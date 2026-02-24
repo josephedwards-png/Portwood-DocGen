@@ -2,7 +2,7 @@ public with sharing class DocGenController {
     
     @AuraEnabled
     public static Map<String, Object> generateDocumentData(Id templateId, Id recordId) {
-        if (templateId == null) throw new AuraHandledException('Template ID is missing.');
+        if (templateId == null) throw new DocGenException('Template ID is missing.');
         
         List<DocGen_Template__c> templates = [
             SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
@@ -13,7 +13,7 @@ public with sharing class DocGenController {
         ];
         
         if (templates.isEmpty()) {
-            throw new AuraHandledException('Template not found or you do not have access.');
+            throw new DocGenException('Template not found or you do not have access.');
         }
         DocGen_Template__c template = templates[0];
         
@@ -26,7 +26,7 @@ public with sharing class DocGenController {
         String fileContent = DocGenTemplateManager.getTemplateFileContent(templateId);
         
         if (recordData == null) {
-            throw new AuraHandledException('Record data not found.');
+            throw new DocGenException('Record data not found.');
         }
 
         return new Map<String, Object>{
@@ -59,7 +59,7 @@ public with sharing class DocGenController {
 
             return contentDocId;
         } catch (Exception e) {
-            throw new AuraHandledException('Error saving document to record: ' + e.getMessage());
+            throw new DocGenException('Error saving document to record: ' + e.getMessage());
         }
     }
 
@@ -72,7 +72,7 @@ public with sharing class DocGenController {
         try {
             return DocGenDataRetriever.getRecordData(recordId, baseObject, queryConfig);
         } catch (Exception e) {
-            throw new AuraHandledException('Error fetching preview data: ' + e.getMessage());
+            throw new DocGenException('Error fetching preview data: ' + e.getMessage());
         }
     }
     
@@ -227,7 +227,7 @@ public with sharing class DocGenController {
             update template;
             
         } catch (Exception e) {
-            throw new AuraHandledException('Error activating version: ' + e.getMessage());
+            throw new DocGenException('Error activating version: ' + e.getMessage());
         }
     }
 

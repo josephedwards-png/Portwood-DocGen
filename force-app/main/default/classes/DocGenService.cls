@@ -1,6 +1,5 @@
 public with sharing class DocGenService {
     
-    public class DocGenException extends Exception {}
 
     public static Id generateDocument(Id templateId, Id recordId) {
         System.debug('Starting DocGen for Template: ' + templateId + ' Record: ' + recordId);
