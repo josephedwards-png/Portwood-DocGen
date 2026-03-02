@@ -37,7 +37,11 @@ public with sharing class DocGenSignatureSenderController {
         Id contentVersionId = docs[0].LatestPublishedVersionId;
 
         // Parse signers JSON
-        List<Map<String, Object>> signerInputs = (List<Map<String, Object>>) JSON.deserializeUntyped(signersJson);
+        List<Object> rawInputs = (List<Object>) JSON.deserializeUntyped(signersJson);
+        List<Map<String, Object>> signerInputs = new List<Map<String, Object>>();
+        for (Object item : rawInputs) {
+            signerInputs.add((Map<String, Object>) item);
+        }
 
         // Create parent request
         DocGen_Signature_Request__c req = new DocGen_Signature_Request__c();

@@ -136,6 +136,30 @@ export default class DocGenRunner extends LightningElement {
             }
             
             const zip = new window.PizZip(bytes.buffer);
+
+            // Pre-process: escape {#Signature...} placeholders so docxtemplater
+            // doesn't treat them as section/loop tags (they're used later by the
+            // signature stamping engine, not by docxtemplater).
+            const _sigEscapes = [];
+            const xmlFiles = ['word/document.xml'];
+            for (const fn of Object.keys(zip.files)) {
+                if ((fn.startsWith('word/header') || fn.startsWith('word/footer')) && fn.endsWith('.xml')) {
+                    xmlFiles.push(fn);
+                }
+            }
+            for (const xf of xmlFiles) {
+                if (!zip.files[xf]) continue;
+                let xContent = zip.file(xf).asText();
+                let changed = false;
+                xContent = xContent.replace(/\{#Signature([^}]*)\}/g, (match, suffix) => {
+                    changed = true;
+                    const key = 'DOCGEN_SIGESC_' + _sigEscapes.length;
+                    _sigEscapes.push({ key, original: match, file: xf });
+                    return key;
+                });
+                if (changed) zip.file(xf, xContent);
+            }
+
             let _imageTagCounter = 0;
             const _pendingImageData = {};
 
@@ -150,7 +174,23 @@ export default class DocGenRunner extends LightningElement {
                             if (tag === '.') return scope;
                             // Image tags: resolve from current scope and generate unique placeholder
                             if (tag.startsWith('%')) {
-                                const fieldName = tag.substring(1);
+                                let imageSpec = tag.substring(1);
+                                let widthPx = null;
+                                let heightPx = null;
+                                // Parse optional :WxH size suffix
+                                if (imageSpec.includes(':')) {
+                                    const colonIdx = imageSpec.lastIndexOf(':');
+                                    const sizeStr = imageSpec.substring(colonIdx + 1).trim().toLowerCase();
+                                    if (sizeStr.includes('x')) {
+                                        const dims = sizeStr.split('x');
+                                        if (dims.length === 2 && !isNaN(dims[0]) && !isNaN(dims[1])) {
+                                            widthPx = parseInt(dims[0], 10);
+                                            heightPx = parseInt(dims[1], 10);
+                                            imageSpec = imageSpec.substring(0, colonIdx);
+                                        }
+                                    }
+                                }
+                                const fieldName = imageSpec;
                                 const keys = fieldName.split('.');
                                 let val = scope;
                                 for (const key of keys) {
@@ -160,8 +200,8 @@ export default class DocGenRunner extends LightningElement {
                                 if (val) {
                                     _imageTagCounter++;
                                     const placeholder = 'DOCGENIMG' + _imageTagCounter;
-                                    _pendingImageData[placeholder] = String(val);
-                                    console.log('DocGen: Image tag {%' + fieldName + '} resolved → placeholder ' + placeholder + ', value length: ' + String(val).length + ', hasDataUri: ' + String(val).includes('data:image'));
+                                    _pendingImageData[placeholder] = { value: String(val), widthPx, heightPx };
+                                    console.log('DocGen: Image tag {%' + fieldName + '} resolved → placeholder ' + placeholder + (widthPx ? ' size:' + widthPx + 'x' + heightPx : ' default size'));
                                     return '{%' + placeholder + '}';
                                 }
                                 console.log('DocGen: Image tag {%' + fieldName + '} resolved to empty/null');
@@ -187,6 +227,23 @@ export default class DocGenRunner extends LightningElement {
 
             console.log('DocGen: Rendering template...');
             doc.render(recordData);
+
+            // Post-process: restore escaped signature placeholders
+            if (_sigEscapes.length > 0) {
+                const outZip = doc.getZip();
+                const touchedFiles = new Set(_sigEscapes.map(s => s.file));
+                for (const xf of touchedFiles) {
+                    if (!outZip.files[xf]) continue;
+                    let xOut = outZip.file(xf).asText();
+                    for (const esc of _sigEscapes) {
+                        if (esc.file === xf) {
+                            xOut = xOut.replace(esc.key, esc.original);
+                        }
+                    }
+                    outZip.file(xf, xOut);
+                }
+                console.log('DocGen: Restored ' + _sigEscapes.length + ' signature placeholder(s).');
+            }
 
             // Post-process: inject images using the unique placeholder data
             console.log('DocGen: Post-processing images...');
@@ -398,12 +455,14 @@ export default class DocGenRunner extends LightningElement {
             xml = xml.replace(imageRegex, (fullMatch, placeholderKey) => {
                 hasChanges = true; // Always mark changes when regex matches
 
-                const val = imageDataMap[placeholderKey];
-                if (!val) {
+                const imgEntry = imageDataMap[placeholderKey];
+                if (!imgEntry) {
                     console.log('DocGen: injectImages - no value for placeholder:', placeholderKey);
                     return '';
                 }
 
+                // Support both old string format and new {value, widthPx, heightPx} object
+                const val = typeof imgEntry === 'string' ? imgEntry : imgEntry.value;
                 const imgResult = extractImage(val);
                 if (!imgResult) {
                     console.log('DocGen: injectImages - extractImage returned null for placeholder:', placeholderKey, 'value starts with:', val.substring(0, 100));
@@ -415,8 +474,12 @@ export default class DocGenRunner extends LightningElement {
                 const fileName = 'docgen_image_' + imageCount + '.' + imgResult.ext;
                 images.push({ relId, fileName, data: imgResult.data });
 
-                const cx = 3657600; // 4 inches in EMU
-                const cy = 2743200; // 3 inches in EMU
+                // 1 pixel at 96 DPI = 9525 EMU. Default: 4" x 3" (384px x 288px)
+                const emuPerPx = 9525;
+                const wpx = (typeof imgEntry === 'object' && imgEntry.widthPx) ? imgEntry.widthPx : 384;
+                const hpx = (typeof imgEntry === 'object' && imgEntry.heightPx) ? imgEntry.heightPx : 288;
+                const cx = wpx * emuPerPx;
+                const cy = hpx * emuPerPx;
 
                 return '</w:t></w:r>' +
                     '<w:r><w:drawing>' +

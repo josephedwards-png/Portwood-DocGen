@@ -344,12 +344,30 @@ public with sharing class DocGenService {
                 output += '{' + rawTag + '}';
                 cursor = tagClose + 1;
             } else if (tagContent.startsWith('%')) {
-                // Image tag: {%FieldName} — inject image from field value
-                String imageField = tagContent.substring(1).trim();
+                // Image tag: {%FieldName} or {%FieldName:WxH} — inject image with optional pixel dimensions
+                String imageSpec = tagContent.substring(1).trim();
+                String imageField = imageSpec;
+                Integer imgWidthPx = null;
+                Integer imgHeightPx = null;
+
+                // Parse optional size suffix :WxH (pixels)
+                if (imageSpec.contains(':')) {
+                    List<String> parts = imageSpec.split(':', 2);
+                    imageField = parts[0].trim();
+                    String sizeStr = parts[1].trim().toLowerCase();
+                    if (sizeStr.contains('x')) {
+                        List<String> dims = sizeStr.split('x');
+                        if (dims.size() == 2 && dims[0].isNumeric() && dims[1].isNumeric()) {
+                            imgWidthPx = Integer.valueOf(dims[0]);
+                            imgHeightPx = Integer.valueOf(dims[1]);
+                        }
+                    }
+                }
+
                 Object val = resolveValue(data, imageField);
                 System.debug('DocGen processXml: Image tag {%' + imageField + '} val null?: ' + (val == null) + ', val length: ' + (val != null ? String.valueOf(val).length() : 0));
                 if (val != null) {
-                    String imageXml = buildImageXml(String.valueOf(val));
+                    String imageXml = buildImageXml(String.valueOf(val), imgWidthPx, imgHeightPx);
                     System.debug('DocGen processXml: buildImageXml returned ' + (imageXml == null ? 'NULL' : 'XML length ' + imageXml.length()));
                     if (imageXml != null) {
                         output += imageXml;
@@ -448,6 +466,10 @@ public with sharing class DocGenService {
      * ContentVersion IDs, or base64 data URIs.
      */
     private static String buildImageXml(String fieldValue) {
+        return buildImageXml(fieldValue, null, null);
+    }
+
+    private static String buildImageXml(String fieldValue, Integer widthPx, Integer heightPx) {
         if (String.isBlank(fieldValue)) return null;
         System.debug('DocGen buildImageXml: input length=' + fieldValue.length() + ', starts with: ' + fieldValue.left(100));
 
@@ -510,14 +532,17 @@ public with sharing class DocGenService {
 
             // Use VML format (<w:pict>) for server-side generation.
             // Salesforce's PDF rendition API handles VML better than DrawingML (<w:drawing>).
-            // 72 points per inch: 4in = 288pt, 3in = 216pt
+            // 1px at 96dpi = 0.75pt. Default: 4in = 288pt, 3in = 216pt
+            Decimal widthPt = (widthPx != null) ? (widthPx * 0.75) : 288;
+            Decimal heightPt = (heightPx != null) ? (heightPx * 0.75) : 216;
+
             return '</w:t></w:r>' +
                 '<w:r><w:pict>' +
                   '<v:shape xmlns:v="urn:schemas-microsoft-com:vml" ' +
                     'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
                     'id="DocGenImage' + imageCounter + '" ' +
                     'type="#_x0000_t75" ' +
-                    'style="width:288pt;height:216pt" ' +
+                    'style="width:' + widthPt + 'pt;height:' + heightPt + 'pt" ' +
                     'stroked="false" ' +
                     'o:bordertopcolor="this" o:borderleftcolor="this" o:borderbottomcolor="this" o:borderrightcolor="this">' +
                     '<v:imagedata xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
