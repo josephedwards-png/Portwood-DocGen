@@ -391,7 +391,7 @@ public without sharing class DocGenSignatureController {
             String base64Pdf = EncodingUtil.base64Encode(pdfBlob);
 
             // Save PDF to record
-            DocGenController.saveGeneratedDocument(relatedRecordId, fileName, base64Pdf, 'pdf');
+            saveSignedDocument(relatedRecordId, fileName, base64Pdf, 'pdf');
 
             // Create per-signer audit trail for compliance (eIDAS/ESIGN)
             String pdfHash = EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', pdfBlob));
@@ -458,7 +458,7 @@ public without sharing class DocGenSignatureController {
             String base64Pdf = EncodingUtil.base64Encode(pdfBlob);
 
             // Save PDF to record
-            DocGenController.saveGeneratedDocument(req.Related_Record_Id__c, fileName, base64Pdf, 'pdf');
+            saveSignedDocument(req.Related_Record_Id__c, fileName, base64Pdf, 'pdf');
 
             // Update request status (SYSTEM_MODE for guest user CRUD bypass)
             req.Status__c = 'Signed';
@@ -484,6 +484,31 @@ public without sharing class DocGenSignatureController {
             System.debug(LoggingLevel.ERROR, 'DocGen: Legacy stamping failed: ' + e.getMessage());
             throw new AuraHandledException('An error occurred while processing the signature.');
         }
+    }
+
+    /**
+     * Saves a signed document to a record using SYSTEM_MODE DML.
+     * Guest users cannot use Security.stripInaccessible or USER_MODE on ContentVersion/ContentDocumentLink,
+     * so this method bypasses CRUD checks. Access is gated by the validated signature token.
+     */
+    private static Id saveSignedDocument(String recordId, String fileName, String base64Data, String extension) {
+        ContentVersion cv = new ContentVersion();
+        cv.Title = fileName;
+        cv.PathOnClient = fileName + (extension.startsWith('.') ? extension : '.' + extension);
+        cv.VersionData = EncodingUtil.base64Decode(base64Data);
+        cv.IsMajorVersion = true;
+        Database.insert(new List<ContentVersion>{ cv }, false, AccessLevel.SYSTEM_MODE);
+
+        Id contentDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id WITH SYSTEM_MODE].ContentDocumentId;
+
+        ContentDocumentLink cdl = new ContentDocumentLink();
+        cdl.ContentDocumentId = contentDocId;
+        cdl.LinkedEntityId = recordId;
+        cdl.ShareType = 'V';
+        cdl.Visibility = 'AllUsers';
+        Database.insert(new List<ContentDocumentLink>{ cdl }, false, AccessLevel.SYSTEM_MODE);
+
+        return contentDocId;
     }
 
     /**
