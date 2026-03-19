@@ -985,11 +985,11 @@ private class DocGenMiscTests {
     }
 
     // =========================================================================
-    // DocGenService — generatePdfDirect
+    // DocGenService — generatePdfBlob (unified PDF path)
     // =========================================================================
 
     @isTest
-    static void testProcessDocumentAsPdfWord() {
+    static void testGeneratePdfBlobWord() {
         String docXml =
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -1000,17 +1000,15 @@ private class DocGenMiscTests {
         Account acc = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        Map<String, Object> result = DocGenService.generatePdfDirect(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         Test.stopTest();
 
         System.assertNotEquals(null, result.get('blob'), 'Should return a PDF blob');
-        System.assertEquals('PDF', result.get('outputFormat'));
-        System.assertEquals('Word', result.get('templateType'));
         System.assertNotEquals(null, result.get('title'));
     }
 
     @isTest
-    static void testProcessDocumentAsPdfThrowsForPowerPoint() {
+    static void testGeneratePdfBlobThrowsForPowerPoint() {
         DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
         tpl.Type__c = 'PowerPoint';
         update tpl;
@@ -1041,7 +1039,7 @@ private class DocGenMiscTests {
         Test.startTest();
         Boolean caught = false;
         try {
-            DocGenService.generatePdfDirect(tpl.Id, acc.Id);
+            DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         } catch (DocGenException e) {
             caught = true;
             System.assert(e.getMessage().contains('only supported for Word'));
@@ -1051,7 +1049,7 @@ private class DocGenMiscTests {
     }
 
     @isTest
-    static void testProcessDocumentAsPdfWithTitleFormat() {
+    static void testGeneratePdfBlobWithTitleFormat() {
         String docXml =
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -1065,7 +1063,7 @@ private class DocGenMiscTests {
         Account acc = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        Map<String, Object> result = DocGenService.generatePdfDirect(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         Test.stopTest();
 
         System.assertNotEquals(null, result.get('blob'));
@@ -1074,7 +1072,7 @@ private class DocGenMiscTests {
     }
 
     @isTest
-    static void testProcessDocumentAsPdfWithImage() {
+    static void testGeneratePdfBlobWithImage() {
         // PDF path with image — exercises imageBase64ByRelId collection
         String tinyBase64 = EncodingUtil.base64Encode(Blob.valueOf('PNGFAKE'));
         Account acc = [SELECT Id FROM Account LIMIT 1];
@@ -1092,11 +1090,10 @@ private class DocGenMiscTests {
         createValidDocxFile(docXml);
 
         Test.startTest();
-        Map<String, Object> result = DocGenService.generatePdfDirect(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         Test.stopTest();
 
         System.assertNotEquals(null, result.get('blob'));
-        System.assertEquals('PDF', result.get('outputFormat'));
     }
 
     // =========================================================================
@@ -2086,11 +2083,11 @@ private class DocGenMiscTests {
     }
 
     // =========================================================================
-    // DocGenService — processDocumentAsHtml
+    // DocGenService — generatePdfBlob used by unified path
     // =========================================================================
 
     @isTest
-    static void testProcessDocumentAsHtml() {
+    static void testGeneratePdfBlobReturnsValidBlob() {
         String docXml =
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -2101,49 +2098,11 @@ private class DocGenMiscTests {
         Account acc = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        Map<String, Object> result = DocGenService.processDocumentAsHtml(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         Test.stopTest();
 
-        System.assertNotEquals(null, result.get('html'));
-        System.assertEquals('PDF', result.get('outputFormat'));
-    }
-
-    @isTest
-    static void testProcessDocumentAsHtmlThrowsForPowerPoint() {
-        DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
-        tpl.Type__c = 'PowerPoint';
-        update tpl;
-
-        Compression.ZipWriter zw = new Compression.ZipWriter();
-        zw.addEntry('[Content_Types].xml', Blob.valueOf(
-            '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-            '<Default Extension="xml" ContentType="application/xml"/></Types>'
-        ));
-        zw.addEntry('_rels/.rels', Blob.valueOf(
-            '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>'
-        ));
-        zw.addEntry('ppt/slides/slide1.xml', Blob.valueOf(
-            '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree>' +
-            '<p:sp><p:txBody><a:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-            '<a:r><a:t>{Name}</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>'
-        ));
-        ContentVersion cv = new ContentVersion(Title='PPTHtml', PathOnClient='PPTHtml.pptx', VersionData=zw.getArchive());
-        insert cv;
-        Id conDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id].ContentDocumentId;
-        insert new ContentDocumentLink(LinkedEntityId=tpl.Id, ContentDocumentId=conDocId, ShareType='V');
-
-        Account acc = [SELECT Id FROM Account LIMIT 1];
-
-        Boolean caught = false;
-        Test.startTest();
-        try {
-            DocGenService.processDocumentAsHtml(tpl.Id, acc.Id);
-        } catch (DocGenException e) {
-            caught = true;
-        }
-        Test.stopTest();
-        System.assert(caught, 'Should throw for PowerPoint HTML generation');
+        System.assertNotEquals(null, result.get('blob'));
+        System.assertNotEquals(null, result.get('title'));
     }
 
     // =========================================================================
@@ -2168,11 +2127,11 @@ private class DocGenMiscTests {
     }
 
     // =========================================================================
-    // DocGenService — preparePdfImages
+    // DocGenService — generateDocument PDF save path
     // =========================================================================
 
     @isTest
-    static void testPreparePdfImages() {
+    static void testGenerateDocumentPdfSave() {
         String docXml =
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -2180,36 +2139,16 @@ private class DocGenMiscTests {
         createValidDocxFile(docXml);
 
         DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        tpl.Output_Format__c = 'PDF';
+        update tpl;
+
         Account acc = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        Map<String, Object> result = DocGenService.preparePdfImages(tpl.Id, acc.Id);
+        Id docId = DocGenService.generateDocument(tpl.Id, acc.Id);
         Test.stopTest();
 
-        System.assertNotEquals(null, result.get('batchKey'));
-        System.assertNotEquals(null, result.get('title'));
-    }
-
-    // =========================================================================
-    // DocGenService — generatePdfFromBatch
-    // =========================================================================
-
-    @isTest
-    static void testGeneratePdfFromBatch() {
-        String docXml =
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-            '<w:body><w:p><w:r><w:t>{Name}</w:t></w:r></w:p></w:body></w:document>';
-        createValidDocxFile(docXml);
-
-        DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
-        Account acc = [SELECT Id FROM Account LIMIT 1];
-
-        Test.startTest();
-        Blob pdfBlob = DocGenService.generatePdfFromBatch(tpl.Id, acc.Id, 'testbatchkey00000000000000000000');
-        Test.stopTest();
-
-        System.assertNotEquals(null, pdfBlob);
+        System.assertNotEquals(null, docId);
     }
 
     // =========================================================================
@@ -2480,11 +2419,11 @@ private class DocGenMiscTests {
     }
 
     // =========================================================================
-    // DocGenService — generateAndSavePdfFromBatch
+    // DocGenService — generatePdfBlob download path
     // =========================================================================
 
     @isTest
-    static void testGenerateAndSavePdfFromBatch() {
+    static void testGeneratePdfBlobDownload() {
         String docXml =
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -2495,10 +2434,11 @@ private class DocGenMiscTests {
         Account acc = [SELECT Id FROM Account LIMIT 1];
 
         Test.startTest();
-        Id docId = DocGenService.generateAndSavePdfFromBatch(tpl.Id, acc.Id, 'testbatch0000000000000000000000');
+        Map<String, Object> result = DocGenService.generatePdfBlob(tpl.Id, acc.Id);
         Test.stopTest();
 
-        System.assertNotEquals(null, docId);
+        System.assertNotEquals(null, result.get('blob'));
+        System.assertNotEquals(null, result.get('title'));
     }
 
     // =========================================================================

@@ -18,10 +18,10 @@ public with sharing class DocGenHtmlRenderer {
         'table { border-collapse: collapse; width: 100%; page-break-inside: auto; }' +
         'tr { page-break-inside: avoid; page-break-after: auto; }' +
         'td, th { padding: 4pt; vertical-align: top; }' +
-        'p { margin: 0 0 8pt 0; orphans: 2; widows: 2; }' +
+        'p { margin: 0 0 8pt 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
         'img { max-width: 100%; }' +
         'ul, ol { margin: 0 0 8pt 0; padding-left: 36pt; }' +
-        'li { margin: 0 0 2pt 0; }' +
+        'li { margin: 0 0 2pt 0; page-break-inside: avoid; }' +
         'hr { border: none; border-top: 1px solid #000; margin: 6pt 0; }' +
         'sub { vertical-align: sub; font-size: 0.8em; }' +
         'sup { vertical-align: super; font-size: 0.8em; }' +

@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "v1.1.1 - Signature fix, PDF renderer, merge field compatibility",
-      "versionNumber": "1.1.1.NEXT",
+      "versionName": "v1.2.0 - Unified PDF pipeline, page break fix, Spring 26 compatibility",
+      "versionNumber": "1.2.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "Document Generation",

@@ -2,7 +2,7 @@
 
 **A free, native, production-ready document engine for Salesforce.**
 
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](#quick-install)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](#quick-install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![API Version](https://img.shields.io/badge/API-v66.0-orange.svg)](#)
@@ -16,6 +16,7 @@ Generate DOCX, PPTX, and PDF documents from any Salesforce record. Merge fields,
 
 - [Why This Exists](#why-this-exists)
 - [Quick Install](#quick-install)
+- [What's New in v1.2.0](#whats-new-in-v120)
 - [What's New in v1.1.1](#whats-new-in-v111)
 - [What's New in v1.1.0](#whats-new-in-v110)
 - [Features at a Glance](#features-at-a-glance)
@@ -80,6 +81,27 @@ Because the "heavy lifting" of PDF rendering and image injection happens on-serv
 Is this right for you?
 If your use case consistently requires generating documents or processing image data larger than these limits, this tool may not be the right fit for your requirements in its current state.
 
+## What's New in v1.2.0
+
+### Unified PDF Generation (#27, #21)
+- Single and bulk PDF generation now use the **exact same code path** -- no more divergent behavior between single-doc and batch modes
+- Removed 6 redundant PDF methods from `DocGenController` and 5 from `DocGenService`, replaced with a single unified pipeline: `mergeTemplate()` → `buildPdfImageMap()` → `DocGenHtmlRenderer.convertToHtml()` → PDF engine
+- Removed `DocGenPdfQueueable` -- no longer needed; PDF generation is synchronous with pre-committed template image URLs
+- LWC polling logic removed from both `docGenRunner` and `docGenAdmin` -- PDF calls are now simple request/response
+
+### Spring '26 Blob.toPdf() Compatibility
+- Orgs with the Spring '26 Release Update enabled get native `Blob.toPdf()` rendering with image support -- no VF page needed
+- Orgs without the Release Update automatically fall back to VF `renderAs="pdf"` (Flying Saucer) for templates with images
+- Text-only templates always use `Blob.toPdf()` directly for speed
+
+### Page Break Fix (#21)
+- Added `page-break-inside: avoid` to `<p>` and `<li>` CSS rules -- paragraphs and list items no longer split across page boundaries
+
+### Net Change
+- **-766 lines** of duplicated PDF logic removed across 11 files
+
+---
+
 ## What's New in v1.1.1
 
 ### Signature Fix (#28)
@@ -142,7 +164,7 @@ If your use case consistently requires generating documents or processing image 
 |---------|-------------|
 | **Template Manager** | Create, edit, version, and share document templates with a visual query builder |
 | **Record Page Generator** | Drop-in LWC component -- users select a template and generate from any record |
-| **PDF Generation** | Server-side conversion from DOCX to PDF via `Blob.toPdf()` |
+| **PDF Generation** | Server-side DOCX-to-PDF via `Blob.toPdf()` with automatic VF fallback for image support |
 | **Bulk Generation** | Generate documents for hundreds of records with real-time progress tracking |
 | **Flow Integration** | Invocable actions for single-record and bulk generation in any Flow |
 | **Electronic Signatures** | Multi-signer, role-based signatures with branded emails and audit trails |

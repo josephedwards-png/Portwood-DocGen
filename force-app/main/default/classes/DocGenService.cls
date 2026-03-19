@@ -376,144 +376,111 @@ public with sharing class DocGenService {
     }
 
     /**
-     * Merges a template with record data and returns the result as HTML.
-     * Used by DocGenPdfRendererController to generate PDF via VF renderAs="pdf".
+     * Builds a URL-based image map for PDF rendering via Blob.toPdf().
+     * Looks up pre-committed template image ContentVersions (saved at version publish time)
+     * and adds RTF/dynamic image URLs. Returns relId → absolute URL map.
      */
-    public static Map<String, Object> processDocumentAsHtml(Id templateId, Id recordId) {
-        MergeResult mr = mergeTemplate(templateId, recordId);
+    private static Map<String, String> buildPdfImageMap(MergeResult mr, Id templateId) {
+        Map<String, String> pdfImages = new Map<String, String>();
+        String baseUrl = URL.getOrgDomainUrl().toExternalForm();
 
-        if (mr.templateType == 'PowerPoint') {
-            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
-        }
-
-        String html = DocGenHtmlRenderer.convertToHtml(mr.documentXml, mr.imageBase64ByRelId);
-
-        return new Map<String, Object>{
-            'html' => html,
-            'title' => mr.docTitle,
-            'outputFormat' => 'PDF',
-            'templateType' => mr.templateType
-        };
-    }
-
-    /**
-     * Step 1 of PDF generation: merges template and saves images as temporary
-     * ContentVersion records so they can be referenced by URL during PDF rendering.
-     * Salesforce's PDF renderer (Flying Saucer) cannot render data URI images,
-     * so images must be served via ContentVersion download URLs.
-     * Returns batch key and doc title. Call generatePdfFromBatch() as step 2.
-     */
-    public static Map<String, Object> preparePdfImages(Id templateId, Id recordId) {
-        MergeResult mr = mergeTemplate(templateId, recordId);
-
-        if (mr.templateType == 'PowerPoint') {
-            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
-        }
-
-        String batchKey = EncodingUtil.convertToHex(
-            Crypto.generateDigest('SHA-256', Blob.valueOf(String.valueOf(System.now().getTime()) + Math.random()))
-        ).substring(0, 32);
-
-        // Save base64 images as temporary ContentVersion records.
-        // URL-only images (from Rich Text fields) are skipped — Blob.toPdf() fetches them directly.
-        if (!mr.imageBase64ByRelId.isEmpty()) {
-            List<ContentVersion> tempImages = new List<ContentVersion>();
-            for (String relId : mr.imageBase64ByRelId.keySet()) {
-                String imageValue = mr.imageBase64ByRelId.get(relId);
-                // Skip URL-only entries — Blob.toPdf() fetches Salesforce URLs directly
-                if (imageValue.startsWith('/') || imageValue.startsWithIgnoreCase('http')) {
-                    continue;
-                }
-                String ext = (imageValue.startsWith('/9j/') || imageValue.startsWith('/9J/')) ? 'jpeg' : 'png';
-                ContentVersion cv = new ContentVersion();
-                cv.Title = 'docgen_tmp_' + batchKey + '_' + relId;
-                cv.PathOnClient = 'docgen_tmp_' + batchKey + '_' + relId + '.' + ext;
-                cv.VersionData = EncodingUtil.base64Decode(imageValue);
-                tempImages.add(cv);
-            }
-            if (!tempImages.isEmpty()) {
-                SObjectAccessDecision tmpDecision = Security.stripInaccessible(AccessType.CREATABLE, tempImages);
-                insert tmpDecision.getRecords();
-            }
-        }
-
-        return new Map<String, Object>{
-            'batchKey' => batchKey,
-            'title' => mr.docTitle,
-            'hasImages' => !mr.imageBase64ByRelId.isEmpty()
-        };
-    }
-
-    /**
-     * Step 2 of PDF generation: renders PDF via VF page using pre-saved image URLs.
-     * Must be called in a separate transaction from preparePdfImages() because
-     * getContentAsPDF() is a callout and DML (from step 1) must be committed first.
-     * Cleans up temporary image ContentVersion records after PDF generation.
-     */
-    public static Blob generatePdfFromBatch(Id templateId, Id recordId, String batchKey) {
-        Blob pdfBlob;
-        if (Test.isRunningTest()) {
-            pdfBlob = Blob.toPdf('<html><body><p>Test PDF</p></body></html>');
-        } else {
-            // Build URL map from committed temp ContentVersion records
-            Map<String, String> urlMap = new Map<String, String>();
-            String prefix = 'docgen_tmp_' + batchKey + '_';
-            List<ContentVersion> tempCvs = [
+        // 1. Template-embedded images: committed CVs linked to active version
+        List<DocGen_Template_Version__c> activeVersions = [
+            SELECT Id FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = true
+            WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (!activeVersions.isEmpty()) {
+            String prefix = 'docgen_tmpl_img_' + activeVersions[0].Id + '_';
+            List<ContentVersion> tmplCvs = [
                 SELECT Id, Title FROM ContentVersion
                 WHERE Title LIKE :(prefix + '%')
                 WITH SYSTEM_MODE
             ];
-            for (ContentVersion cv : tempCvs) {
+            for (ContentVersion cv : tmplCvs) {
                 String relId = cv.Title.substring(prefix.length());
-                urlMap.put(relId, '/sfc/servlet.shepherd/version/download/' + cv.Id);
+                pdfImages.put(relId, baseUrl + '/sfc/servlet.shepherd/version/download/' + cv.Id);
             }
-
-            // Generate HTML with URL-based images (CV URLs + any direct URLs from RTF)
-            Map<String, Object> htmlResult = processDocumentAsHtmlWithImageMap(templateId, recordId, urlMap);
-            String html = (String) htmlResult.get('html');
-
-            // Blob.toPdf() (Spring '26) fetches images from Salesforce URLs directly
-            pdfBlob = Blob.toPdf(html);
         }
 
-        // Clean up temporary image ContentVersion records
-        cleanupTempImages(batchKey);
+        // 2. RTF/dynamic images: absolute Salesforce URLs
+        for (String relId : mr.imageUrlByRelId.keySet()) {
+            String url = mr.imageUrlByRelId.get(relId);
+            if (!url.startsWithIgnoreCase('http')) {
+                url = baseUrl + url;
+            }
+            pdfImages.put(relId, url);
+        }
 
-        return pdfBlob;
+        return pdfImages;
     }
 
     /**
-     * Saves images from a MergeResult as temporary ContentVersion records.
-     * Returns the generated batch key for later retrieval.
+     * Generates a PDF Blob from a MergeResult using the unified image map.
+     * Single entry point for all PDF rendering — used by generateDocument()
+     * and generatePdfBlob().
      */
-    private static String saveTempImageCvs(MergeResult mr) {
-        String batchKey = EncodingUtil.convertToHex(
-            Crypto.generateDigest('SHA-256', Blob.valueOf(String.valueOf(System.now().getTime()) + Math.random()))
-        ).substring(0, 32);
+    private static Blob renderPdf(MergeResult mr, Id templateId, Id recordId) {
+        if (Test.isRunningTest()) {
+            return Blob.toPdf('<html><body><p>Test PDF</p></body></html>');
+        }
 
-        List<ContentVersion> tempImages = new List<ContentVersion>();
-        for (String relId : mr.imageBase64ByRelId.keySet()) {
-            String imageValue = mr.imageBase64ByRelId.get(relId);
-            // Skip URL-only entries — Blob.toPdf() fetches Salesforce URLs directly
-            if (imageValue.startsWith('/') || imageValue.startsWithIgnoreCase('http')) {
-                continue;
-            }
-            String ext = (imageValue.startsWith('/9j/') || imageValue.startsWith('/9J/')) ? 'jpeg' : 'png';
-            ContentVersion cv = new ContentVersion();
-            cv.Title = 'docgen_tmp_' + batchKey + '_' + relId;
-            cv.PathOnClient = 'docgen_tmp_' + batchKey + '_' + relId + '.' + ext;
-            cv.VersionData = EncodingUtil.base64Decode(imageValue);
-            tempImages.add(cv);
+        Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
+        String html = DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
+
+        // Try Blob.toPdf() first — Spring '26+ orgs with the Release Update enabled
+        // can resolve Salesforce ContentVersion image URLs natively.
+        // If it fails (pre-Spring '26 or Release Update not enabled), fall back to
+        // VF page renderAs="pdf" (Flying Saucer) which resolves image URLs universally.
+        try {
+            return Blob.toPdf(html);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.INFO, 'DocGen: Blob.toPdf() failed, using VF page fallback: ' + e.getMessage());
         }
-        if (!tempImages.isEmpty()) {
-            SObjectAccessDecision tmpDecision = Security.stripInaccessible(AccessType.CREATABLE, tempImages);
-            insert tmpDecision.getRecords();
-        }
-        return batchKey;
+
+        PageReference pdfPage = Page.DocGenPdfRenderer;
+        pdfPage.getParameters().put('mode', 'document');
+        pdfPage.getParameters().put('templateId', String.valueOf(templateId));
+        pdfPage.getParameters().put('recordId', String.valueOf(recordId));
+        return pdfPage.getContentAsPDF();
     }
 
     /**
-     * Deletes temporary image ContentVersion records created by preparePdfImages().
+     * Generates HTML for a document PDF using pre-committed template image URLs.
+     * Called by DocGenPdfRendererController to render via VF renderAs="pdf".
+     */
+    public static String renderDocumentHtml(Id templateId, Id recordId) {
+        MergeResult mr = mergeTemplate(templateId, recordId);
+
+        if (mr.templateType == 'PowerPoint') {
+            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
+        }
+
+        Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
+        return DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
+    }
+
+    /**
+     * Generates a PDF Blob and title without saving to record.
+     * Used by DocGenController for download mode.
+     */
+    public static Map<String, Object> generatePdfBlob(Id templateId, Id recordId) {
+        MergeResult mr = mergeTemplate(templateId, recordId);
+
+        if (mr.templateType == 'PowerPoint') {
+            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
+        }
+
+        Blob pdfBlob = renderPdf(mr, templateId, recordId);
+
+        return new Map<String, Object>{
+            'blob' => pdfBlob,
+            'title' => mr.docTitle
+        };
+    }
+
+    /**
+     * Deletes temporary image ContentVersion records (used by signature flow).
      */
     public static void cleanupTempImages(String batchKey) {
         if (String.isBlank(batchKey)) return;
@@ -566,128 +533,21 @@ public with sharing class DocGenService {
     }
 
     /**
-     * Generates a PDF via Blob.toPdf() with images referenced by URL in the HTML.
-     * Blob.toPdf() fetches images from Salesforce URLs during rendering.
-     * Base64 images (from template media) are converted to data URIs inline.
-     * URL images (from RTF fields) are passed through as absolute URLs.
-     */
-    public static Map<String, Object> generatePdfDirect(Id templateId, Id recordId) {
-        MergeResult mr = mergeTemplate(templateId, recordId);
-
-        if (mr.templateType == 'PowerPoint') {
-            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
-        }
-
-        // Build image map with absolute URLs for Blob.toPdf().
-        // Data URIs don't work (Flying Saucer limitation) — all images must be URLs.
-        Map<String, String> pdfImages = new Map<String, String>();
-        String baseUrl = URL.getOrgDomainUrl().toExternalForm();
-
-        // 1. Template-embedded images: look up committed CVs linked to the active version
-        List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
-        ];
-        if (!activeVersions.isEmpty()) {
-            String prefix = 'docgen_tmpl_img_' + activeVersions[0].Id + '_';
-            List<ContentVersion> tmplCvs = [
-                SELECT Id, Title FROM ContentVersion
-                WHERE Title LIKE :(prefix + '%')
-                WITH SYSTEM_MODE
-            ];
-            for (ContentVersion cv : tmplCvs) {
-                String relId = cv.Title.substring(prefix.length());
-                pdfImages.put(relId, baseUrl + '/sfc/servlet.shepherd/version/download/' + cv.Id);
-            }
-        }
-
-        // 2. RTF/dynamic images: use absolute Salesforce URLs from imageUrlByRelId
-        for (String relId : mr.imageUrlByRelId.keySet()) {
-            String url = mr.imageUrlByRelId.get(relId);
-            if (!url.startsWithIgnoreCase('http')) {
-                url = baseUrl + url;
-            }
-            pdfImages.put(relId, url);
-        }
-
-        String html = DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
-        Blob pdfBlob;
-        if (Test.isRunningTest()) {
-            pdfBlob = Blob.toPdf('<html><body><p>Test PDF</p></body></html>');
-        } else {
-            pdfBlob = Blob.toPdf(html);
-        }
-
-        return new Map<String, Object>{
-            'blob' => pdfBlob,
-            'title' => mr.docTitle,
-            'outputFormat' => 'PDF',
-            'templateType' => mr.templateType
-        };
-    }
-
-    /**
      * Processes a template and saves the result as a ContentVersion attached to the record.
-     * For PDF output, uses Blob.toPdf() with images as absolute URLs or data URIs.
+     * For PDF output, uses the unified renderPdf() path with pre-committed image URLs.
      * Returns ContentDocumentId.
      */
     public static Id generateDocument(Id templateId, Id recordId) {
         MergeResult mr = mergeTemplate(templateId, recordId);
 
         if (mr.outputFormat == 'PDF' && mr.templateType == 'Word') {
-            Map<String, String> pdfImages = new Map<String, String>();
-            String baseUrl = URL.getOrgDomainUrl().toExternalForm();
-
-            // Template-embedded images: committed CVs linked to active version
-            List<DocGen_Template_Version__c> activeVersions = [
-                SELECT Id FROM DocGen_Template_Version__c
-                WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH SYSTEM_MODE LIMIT 1
-            ];
-            if (!activeVersions.isEmpty()) {
-                String prefix = 'docgen_tmpl_img_' + activeVersions[0].Id + '_';
-                List<ContentVersion> tmplCvs = [
-                    SELECT Id, Title FROM ContentVersion
-                    WHERE Title LIKE :(prefix + '%')
-                    WITH SYSTEM_MODE
-                ];
-                for (ContentVersion cv : tmplCvs) {
-                    String relId = cv.Title.substring(prefix.length());
-                    pdfImages.put(relId, baseUrl + '/sfc/servlet.shepherd/version/download/' + cv.Id);
-                }
-            }
-
-            // RTF/dynamic images: absolute Salesforce URLs
-            for (String relId : mr.imageUrlByRelId.keySet()) {
-                String url = mr.imageUrlByRelId.get(relId);
-                if (!url.startsWithIgnoreCase('http')) url = baseUrl + url;
-                pdfImages.put(relId, url);
-            }
-
-            String html = DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
-            Blob pdfBlob;
-            if (Test.isRunningTest()) {
-                pdfBlob = Blob.toPdf('<html><body><p>Test PDF</p></body></html>');
-            } else {
-                pdfBlob = Blob.toPdf(html);
-            }
+            Blob pdfBlob = renderPdf(mr, templateId, recordId);
             return savePdfFile(pdfBlob, mr.docTitle, recordId);
         }
 
         // Native DOCX/PPTX path
         Blob resultBlob = assembleZip(mr);
         return saveFile(resultBlob, mr.docTitle, recordId, mr.outputFormat, mr.templateType);
-    }
-
-    /**
-     * Generates PDF from a batch (pre-saved images) and saves to record.
-     * Call preparePdfImages() first to save images, then this method.
-     */
-    public static Id generateAndSavePdfFromBatch(Id templateId, Id recordId, String batchKey) {
-        MergeResult mr = mergeTemplate(templateId, recordId);
-        Blob pdfBlob = generatePdfFromBatch(templateId, recordId, batchKey);
-        return savePdfFile(pdfBlob, mr.docTitle, recordId);
     }
 
     /**
@@ -1047,11 +907,6 @@ public with sharing class DocGenService {
         return current;
     }
     
-    /**
-     * Builds OOXML drawing markup for an image and registers it for ZIP injection.
-     * Accepts: HTML with <img> tags, Salesforce file references (/servlet/..., /sfc/..., refid=...),
-     * ContentVersion IDs, or base64 data URIs.
-     */
     /**
      * Converts rich text HTML to DOCX XML (w:p, w:r, w:t elements).
      * Preserves text, basic formatting (bold/italic/underline), multiple images, and paragraphs.

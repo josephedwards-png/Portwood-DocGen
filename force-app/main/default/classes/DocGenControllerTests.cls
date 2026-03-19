@@ -673,10 +673,10 @@ private class DocGenControllerTests {
     }
 
     // -----------------------------------------------------------------------
-    // generatePdfDocument — error path (non-real DOCX triggers exception)
+    // generatePdf — error path (non-real DOCX triggers exception)
     // -----------------------------------------------------------------------
     @isTest
-    static void testGeneratePdfDocumentThrows() {
+    static void testGeneratePdfDownloadThrows() {
         createTestFile();
         DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
         Account acc = [SELECT Id FROM Account WHERE Name = 'Controller Test Account' LIMIT 1];
@@ -684,7 +684,7 @@ private class DocGenControllerTests {
         Test.startTest();
         Boolean caughtException = false;
         try {
-            DocGenController.generatePdfDocument(tpl.Id, acc.Id);
+            DocGenController.generatePdf(tpl.Id, acc.Id, false);
         } catch (AuraHandledException e) {
             caughtException = true;
         }
@@ -694,10 +694,10 @@ private class DocGenControllerTests {
     }
 
     // -----------------------------------------------------------------------
-    // generatePdfDocument — success path with valid DOCX
+    // generatePdf — download success path with valid DOCX
     // -----------------------------------------------------------------------
     @isTest
-    static void testGeneratePdfDocumentSuccess() {
+    static void testGeneratePdfDownloadSuccess() {
         DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
         Account acc = [SELECT Id FROM Account WHERE Name = 'Controller Test Account' LIMIT 1];
 
@@ -734,7 +734,7 @@ private class DocGenControllerTests {
         );
 
         Test.startTest();
-        Map<String, Object> result = DocGenController.generatePdfDocument(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenController.generatePdf(tpl.Id, acc.Id, false);
         Test.stopTest();
 
         System.assertNotEquals(null, result, 'Result should not be null');
@@ -743,32 +743,13 @@ private class DocGenControllerTests {
     }
 
     // -----------------------------------------------------------------------
-    // generateAndSavePdfDocument — error path (non-real DOCX)
+    // generatePdf — save to record success path
     // -----------------------------------------------------------------------
     @isTest
-    static void testGenerateAndSavePdfDocumentThrows() {
-        createTestFile();
+    static void testGeneratePdfSaveSuccess() {
         DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
-        Account acc = [SELECT Id FROM Account WHERE Name = 'Controller Test Account' LIMIT 1];
-
-        Test.startTest();
-        Boolean caughtException = false;
-        try {
-            DocGenController.generateAndSavePdfDocument(tpl.Id, acc.Id);
-        } catch (Exception e) {
-            caughtException = true;
-        }
-        Test.stopTest();
-
-        System.assert(caughtException, 'Should throw exception for non-real DOCX template');
-    }
-
-    // -----------------------------------------------------------------------
-    // generateAndSavePdfDocument — success path with valid DOCX
-    // -----------------------------------------------------------------------
-    @isTest
-    static void testGenerateAndSavePdfDocumentSuccess() {
-        DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+        tpl.Output_Format__c = 'PDF';
+        update tpl;
         Account acc = [SELECT Id FROM Account WHERE Name = 'Controller Test Account' LIMIT 1];
 
         Compression.ZipWriter zw = new Compression.ZipWriter();
@@ -804,17 +785,11 @@ private class DocGenControllerTests {
         );
 
         Test.startTest();
-        Id contentDocId = DocGenController.generateAndSavePdfDocument(tpl.Id, acc.Id);
+        Map<String, Object> result = DocGenController.generatePdf(tpl.Id, acc.Id, true);
         Test.stopTest();
 
-        System.assertNotEquals(null, contentDocId, 'Should return a ContentDocumentId');
-
-        List<ContentVersion> versions = [
-            SELECT Title, PathOnClient FROM ContentVersion
-            WHERE ContentDocumentId = :contentDocId
-        ];
-        System.assertEquals(1, versions.size(), 'Should have one ContentVersion');
-        System.assert(versions[0].PathOnClient.endsWith('.pdf'), 'Should be a PDF file');
+        System.assertNotEquals(null, result, 'Result should not be null');
+        System.assertEquals(true, result.get('saved'), 'Should indicate saved');
     }
 
     // -----------------------------------------------------------------------

@@ -1,12 +1,11 @@
 /**
  * Controller for DocGenPdfRenderer.page — generates PDF by rendering HTML via
- * the VF renderAs="pdf" engine (Flying Saucer), which supports data URI images.
- * Blob.toPdf() does NOT render data URI images, so this VF page is used instead.
+ * the VF renderAs="pdf" engine (Flying Saucer) for signature workflows.
  *
  * Uses 'without sharing' because this runs in VF page context for PDF rendering.
  * The page is accessed by system processes (Queueable jobs, platform event triggers)
  * that need to read ContentVersion and template data regardless of the running user's
- * sharing rules. Access is gated by requiring valid templateId/recordId/batchKey params.
+ * sharing rules. Access is gated by requiring valid requestId/batchKey params.
  */
 public without sharing class DocGenPdfRendererController {
 
@@ -17,12 +16,10 @@ public without sharing class DocGenPdfRendererController {
 
         if (mode == 'signature') {
             renderSignaturePdf();
-        } else if (mode == 'document') {
-            renderDocumentPdf();
-        } else if (mode == 'batch') {
-            renderBatchPdf();
         } else if (mode == 'sigbatch') {
             renderSignatureBatchPdf();
+        } else if (mode == 'document') {
+            renderDocumentPdf();
         } else {
             htmlContent = '<html><body><p>Invalid mode.</p></body></html>';
         }
@@ -92,17 +89,6 @@ public without sharing class DocGenPdfRendererController {
     }
 
     /**
-     * Renders a document PDF by merging a template with record data.
-     * URL params: templateId, recordId
-     */
-    /**
-     * Renders a document PDF using pre-saved image ContentVersion records.
-     * Images are saved by DocGenService.preparePdfImages() in a prior transaction.
-     * This mode enables images to render in PDF since Flying Saucer can fetch
-     * ContentVersion URLs but cannot render data URI images.
-     * URL params: templateId, recordId, batchKey
-     */
-    /**
      * Renders a signed document PDF using pre-saved stamped DOCX XML and image
      * ContentVersion records from SignaturePdfQueueable stage 1.
      * URL params: batchKey
@@ -148,52 +134,11 @@ public without sharing class DocGenPdfRendererController {
         }
     }
 
-    private void renderBatchPdf() {
-        String templateId = ApexPages.currentPage().getParameters().get('templateId');
-        String recordId = ApexPages.currentPage().getParameters().get('recordId');
-        String batchKey = ApexPages.currentPage().getParameters().get('batchKey');
-
-        if (String.isBlank(templateId) || String.isBlank(recordId) || String.isBlank(batchKey)) {
-            htmlContent = '<html><body><p>Error: Missing required parameters.</p></body></html>';
-            return;
-        }
-
-        try {
-            // Re-merge template to get document XML and image relIds
-            Map<String, Object> result = DocGenService.processDocumentAsHtml(templateId, recordId);
-            String dataUriHtml = (String) result.get('html');
-
-            // Look up pre-saved image ContentVersion records and build URL map
-            List<ContentVersion> tempCvs = [
-                SELECT Id, Title FROM ContentVersion
-                WHERE Title LIKE :('docgen_tmp_' + batchKey + '_%')
-                WITH SYSTEM_MODE
-            ];
-
-            if (tempCvs.isEmpty()) {
-                // No pre-saved images — use data URI HTML as-is (images won't render but text will)
-                htmlContent = dataUriHtml;
-                return;
-            }
-
-            // Replace data URI images with ContentVersion download URLs
-            Map<String, String> urlMap = new Map<String, String>();
-            String prefix = 'docgen_tmp_' + batchKey + '_';
-            for (ContentVersion cv : tempCvs) {
-                String relId = cv.Title.substring(prefix.length());
-                urlMap.put(relId, '/sfc/servlet.shepherd/version/download/' + cv.Id);
-            }
-
-            // Re-generate HTML using URL-based image map instead of data URIs
-            Map<String, Object> htmlResult = DocGenService.processDocumentAsHtmlWithImageMap(templateId, recordId, urlMap);
-            htmlContent = (String) htmlResult.get('html');
-
-        } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'DocGen: Batch PDF render error: ' + e.getMessage());
-            htmlContent = '<html><body><p>Error generating document: ' + e.getMessage().escapeHtml4() + '</p></body></html>';
-        }
-    }
-
+    /**
+     * Renders a document PDF by merging a template with record data.
+     * Uses pre-committed template image CVs for URL-based rendering.
+     * URL params: templateId, recordId
+     */
     private void renderDocumentPdf() {
         String templateId = ApexPages.currentPage().getParameters().get('templateId');
         String recordId = ApexPages.currentPage().getParameters().get('recordId');
@@ -204,8 +149,7 @@ public without sharing class DocGenPdfRendererController {
         }
 
         try {
-            Map<String, Object> result = DocGenService.processDocumentAsHtml(templateId, recordId);
-            htmlContent = (String) result.get('html');
+            htmlContent = DocGenService.renderDocumentHtml(templateId, recordId);
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'DocGen: Document PDF render error: ' + e.getMessage());
             htmlContent = '<html><body><p>Error generating document: ' + e.getMessage().escapeHtml4() + '</p></body></html>';

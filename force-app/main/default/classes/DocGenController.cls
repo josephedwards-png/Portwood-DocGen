@@ -297,108 +297,23 @@ public with sharing class DocGenController {
     }
 
     /**
-     * Step 1 of PDF generation with images: merges template and saves images as
-     * temporary ContentVersion records. Returns batch key and doc title.
-     * The LWC must call generatePdfFromBatch() as step 2.
+     * Unified PDF generation. Uses the same code path as bulk batch generation.
+     * For "save" mode: saves PDF to record via DocGenService.generateDocument().
+     * For "download" mode: returns base64 PDF via DocGenService.generatePdfBlob().
      */
     @AuraEnabled
-    public static Map<String, Object> preparePdfGeneration(Id templateId, Id recordId) {
+    public static Map<String, Object> generatePdf(Id templateId, Id recordId, Boolean saveToRecord) {
         try {
-            return DocGenService.preparePdfImages(templateId, recordId);
-        } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error preparing PDF: ' + e.getMessage());
-            throw new AuraHandledException('Error preparing PDF generation. Please check the template configuration.');
-        }
-    }
-
-    /**
-     * Step 2 of PDF generation with images: renders PDF using pre-saved image URLs
-     * via VF page, then cleans up temporary image records.
-     * Returns base64 PDF and title for download.
-     */
-    @AuraEnabled
-    public static Map<String, Object> generatePdfFromBatch(Id templateId, Id recordId, String batchKey, String docTitle) {
-        try {
-            Blob pdfBlob = DocGenService.generatePdfFromBatch(templateId, recordId, batchKey);
-            return new Map<String, Object>{
-                'base64' => EncodingUtil.base64Encode(pdfBlob),
-                'title' => docTitle
-            };
-        } catch (Exception e) {
-            // Clean up temp images on error
-            DocGenService.cleanupTempImages(batchKey);
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error generating PDF: ' + e.getMessage());
-            throw new AuraHandledException('Error generating PDF document. Please check the template configuration.');
-        }
-    }
-
-    /**
-     * Step 2 alternate: renders PDF and saves to record instead of returning base64.
-     * Returns ContentDocumentId.
-     */
-    @AuraEnabled
-    public static Id savePdfFromBatch(Id templateId, Id recordId, String batchKey, String docTitle) {
-        try {
-            Blob pdfBlob = DocGenService.generatePdfFromBatch(templateId, recordId, batchKey);
-            if (docTitle == null) docTitle = 'Generated_Document';
-
-            ContentVersion cv = new ContentVersion();
-            cv.Title = docTitle;
-            cv.PathOnClient = docTitle + '.pdf';
-            cv.VersionData = pdfBlob;
-            cv.IsMajorVersion = true;
-            SObjectAccessDecision cvDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
-            insert cvDecision.getRecords();
-            Id cvId = cvDecision.getRecords()[0].Id;
-
-            Id contentDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cvId WITH USER_MODE].ContentDocumentId;
-
-            ContentDocumentLink cdl = new ContentDocumentLink();
-            cdl.ContentDocumentId = contentDocId;
-            cdl.LinkedEntityId = recordId;
-            cdl.ShareType = 'V';
-            cdl.Visibility = 'AllUsers';
-            SObjectAccessDecision cdlDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
-            insert cdlDecision.getRecords();
-
-            return contentDocId;
-        } catch (System.NoAccessException e) {
-            DocGenService.cleanupTempImages(batchKey);
-            throw new DocGenException('Insufficient access to save PDF: ' + e.getMessage());
-        } catch (Exception e) {
-            DocGenService.cleanupTempImages(batchKey);
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error saving PDF: ' + e.getMessage());
-            throw new AuraHandledException('Error saving PDF document to record.');
-        }
-    }
-
-    /**
-     * Generates a PDF synchronously via Blob.toPdf() with images as data URIs.
-     * For "save" mode: PDF is saved directly to the record.
-     * For "download" mode: returns base64 PDF for client-side download.
-     */
-    @AuraEnabled
-    public static Map<String, Object> generatePdfAsync(Id templateId, Id recordId, Boolean saveToRecord) {
-        try {
-            Map<String, Object> result = DocGenService.generatePdfDirect(templateId, recordId);
-            Blob pdfBlob = (Blob) result.get('blob');
-            String docTitle = (String) result.get('title');
-            if (docTitle == null) docTitle = 'Generated_Document';
-
             if (saveToRecord) {
-                ContentVersion cv = new ContentVersion();
-                cv.Title = docTitle;
-                cv.PathOnClient = docTitle + '.pdf';
-                cv.VersionData = pdfBlob;
-                cv.FirstPublishLocationId = recordId;
-                SObjectAccessDecision cvDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
-                insert cvDecision.getRecords();
-
+                Id contentDocId = DocGenService.generateDocument(templateId, recordId);
                 return new Map<String, Object>{
-                    'title' => docTitle,
-                    'saved' => true
+                    'saved' => true,
+                    'contentDocumentId' => contentDocId
                 };
             } else {
+                Map<String, Object> result = DocGenService.generatePdfBlob(templateId, recordId);
+                Blob pdfBlob = (Blob) result.get('blob');
+                String docTitle = (String) result.get('title');
                 return new Map<String, Object>{
                     'base64' => EncodingUtil.base64Encode(pdfBlob),
                     'title' => docTitle
@@ -407,95 +322,6 @@ public with sharing class DocGenController {
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'DocGen: Error generating PDF: ' + e.getMessage());
             throw new AuraHandledException('Error generating PDF document. Please check the template configuration.');
-        }
-    }
-
-    /**
-     * Polls for async PDF generation result (download mode).
-     * Returns base64 PDF data if ready, null if still processing.
-     */
-    @AuraEnabled
-    public static Map<String, Object> checkPdfResult(String resultKey) {
-        try {
-            List<ContentVersion> cvs = [
-                SELECT VersionData, PathOnClient FROM ContentVersion
-                WHERE Title = :('docgen_result_' + resultKey)
-                WITH USER_MODE LIMIT 1
-            ];
-            if (cvs.isEmpty()) return null;
-
-            String base64 = EncodingUtil.base64Encode(cvs[0].VersionData);
-            String fileName = cvs[0].PathOnClient;
-
-            // Clean up the temp result CV
-            Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Title = :('docgen_result_' + resultKey) WITH SYSTEM_MODE LIMIT 1].ContentDocumentId;
-            delete [SELECT Id FROM ContentDocument WHERE Id = :docId WITH SYSTEM_MODE];
-
-            return new Map<String, Object>{
-                'base64' => base64,
-                'fileName' => fileName
-            };
-        } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error checking PDF result: ' + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Generates a PDF document server-side and returns it as base64 for download.
-     */
-    @AuraEnabled
-    public static Map<String, Object> generatePdfDocument(Id templateId, Id recordId) {
-        try {
-            Map<String, Object> result = DocGenService.generatePdfDirect(templateId, recordId);
-            Blob pdfBlob = (Blob) result.get('blob');
-            return new Map<String, Object>{
-                'base64' => EncodingUtil.base64Encode(pdfBlob),
-                'title' => result.get('title')
-            };
-        } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error generating PDF: ' + e.getMessage());
-            throw new AuraHandledException('Error generating PDF document. Please check the template configuration.');
-        }
-    }
-
-    /**
-     * Generates a PDF document server-side and saves it to the record.
-     * Returns the ContentDocumentId.
-     */
-    @AuraEnabled
-    public static Id generateAndSavePdfDocument(Id templateId, Id recordId) {
-        try {
-            Map<String, Object> result = DocGenService.generatePdfDirect(templateId, recordId);
-            Blob pdfBlob = (Blob) result.get('blob');
-            String title = (String) result.get('title');
-            if (title == null) title = 'Generated_Document';
-
-            ContentVersion cv = new ContentVersion();
-            cv.Title = title;
-            cv.PathOnClient = title + '.pdf';
-            cv.VersionData = pdfBlob;
-            cv.IsMajorVersion = true;
-            SObjectAccessDecision cvDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
-            insert cvDecision.getRecords();
-            Id cvId = cvDecision.getRecords()[0].Id;
-
-            Id contentDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cvId WITH USER_MODE].ContentDocumentId;
-
-            ContentDocumentLink cdl = new ContentDocumentLink();
-            cdl.ContentDocumentId = contentDocId;
-            cdl.LinkedEntityId = recordId;
-            cdl.ShareType = 'V';
-            cdl.Visibility = 'AllUsers';
-            SObjectAccessDecision cdlDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
-            insert cdlDecision.getRecords();
-
-            return contentDocId;
-        } catch (System.NoAccessException e) {
-            throw new DocGenException('Insufficient access to save PDF: ' + e.getMessage());
-        } catch (Exception e) {
-            System.debug(LoggingLevel.ERROR, 'DocGen: Error saving PDF: ' + e.getMessage());
-            throw new AuraHandledException('Error saving PDF document to record.');
         }
     }
 
