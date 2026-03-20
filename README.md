@@ -2,7 +2,7 @@
 
 **A free, native, production-ready document engine for Salesforce.**
 
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](#quick-install)
+[![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)](#quick-install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![API Version](https://img.shields.io/badge/API-v66.0-orange.svg)](#)
@@ -16,6 +16,7 @@ Generate DOCX, PPTX, and PDF documents from any Salesforce record. Merge fields,
 
 - [Why This Exists](#why-this-exists)
 - [Quick Install](#quick-install)
+- [What's New in v1.2.2](#whats-new-in-v122)
 - [What's New in v1.2.0](#whats-new-in-v120)
 - [What's New in v1.1.1](#whats-new-in-v111)
 - [What's New in v1.1.0](#whats-new-in-v110)
@@ -56,16 +57,16 @@ This project gives you a professional-grade document engine -- template manageme
 
 ## Quick Install
 
-**Package Version ID**: `04tdL000000RHrBQAW`
+**Package Version ID**: `04tdL000000RMqrQAG`
 
 **CLI:**
 ```bash
-sf package install --package 04tdL000000RHrBQAW --wait 10 --installation-key-bypass
+sf package install --package 04tdL000000RMqrQAG --wait 10 --installation-key-bypass
 ```
 
 **Browser:**
-- [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RHrBQAW)
-- [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RHrBQAW)
+- [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RMqrQAG)
+- [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RMqrQAG)
 
 > Select **Install for Admins Only** during installation, then assign permission sets to your users.
 
@@ -80,6 +81,31 @@ Because the "heavy lifting" of PDF rendering and image injection happens on-serv
 
 Is this right for you?
 If your use case consistently requires generating documents or processing image data larger than these limits, this tool may not be the right fit for your requirements in its current state.
+
+## What's New in v1.2.2
+
+### E-Signature PDF Fix
+- Signed PDFs now save correctly to the original record after all signers complete
+- Fixed `Related_Record_Id__c` lookup -- no longer relies on fragile ContentDocumentLink traversal
+- Fixed base64 `data:image/...` prefix not being stripped before signature image decoding
+- Signature images now render in the signed PDF via committed ContentVersion download URLs
+- Added `Database.AllowsCallouts` to the Stage 2 render Queueable
+
+### Automated Process User Compatibility
+- Signature PDF generation runs entirely through `Blob.toPdf()` -- no Visualforce page access required
+- Requires the Spring '26 Release Update: **"Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations"**
+- Added `DocGenPdfRendererController`, `DocGenSignatureController`, and `DocGenSignatureService` class access to Admin and User permission sets
+- Added VF page access (`DocGenPdfRenderer`, `DocGenSignature`) to Admin and User permission sets
+- Error audit logging: signature PDF failures now create a `DocGen_Signature_Audit__c` record with the error message instead of failing silently
+
+### Admin Guide
+- New **Data Model** section with complete object reference tables, signature flow lifecycle, and relationship diagram
+- Signature placeholders now recommend always using `{#Signature_RoleName}` format
+
+### Page Layouts
+- Added page layouts for all 9 custom objects
+
+---
 
 ## What's New in v1.2.0
 
@@ -212,6 +238,36 @@ E-signatures require a Salesforce Site (not Experience Cloud):
 5. Copy the Site URL and paste it in the **DocGen Setup** tab
 
 > Signature links are secured with SHA-256 tokens and expire after 30 days.
+
+### Required: Enable Updated Blob.toPdf() (Spring '26)
+
+E-signature PDF generation runs as the **Automated Process user** via Platform Events and Queueable Apex. This system user cannot access Visualforce pages, so signature PDFs are rendered entirely through `Blob.toPdf()`. The Spring '26 Release Update must be enabled for `Blob.toPdf()` to properly render HTML with CSS and images.
+
+**To enable:**
+1. Go to **Setup > Release Updates**
+2. Find **"Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations"**
+3. Click **Get Started** > **Enable**
+
+**What this does:**
+- Upgrades `Blob.toPdf()` to use the same rendering engine as Visualforce `renderAs="pdf"`
+- Enables CSS parsing (`<style>` tags), image rendering (`<img>` with Salesforce URLs), and modern font support
+- Required for signature images to appear in the signed PDF
+
+**Without this Release Update**, signed PDFs will be generated but will contain raw CSS text instead of formatted content, and signature images will not render.
+
+> **Note:** This Release Update is opt-in until Summer '26 when it becomes enforced for all orgs.
+
+### How the Automated Process User Works
+
+When all signers complete their signatures, the following chain executes automatically:
+
+1. The last signer's completion publishes a **Platform Event** (`DocGen_Signature_PDF__e`)
+2. A **trigger** fires and enqueues a Queueable job (runs as the **Automated Process user**)
+3. **Stage 1** stamps all signature images into the DOCX and saves the result as ContentVersion files on the Signature Request record
+4. **Stage 2** (chained Queueable) reads those committed files, generates HTML with ContentVersion download URLs, and calls `Blob.toPdf()` to produce the final PDF
+5. The signed PDF is saved to the **original record** (Account, Opportunity, etc.) and an audit trail is created
+
+The Automated Process user has full data access via `SYSTEM_MODE` queries and `AccessLevel.SYSTEM_MODE` DML. It does **not** need permission sets for object access. However, it **does** require the Spring '26 `Blob.toPdf()` Release Update for proper PDF rendering since it cannot access Visualforce pages.
 
 ### Email Branding
 
