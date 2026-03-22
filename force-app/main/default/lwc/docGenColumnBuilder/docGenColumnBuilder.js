@@ -3,6 +3,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions';
 import getObjectFields from '@salesforce/apex/DocGenController.getObjectFields';
 import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
+import getParentRelationships from '@salesforce/apex/DocGenController.getParentRelationships';
 import getAvailableReports from '@salesforce/apex/DocGenController.getAvailableReports';
 import importReportConfig from '@salesforce/apex/DocGenController.importReportConfig';
 
@@ -70,7 +71,8 @@ export default class DocGenColumnBuilder extends LightningElement {
 
     get filteredObjectOptions() {
         const term = (this.objectSearchTerm || '').toLowerCase();
-        return this.objectOptions.filter(o => o.label.toLowerCase().includes(term)).slice(0, 50);
+        if (term.length < 2) return []; // Don't show until at least 2 chars typed
+        return this.objectOptions.filter(o => o.label.toLowerCase().includes(term)).slice(0, 20);
     }
 
     get filteredAddOptions() {
@@ -208,8 +210,14 @@ export default class DocGenColumnBuilder extends LightningElement {
     }
 
     // === OBJECT SELECTION ===
-    handleObjectSearch(event) { this.objectSearchTerm = event.target.value; this.showObjectPicker = true; }
-    handleObjectFocus() { this.showObjectPicker = true; }
+    handleObjectSearch(event) {
+        this.objectSearchTerm = event.target.value;
+        this.showObjectPicker = this.objectSearchTerm.length >= 2;
+    }
+    handleObjectFocus() {
+        // Only show if we already have search results
+        if (this.objectSearchTerm.length >= 2) this.showObjectPicker = true;
+    }
     handleObjectSelect(event) {
         const value = event.currentTarget.dataset.value;
         const label = event.currentTarget.dataset.label;
