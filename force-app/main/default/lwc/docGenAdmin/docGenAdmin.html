@@ -185,6 +185,22 @@
                                 </div>
                             </div>
                             <lightning-textarea label="Description" value={editTemplateDesc} onchange={handleEditDescChange} class="slds-var-m-top_small"></lightning-textarea>
+
+                            <!-- Test/Sample Record -->
+                            <div class="slds-box slds-theme_shade slds-var-m-top_medium" style="border-radius: 6px;">
+                                <h4 class="slds-text-title_bold slds-var-m-bottom_x-small">Sample Record for Previews</h4>
+                                <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_small">Set a record to use for sample generation and bulk preview. This lets you see what your document will look like before running a bulk job.</p>
+                                <lightning-record-picker
+                                    label="Sample Record"
+                                    object-api-name={editTemplateObject}
+                                    value={editTemplateTestRecordId}
+                                    onchange={handleEditTestRecordChange}
+                                    placeholder="Search for a record...">
+                                </lightning-record-picker>
+                                <template if:true={editTemplateTestRecordId}>
+                                    <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_xx-small">ID: {editTemplateTestRecordId}</p>
+                                </template>
+                            </div>
                         </lightning-tab>
 
                         <!-- Tab 2: Query Configuration -->

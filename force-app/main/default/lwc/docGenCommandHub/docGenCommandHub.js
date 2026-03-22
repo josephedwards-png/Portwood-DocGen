@@ -5,7 +5,7 @@ export default class DocGenCommandHub extends LightningElement {
     @track templateCount = 0;
     @track showBanner = false;
     @track bannerDismissed = false;
-    @track activeSection = 'templates'; // 'templates' | 'bulk' | 'help'
+    @track showHelp = false;
     @track isLoaded = false;
 
     _wiredTemplates;
@@ -40,19 +40,6 @@ export default class DocGenCommandHub extends LightningElement {
             : 'Upload a Word template with merge tags, generate PDFs or DOCX from any record.';
     }
 
-    // Tab states
-    get isTemplates() { return this.activeSection === 'templates'; }
-    get isBulk() { return this.activeSection === 'bulk'; }
-    get isHelp() { return this.activeSection === 'help'; }
-
-    get templatesTabClass() { return this.activeSection === 'templates' ? 'tab-active' : 'tab-inactive'; }
-    get bulkTabClass() { return this.activeSection === 'bulk' ? 'tab-active' : 'tab-inactive'; }
-    get helpTabClass() { return this.activeSection === 'help' ? 'tab-active' : 'tab-inactive'; }
-
-    handleShowTemplates() { this.activeSection = 'templates'; }
-    handleShowBulk() { this.activeSection = 'bulk'; }
-    handleShowHelp() { this.activeSection = 'help'; }
-
     handleDismissBanner() {
         this.showBanner = false;
         this.bannerDismissed = true;
@@ -61,6 +48,10 @@ export default class DocGenCommandHub extends LightningElement {
     handleShowBanner() {
         this.showBanner = true;
         this.bannerDismissed = false;
+    }
+
+    handleToggleHelp() {
+        this.showHelp = !this.showHelp;
     }
 
     handleCopyTag(event) {
