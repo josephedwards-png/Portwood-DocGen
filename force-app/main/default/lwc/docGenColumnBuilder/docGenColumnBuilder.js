@@ -774,10 +774,12 @@ export default class DocGenColumnBuilder extends LightningElement {
             }
         }
 
-        // Save report filters for bulk generation
+        // Save report filters FIRST (before async loading notifies parent)
         if (result.bulkWhereClause) {
             this.savedReportFilters = result.bulkWhereClause;
         }
+        // Trigger a notifyChange so the config includes bulkWhereClause immediately
+        this._notifyChange();
 
         let toastMsg = result.fieldCount + ' fields from "' + result.reportName + '" applied.';
         if (result.bulkWhereClause) {
