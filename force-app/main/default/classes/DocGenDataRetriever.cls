@@ -89,6 +89,185 @@ public with sharing class DocGenDataRetriever {
      * Parses the config string into flat fields/direct subqueries and deep subquery specs.
      * Nested subqueries are extracted so Level 0 only contains direct children.
      */
+    /**
+     * JSON v2 config parser. Builds SOQL from structured JSON, handles junctions.
+     *
+     * JSON format:
+     * { "v":2, "baseObject":"Opportunity", "baseFields":["Name","Amount"],
+     *   "parentFields":["Account.Name"], "children":[{"rel":"OpportunityLineItems","fields":["Name"]}],
+     *   "junctions":[{"junctionRel":"OpportunityContactRoles","junctionFields":["Role"],
+     *     "targetObject":"Contact","targetIdField":"ContactId","targetFields":["FirstName","LastName"]}] }
+     */
+    private static Map<String, Object> getRecordDataV2(Id recordId, String baseObject, String jsonConfig) {
+        Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(jsonConfig);
+
+        // Build SELECT clause from baseFields + parentFields + child subqueries + junction subqueries
+        List<String> selectParts = new List<String>();
+
+        // Base fields
+        List<Object> baseFields = (List<Object>) config.get('baseFields');
+        if (baseFields != null) {
+            for (Object f : baseFields) selectParts.add(String.valueOf(f));
+        }
+
+        // Parent fields (Account.Name, Owner.Email)
+        List<Object> parentFields = (List<Object>) config.get('parentFields');
+        if (parentFields != null) {
+            for (Object f : parentFields) selectParts.add(String.valueOf(f));
+        }
+
+        // Direct child subqueries
+        List<Object> children = (List<Object>) config.get('children');
+        List<SubquerySpec> childSpecs = new List<SubquerySpec>();
+        if (children != null) {
+            for (Object childObj : children) {
+                Map<String, Object> child = (Map<String, Object>) childObj;
+                String rel = (String) child.get('rel');
+                List<Object> fields = (List<Object>) child.get('fields');
+                if (rel == null || fields == null || fields.isEmpty()) continue;
+
+                List<String> fieldNames = new List<String>();
+                for (Object f : fields) fieldNames.add(String.valueOf(f));
+
+                String subquery = '(SELECT ' + String.join(fieldNames, ', ') + ' FROM ' + rel;
+                String w = (String) child.get('where');
+                String o = (String) child.get('orderBy');
+                String l = (String) child.get('limit');
+                if (String.isNotBlank(w)) subquery += ' WHERE ' + w;
+                if (String.isNotBlank(o)) subquery += ' ORDER BY ' + o;
+                if (String.isNotBlank(l)) subquery += ' LIMIT ' + l;
+                subquery += ')';
+                selectParts.add(subquery);
+
+                // Track for grandchild stitching (if nested children exist)
+                SubquerySpec spec = new SubquerySpec();
+                spec.relationshipName = rel;
+                resolveChildSchema(spec, baseObject);
+                spec.fieldsOnly = String.join(fieldNames, ', ');
+                childSpecs.add(spec);
+            }
+        }
+
+        // Junction subqueries — query the junction relationship as a direct child
+        List<JunctionSpec> junctionSpecs = new List<JunctionSpec>();
+        List<Object> junctions = (List<Object>) config.get('junctions');
+        if (junctions != null) {
+            for (Object jObj : junctions) {
+                Map<String, Object> j = (Map<String, Object>) jObj;
+                JunctionSpec js = new JunctionSpec();
+                js.junctionRel = (String) j.get('junctionRel');
+                js.targetObject = (String) j.get('targetObject');
+                js.targetIdField = (String) j.get('targetIdField');
+                js.targetWhere = (String) j.get('targetWhere');
+                js.targetOrderBy = (String) j.get('targetOrderBy');
+
+                js.junctionFields = new List<String>();
+                List<Object> jf = (List<Object>) j.get('junctionFields');
+                if (jf != null) for (Object f : jf) js.junctionFields.add(String.valueOf(f));
+
+                js.targetFields = new List<String>();
+                List<Object> tf = (List<Object>) j.get('targetFields');
+                if (tf != null) for (Object f : tf) js.targetFields.add(String.valueOf(f));
+
+                junctionSpecs.add(js);
+
+                // Build junction subquery: (SELECT ContactId, Role FROM OpportunityContactRoles)
+                List<String> jqFields = new List<String>();
+                jqFields.add(js.targetIdField); // Always need the lookup ID for stitching
+                jqFields.addAll(js.junctionFields);
+                selectParts.add('(SELECT ' + String.join(jqFields, ', ') + ' FROM ' + js.junctionRel + ')');
+            }
+        }
+
+        if (selectParts.isEmpty()) selectParts.add('Id');
+
+        // Execute Level 0 query
+        String query = 'SELECT ' + String.join(selectParts, ', ') + ' FROM ' +
+            String.escapeSingleQuotes(baseObject) + ' WHERE Id = :recordId LIMIT 1';
+
+        Map<String, Object> data;
+        try {
+            List<SObject> results = Database.query(query, AccessLevel.USER_MODE);
+            if (results.isEmpty()) return null;
+            data = mapSObject(results[0]);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'DocGen: V2 query error: ' + e.getMessage());
+            throw new AuraHandledException('Error executing query. Please verify your template configuration.');
+        }
+
+        // Stitch junction targets (two-hop: junction record → target object)
+        for (JunctionSpec js : junctionSpecs) {
+            stitchJunctionTargets(data, js);
+        }
+
+        return data;
+    }
+
+    /**
+     * Stitches target object data into junction records.
+     * E.g., for OpportunityContactRoles, queries Contacts by ID and
+     * injects Contact data into each OCR record under the 'Contact' key.
+     */
+    private static void stitchJunctionTargets(Map<String, Object> data, JunctionSpec js) {
+        Object junctionData = data.get(js.junctionRel);
+        if (junctionData == null || !(junctionData instanceof Map<String, Object>)) return;
+
+        Map<String, Object> jMap = (Map<String, Object>) junctionData;
+        Object recordsObj = jMap.get('records');
+        if (recordsObj == null || !(recordsObj instanceof List<Object>)) return;
+
+        List<Object> junctionRecords = (List<Object>) recordsObj;
+        if (junctionRecords.isEmpty()) return;
+
+        // Collect target IDs from junction records
+        Set<Id> targetIds = new Set<Id>();
+        for (Object rec : junctionRecords) {
+            if (rec instanceof Map<String, Object>) {
+                Object idVal = ((Map<String, Object>) rec).get(js.targetIdField);
+                if (idVal != null) {
+                    try { targetIds.add(Id.valueOf(String.valueOf(idVal))); } catch (Exception e) { /* skip */ }
+                }
+            }
+        }
+        if (targetIds.isEmpty()) return;
+
+        // Query target objects
+        List<String> targetFieldList = new List<String>(js.targetFields);
+        if (!targetFieldList.contains('Id')) targetFieldList.add(0, 'Id');
+
+        String targetQuery = 'SELECT ' + String.join(targetFieldList, ', ') +
+            ' FROM ' + String.escapeSingleQuotes(js.targetObject) +
+            ' WHERE Id IN :targetIds';
+        if (String.isNotBlank(js.targetWhere)) targetQuery += ' AND ' + js.targetWhere;
+        if (String.isNotBlank(js.targetOrderBy)) targetQuery += ' ORDER BY ' + js.targetOrderBy;
+
+        Map<Id, Map<String, Object>> targetMap = new Map<Id, Map<String, Object>>();
+        try {
+            for (SObject targetRec : Database.query(targetQuery, AccessLevel.USER_MODE)) {
+                targetMap.put(targetRec.Id, mapSObject(targetRec));
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'DocGen: Junction target query failed: ' + e.getMessage());
+            return;
+        }
+
+        // Stitch target data into each junction record
+        for (Object rec : junctionRecords) {
+            if (!(rec instanceof Map<String, Object>)) continue;
+            Map<String, Object> jRec = (Map<String, Object>) rec;
+            Object targetIdVal = jRec.get(js.targetIdField);
+            if (targetIdVal == null) continue;
+
+            Id targetId;
+            try { targetId = Id.valueOf(String.valueOf(targetIdVal)); } catch (Exception e) { continue; }
+
+            Map<String, Object> targetData = targetMap.get(targetId);
+            if (targetData != null) {
+                jRec.put(js.targetObject, targetData);
+            }
+        }
+    }
+
     private static void parseConfigParts(String fieldsConfig, String baseObject,
             Map<String, SObjectField> fieldMap, List<String> flatParts, List<SubquerySpec> deepSpecs) {
 
