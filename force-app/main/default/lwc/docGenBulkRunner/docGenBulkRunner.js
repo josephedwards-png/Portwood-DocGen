@@ -82,9 +82,9 @@ export default class DocGenBulkRunner extends LightningElement {
                     const config = JSON.parse(tmplData.Query_Config__c);
 
                     // Check for pre-built WHERE clause (saved from report import)
+                    let autoFilter = null;
                     if (config.bulkWhereClause) {
-                        this.condition = config.bulkWhereClause;
-                        this.showToast('Filter Applied', 'Report filter loaded: ' + this.condition, 'info');
+                        autoFilter = config.bulkWhereClause;
                     }
                     // Fallback: convert reportFilters array to WHERE clause
                     else if (config.reportFilters && config.reportFilters.length > 0) {
@@ -92,8 +92,25 @@ export default class DocGenBulkRunner extends LightningElement {
                             if (f.operator === 'LIKE') return f.field + " LIKE '%" + f.value + "%'";
                             return f.field + " " + f.operator + " '" + f.value + "'";
                         });
-                        this.condition = parts.join(' AND ');
+                        autoFilter = parts.join(' AND ');
+                    }
+
+                    if (autoFilter) {
+                        this.condition = autoFilter;
                         this.showToast('Filter Applied', 'Report filter loaded: ' + this.condition, 'info');
+
+                        // Auto-save as a saved query if not already saved
+                        const existingMatch = this.savedQueries.find(q => q.Query_Condition__c === autoFilter);
+                        if (!existingMatch) {
+                            saveQuery({
+                                templateId: this.selectedTemplateId,
+                                label: 'From Report',
+                                description: 'Auto-saved from report import',
+                                condition: autoFilter
+                            }).then(() => {
+                                this.loadSavedQueries();
+                            }).catch(() => {});
+                        }
                     }
                 } catch (e) {
                     // Not JSON or no filters — that's fine
