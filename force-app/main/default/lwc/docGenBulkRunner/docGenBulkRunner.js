@@ -75,13 +75,19 @@ export default class DocGenBulkRunner extends LightningElement {
             this.recordCount = null;
             this.loadSavedQueries();
 
-            // Auto-load report filter WHERE clause from template config if V3
+            // Auto-load report filter WHERE clause from template config
             const tmplData = this._templateDataMap[this.selectedTemplateId];
             if (tmplData && tmplData.Query_Config__c) {
                 try {
                     const config = JSON.parse(tmplData.Query_Config__c);
-                    if (config.reportFilters && config.reportFilters.length > 0) {
-                        // Convert report filters to WHERE clause
+
+                    // Check for pre-built WHERE clause (saved from report import)
+                    if (config.bulkWhereClause) {
+                        this.condition = config.bulkWhereClause;
+                        this.showToast('Filter Applied', 'Report filter loaded: ' + this.condition, 'info');
+                    }
+                    // Fallback: convert reportFilters array to WHERE clause
+                    else if (config.reportFilters && config.reportFilters.length > 0) {
                         const parts = config.reportFilters.map(f => {
                             if (f.operator === 'LIKE') return f.field + " LIKE '%" + f.value + "%'";
                             return f.field + " " + f.operator + " '" + f.value + "'";
