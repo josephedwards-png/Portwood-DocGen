@@ -678,14 +678,51 @@ public with sharing class DocGenController {
             properCaseMap.put(apiName.toLowerCase(), properName);
         }
 
+        // Build parent relationship prefix map: USERS → Owner, ACCOUNT → Account, etc.
+        Map<String, String> parentPrefixMap = new Map<String, String>();
+        for (SObjectField sof : fieldMap.values()) {
+            Schema.DescribeFieldResult dfr = sof.getDescribe();
+            if (dfr.getRelationshipName() != null && dfr.getReferenceTo() != null && !dfr.getReferenceTo().isEmpty()) {
+                // Map the referenced object's label/name to the relationship name
+                String refObjName = dfr.getReferenceTo()[0].getDescribe().getName().toUpperCase();
+                parentPrefixMap.put(refObjName, dfr.getRelationshipName());
+                // Also map common report prefixes
+                if (dfr.getName() == 'OwnerId') parentPrefixMap.put('USERS', dfr.getRelationshipName());
+                if (dfr.getName() == 'CreatedById') parentPrefixMap.put('CREATED_BY', dfr.getRelationshipName());
+            }
+        }
+
         // Normalize report columns to SOQL field names
         List<String> detailColumns = metadata.getDetailColumns();
         Map<String, Reports.DetailColumn> columnInfo = extMeta.getDetailColumnInfo();
         List<String> normalizedFields = new List<String>();
+        List<String> parentFields = new List<String>();
 
         for (String colKey : detailColumns) {
             Reports.DetailColumn col = columnInfo.get(colKey);
             String colLabel = (col != null) ? col.getLabel() : null;
+
+            // Check if this is a parent relationship column (e.g., USERS.NAME)
+            // But NOT if the prefix matches the base object (ACCOUNT.NAME on Account = the record's own Name)
+            if (colKey.contains('.')) {
+                String prefix = colKey.substringBefore('.').toUpperCase();
+                String childField = colKey.substringAfter('.');
+                Boolean isSelfPrefix = prefix.equalsIgnoreCase(baseObject) ||
+                    prefix.equalsIgnoreCase(baseObject.removeEnd('__c'));
+                if (!isSelfPrefix && parentPrefixMap.containsKey(prefix)) {
+                    String relName = parentPrefixMap.get(prefix);
+                    // Resolve the child field name on the referenced object
+                    String parentFieldName = resolveParentFieldName(relName, childField, colLabel, fieldMap);
+                    if (parentFieldName != null) {
+                        String fullPath = relName + '.' + parentFieldName;
+                        if (!parentFields.contains(fullPath)) {
+                            parentFields.add(fullPath);
+                        }
+                        continue;
+                    }
+                }
+            }
+
             String fieldName = normalizeReportColumn(colKey, colLabel, fieldMap, labelToApiName, properCaseMap);
             if (fieldName != null && !normalizedFields.contains(fieldName)) {
                 normalizedFields.add(fieldName);
@@ -710,11 +747,53 @@ public with sharing class DocGenController {
         return new Map<String, Object>{
             'baseObject' => baseObject,
             'fields' => normalizedFields,
+            'parentFields' => parentFields,
             'filters' => filters,
             'reportName' => metadata.getName(),
-            'fieldCount' => normalizedFields.size(),
+            'fieldCount' => normalizedFields.size() + parentFields.size(),
             'filterCount' => filters.size()
         };
+    }
+
+    /**
+     * Resolves a field name on a parent object from a report column.
+     * E.g., for Owner relationship with child field 'NAME', resolves to 'Name'.
+     */
+    private static String resolveParentFieldName(String relName, String childFieldKey,
+            String columnLabel, Map<String, SObjectField> baseFieldMap) {
+        // Find the lookup field to get the referenced object
+        for (SObjectField sof : baseFieldMap.values()) {
+            Schema.DescribeFieldResult dfr = sof.getDescribe();
+            if (dfr.getRelationshipName() == relName && dfr.getReferenceTo() != null && !dfr.getReferenceTo().isEmpty()) {
+                Map<String, SObjectField> parentFieldMap = dfr.getReferenceTo()[0].getDescribe().fields.getMap();
+
+                // Try direct match
+                if (parentFieldMap.containsKey(childFieldKey)) {
+                    return parentFieldMap.get(childFieldKey).getDescribe().getName();
+                }
+
+                // Try label match on parent object
+                if (String.isNotBlank(columnLabel)) {
+                    // Strip parent context from label: "Account Owner" → might just be "Name" on User
+                    for (String pKey : parentFieldMap.keySet()) {
+                        Schema.DescribeFieldResult pDfr = parentFieldMap.get(pKey).getDescribe();
+                        if (pDfr.getLabel().equalsIgnoreCase(columnLabel) ||
+                            pDfr.getLabel().equalsIgnoreCase('Name') && childFieldKey.equalsIgnoreCase('NAME')) {
+                            return pDfr.getName();
+                        }
+                    }
+                }
+
+                // Common: NAME → Name, EMAIL → Email
+                for (String pKey : parentFieldMap.keySet()) {
+                    if (pKey.equalsIgnoreCase(childFieldKey)) {
+                        return parentFieldMap.get(pKey).getDescribe().getName();
+                    }
+                }
+                break;
+            }
+        }
+        return null;
     }
 
     /**

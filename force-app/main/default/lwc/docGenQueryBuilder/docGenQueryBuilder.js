@@ -187,6 +187,13 @@ export default class DocGenQueryBuilder extends LightningElement {
                 const validValues = new Set(data.map(opt => opt.value));
                 this.baseFieldSelection = this._pendingReportFields.filter(f => validValues.has(f));
                 this._pendingReportFields = null;
+
+                // Also apply parent fields (Owner.Name, etc.)
+                if (this._pendingReportParentFields && this._pendingReportParentFields.length > 0) {
+                    this.parentFieldSelection = [...this._pendingReportParentFields];
+                    this._pendingReportParentFields = null;
+                }
+
                 this.updateCombinedSelection();
             }
         } else if (error) {
@@ -1291,8 +1298,9 @@ export default class DocGenQueryBuilder extends LightningElement {
         }));
     }
 
-    // Pending report import fields — set after wire reloads field options
+    // Pending report import fields — applied after wire reloads field options
     _pendingReportFields = null;
+    _pendingReportParentFields = null;
 
     handleImportReport() {
         if (!this.selectedReportId) return;
@@ -1304,6 +1312,7 @@ export default class DocGenQueryBuilder extends LightningElement {
 
                 // Store fields to apply after the wire reloads
                 this._pendingReportFields = result.fields || [];
+                this._pendingReportParentFields = result.parentFields || [];
 
                 // Set the base object — this triggers the @wire(getObjectFields) to reload
                 if (result.baseObject) {
