@@ -3,10 +3,9 @@ import getAllTemplates from '@salesforce/apex/DocGenController.getAllTemplates';
 
 export default class DocGenCommandHub extends LightningElement {
     @track templateCount = 0;
-    @track showBanner = true;
+    @track showBanner = false;
     @track bannerDismissed = false;
-    @track showHelp = false;
-    @track showBulk = false;
+    @track activeSection = 'templates'; // 'templates' | 'bulk' | 'help'
     @track isLoaded = false;
 
     _wiredTemplates;
@@ -16,9 +15,8 @@ export default class DocGenCommandHub extends LightningElement {
         this._wiredTemplates = result;
         if (result.data) {
             this.templateCount = result.data.length;
-            // Show welcome banner if < 10 templates and user hasn't dismissed it
-            if (!this.bannerDismissed) {
-                this.showBanner = this.templateCount < 10;
+            if (!this.bannerDismissed && this.templateCount < 10) {
+                this.showBanner = true;
             }
             this.isLoaded = true;
         } else if (result.error) {
@@ -32,43 +30,37 @@ export default class DocGenCommandHub extends LightningElement {
         return this.templateCount + ' templates ready';
     }
 
-    get bulkSectionIcon() {
-        return this.showBulk ? 'utility:chevrondown' : 'utility:chevronright';
-    }
-
     get bannerHeading() {
-        if (this.templateCount === 0) return 'Welcome to DocGen';
-        return 'DocGen';
+        return this.templateCount === 0 ? 'Welcome to DocGen' : 'DocGen';
     }
 
     get bannerSubtext() {
-        if (this.templateCount === 0) return "Let's create your first template. It takes about 3 minutes.";
-        return 'Upload a Word template with merge tags, generate PDFs or DOCX from any record.';
+        return this.templateCount === 0
+            ? "Let's create your first template. It takes about 3 minutes."
+            : 'Upload a Word template with merge tags, generate PDFs or DOCX from any record.';
     }
+
+    // Tab states
+    get isTemplates() { return this.activeSection === 'templates'; }
+    get isBulk() { return this.activeSection === 'bulk'; }
+    get isHelp() { return this.activeSection === 'help'; }
+
+    get templatesTabClass() { return this.activeSection === 'templates' ? 'tab-active' : 'tab-inactive'; }
+    get bulkTabClass() { return this.activeSection === 'bulk' ? 'tab-active' : 'tab-inactive'; }
+    get helpTabClass() { return this.activeSection === 'help' ? 'tab-active' : 'tab-inactive'; }
+
+    handleShowTemplates() { this.activeSection = 'templates'; }
+    handleShowBulk() { this.activeSection = 'bulk'; }
+    handleShowHelp() { this.activeSection = 'help'; }
 
     handleDismissBanner() {
         this.showBanner = false;
         this.bannerDismissed = true;
     }
 
-    handleScrollToTemplates() {
-        const el = this.template.querySelector('[data-section="templates"]');
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-    }
-
-    handleToggleBulk() {
-        this.showBulk = !this.showBulk;
-        if (this.showBulk) {
-            // eslint-disable-next-line @lwc/lwc/no-async-operation
-            setTimeout(() => {
-                const el = this.template.querySelector('[data-section="bulk"]');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-        }
-    }
-
-    handleToggleHelp() {
-        this.showHelp = !this.showHelp;
+    handleShowBanner() {
+        this.showBanner = true;
+        this.bannerDismissed = false;
     }
 
     handleCopyTag(event) {

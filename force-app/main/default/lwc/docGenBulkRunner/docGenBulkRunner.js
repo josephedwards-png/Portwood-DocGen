@@ -59,6 +59,18 @@ export default class DocGenBulkRunner extends LightningElement {
         }
     }
 
+    @track templateSearchTerm = '';
+
+    get filteredTemplates() {
+        if (!this.templateSearchTerm) return this.templates;
+        const term = this.templateSearchTerm.toLowerCase();
+        return this.templates.filter(t => t.label.toLowerCase().includes(term));
+    }
+
+    handleTemplateSearch(event) {
+        this.templateSearchTerm = event.detail.value || event.target.value || '';
+    }
+
     handleRefreshTemplates() {
         refreshApex(this._wiredTemplateResult);
     }

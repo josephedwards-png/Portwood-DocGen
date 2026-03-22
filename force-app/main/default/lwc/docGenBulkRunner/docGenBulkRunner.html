@@ -18,15 +18,16 @@
                         <div class="slds-col slds-grow">
                             <lightning-combobox
                                 label="Select Template"
-                                placeholder="Choose a template..."
+                                placeholder="Search or choose a template..."
                                 value={selectedTemplateId}
-                                options={templates}
+                                options={filteredTemplates}
                                 onchange={handleTemplateChange}
                                 disabled={isProcessing}>
                             </lightning-combobox>
                         </div>
                         <lightning-button-icon icon-name="utility:refresh" variant="border-filled" alternative-text="Refresh templates" onclick={handleRefreshTemplates}></lightning-button-icon>
                     </div>
+                    <lightning-input type="search" variant="label-hidden" placeholder="Filter templates..." onchange={handleTemplateSearch} class="slds-var-m-top_x-small"></lightning-input>
 
                     <template if:true={baseObject}>
                         <div class="slds-text-color_weak slds-var-m-top_x-small">

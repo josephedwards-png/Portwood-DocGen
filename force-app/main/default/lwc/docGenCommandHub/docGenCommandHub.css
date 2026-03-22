@@ -1,53 +1,47 @@
 .hub-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 1.5rem;
+    padding: 1rem 1.5rem;
 }
 
-.action-card {
-    border-radius: 8px;
-    height: 100%;
-    cursor: pointer;
-    transition: box-shadow 0.15s ease;
-}
-.action-card:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+.tab-active {
+    background: #fff;
+    border: 2px solid #0176D3;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-.card-title {
-    font-weight: 700;
-    margin: 0;
+.tab-inactive {
+    background: #f3f2f2;
+    border: 2px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
 }
 
-.section-heading {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 0.5rem 0;
+.tab-inactive:hover {
+    background: #eef4fb;
+    border-color: #d1e3f8;
 }
 
 .tag-card {
     background: #f3f2f2;
     border-radius: 6px;
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
 }
 
 .tag-code {
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     color: #0176d3;
     cursor: pointer;
 }
-.tag-code:hover {
-    text-decoration: underline;
-}
+.tag-code:hover { text-decoration: underline; }
 
 .tag-desc {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: #706e6b;
-    margin: 0.25rem 0 0 0;
+    margin: 0.125rem 0 0 0;
 }
 
 .info-card {
     background: #f3f2f2;
     border-radius: 6px;
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
 }
