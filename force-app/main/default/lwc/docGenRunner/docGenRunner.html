@@ -13,7 +13,7 @@
             </template>
 
             <template lwc:else>
-                <!-- Mode toggle: Generate vs Merge Only -->
+                <!-- Mode toggle -->
                 <div class="slds-var-m-bottom_medium">
                     <lightning-radio-group
                         name="appMode"
@@ -88,6 +88,70 @@
                         label={generateButtonLabel}
                         onclick={generateDocument}
                         disabled={isGenerateDisabled}
+                        class="slds-var-m-top_medium">
+                    </lightning-button>
+                </template>
+
+                <!-- DOCUMENT PACKET MODE -->
+                <template lwc:if={isPacketMode}>
+                    <div class="slds-var-m-bottom_medium">
+                        <lightning-dual-listbox
+                            name="packetTemplates"
+                            label="Select and order templates for the packet"
+                            source-label="Available Templates"
+                            selected-label="Packet Order"
+                            options={pdfTemplateOptions}
+                            value={packetTemplateIds}
+                            onchange={handlePacketTemplateSelection}>
+                        </lightning-dual-listbox>
+                    </div>
+
+                    <!-- Optionally append existing PDFs -->
+                    <div class="slds-var-m-bottom_medium">
+                        <lightning-input
+                            type="checkbox"
+                            label="Also include existing PDFs from this record"
+                            checked={packetIncludeExisting}
+                            onchange={handlePacketIncludeToggle}>
+                        </lightning-input>
+                    </div>
+
+                    <template lwc:if={packetIncludeExisting}>
+                        <div class="slds-var-m-bottom_medium slds-box slds-theme_shade slds-var-p-around_small">
+                            <template lwc:if={hasRecordPdfs}>
+                                <lightning-checkbox-group
+                                    name="packetPdfSelection"
+                                    label="Existing PDFs to append"
+                                    options={recordPdfOptions}
+                                    value={packetExistingPdfIds}
+                                    onchange={handlePacketPdfSelection}
+                                    variant="label-hidden">
+                                </lightning-checkbox-group>
+                            </template>
+                            <template lwc:else>
+                                <p class="slds-text-body_small slds-text-color_weak">
+                                    No PDF files found on this record.
+                                </p>
+                            </template>
+                        </div>
+                    </template>
+
+                    <div class="slds-var-m-bottom_medium">
+                        <lightning-radio-group
+                            name="packetOutput"
+                            label="Action"
+                            options={mergeOnlyOutputOptions}
+                            value={outputMode}
+                            onchange={handleOutputModeChange}
+                            type="button">
+                        </lightning-radio-group>
+                    </div>
+
+                    <lightning-button
+                        variant="brand"
+                        label={packetButtonLabel}
+                        onclick={generatePacket}
+                        disabled={isPacketDisabled}
                         class="slds-var-m-top_medium">
                     </lightning-button>
                 </template>

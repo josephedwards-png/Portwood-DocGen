@@ -26,6 +26,11 @@ export default class DocGenRunner extends LightningElement {
     @track selectedPdfCvIds = [];
     @track mergeOnlyCvIds = [];
 
+    // Packet mode state
+    @track packetTemplateIds = [];
+    @track packetIncludeExisting = false;
+    @track packetExistingPdfIds = [];
+
     isLoading = false;
     error;
     _templateData = [];
@@ -34,8 +39,9 @@ export default class DocGenRunner extends LightningElement {
 
     get modeOptions() {
         return [
-            { label: 'Generate Document', value: 'generate' },
-            { label: 'Merge PDFs Only', value: 'mergeOnly' }
+            { label: 'Generate', value: 'generate' },
+            { label: 'Document Packet', value: 'packet' },
+            { label: 'Merge PDFs', value: 'mergeOnly' }
         ];
     }
 
@@ -43,8 +49,28 @@ export default class DocGenRunner extends LightningElement {
         return this.appMode === 'generate';
     }
 
+    get isPacketMode() {
+        return this.appMode === 'packet';
+    }
+
     get isMergeOnlyMode() {
         return this.appMode === 'mergeOnly';
+    }
+
+    /** PDF templates available for packet mode */
+    get pdfTemplateOptions() {
+        return this._templateData
+            .filter(t => t.Output_Format__c === 'PDF')
+            .map(t => ({ label: t.Name, value: t.Id }));
+    }
+
+    get packetButtonLabel() {
+        const count = this.packetTemplateIds.length + (this.packetIncludeExisting ? this.packetExistingPdfIds.length : 0);
+        return count > 0 ? 'Generate Packet (' + count + ' docs)' : 'Generate Packet';
+    }
+
+    get isPacketDisabled() {
+        return this.packetTemplateIds.length < 1 || this.isLoading;
     }
 
     get outputOptions() {
@@ -135,9 +161,24 @@ export default class DocGenRunner extends LightningElement {
     handleModeChange(event) {
         this.appMode = event.detail.value;
         this.error = null;
-        if (this.appMode === 'mergeOnly' && this.recordPdfOptions.length === 0) {
+        if ((this.appMode === 'mergeOnly' || this.appMode === 'packet') && this.recordPdfOptions.length === 0) {
             this._loadRecordPdfs();
         }
+    }
+
+    handlePacketTemplateSelection(event) {
+        this.packetTemplateIds = event.detail.value;
+    }
+
+    handlePacketIncludeToggle(event) {
+        this.packetIncludeExisting = event.target.checked;
+        if (this.packetIncludeExisting && this.recordPdfOptions.length === 0) {
+            this._loadRecordPdfs();
+        }
+    }
+
+    handlePacketPdfSelection(event) {
+        this.packetExistingPdfIds = event.detail.value;
     }
 
     handleOutputModeChange(event) {
@@ -313,6 +354,82 @@ export default class DocGenRunner extends LightningElement {
      * Merge-only mode — no template generation. Fetches selected PDFs
      * from the record and merges them client-side in the user's chosen order.
      */
+    /**
+     * Document Packet — generates multiple templates as PDFs, optionally
+     * appends existing PDFs, and merges everything into one document.
+     */
+    async generatePacket() {
+        this.isLoading = true;
+        this.error = null;
+
+        try {
+            const templateCount = this.packetTemplateIds.length;
+            const existingCount = this.packetIncludeExisting ? this.packetExistingPdfIds.length : 0;
+            const totalDocs = templateCount + existingCount;
+            this.showToast('Info', `Generating packet (${totalDocs} documents)...`, 'info');
+
+            const pdfBytesArray = [];
+
+            // Generate each template as PDF (in packet order)
+            for (const templateId of this.packetTemplateIds) {
+                const result = await generatePdf({
+                    templateId: templateId,
+                    recordId: this.recordId,
+                    saveToRecord: false
+                });
+                if (result && result.base64) {
+                    pdfBytesArray.push(this._base64ToUint8Array(result.base64));
+                }
+            }
+
+            // Fetch existing PDFs if included
+            if (this.packetIncludeExisting && this.packetExistingPdfIds.length > 0) {
+                for (const cvId of this.packetExistingPdfIds) {
+                    const b64 = await getContentVersionBase64({ contentVersionId: cvId });
+                    if (b64) {
+                        pdfBytesArray.push(this._base64ToUint8Array(b64));
+                    }
+                }
+            }
+
+            if (pdfBytesArray.length === 0) {
+                throw new Error('No documents were generated.');
+            }
+
+            // Single template, no existing PDFs — just download/save directly
+            let finalBase64;
+            if (pdfBytesArray.length === 1) {
+                finalBase64 = this._uint8ArrayToBase64(pdfBytesArray[0]);
+            } else {
+                const mergedBytes = mergePdfs(pdfBytesArray);
+                finalBase64 = this._uint8ArrayToBase64(mergedBytes);
+            }
+
+            const saveToRecord = this.outputMode === 'save';
+            if (saveToRecord) {
+                this.showToast('Info', 'Saving packet to record...', 'info');
+                await saveGeneratedDocument({
+                    recordId: this.recordId,
+                    fileName: 'Document Packet',
+                    base64Data: finalBase64,
+                    extension: 'pdf'
+                });
+                this.showToast('Success', 'Document packet saved to record.', 'success');
+            } else {
+                this.downloadBase64(finalBase64, 'Document Packet.pdf', 'application/pdf');
+                this.showToast('Success', 'Document packet downloaded.', 'success');
+            }
+        } catch (e) {
+            let msg = 'Unknown error during packet generation';
+            if (e.body && e.body.message) msg = e.body.message;
+            else if (e.message) msg = e.message;
+            else if (typeof e === 'string') msg = e;
+            this.error = 'Packet Error: ' + msg;
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
     async mergeOnlyDocument() {
         this.isLoading = true;
         this.error = null;

@@ -475,10 +475,14 @@ export default class DocGenColumnBuilder extends LightningElement {
     // === TAB NAVIGATION ===
     handleTabClick(event) {
         this.activeNodeId = event.currentTarget.dataset.nodeId;
+        this.showSelectedOnly = false;
+        this._currentSearch = '';
     }
 
     handleTreeNodeClick(event) {
         this.activeNodeId = event.currentTarget.dataset.nodeId;
+        this.showSelectedOnly = false;
+        this._currentSearch = '';
     }
 
     // === ADD NODE ===
@@ -552,10 +556,16 @@ export default class DocGenColumnBuilder extends LightningElement {
     }
 
     // === FIELD SELECTION ===
+
+    @track showSelectedOnly = false;
+
     handleFieldChange(event) {
         const node = this.activeNode;
         if (node) {
-            node.selectedFields = event.detail.value;
+            // Preserve selections that are hidden by the current filter
+            const visibleValues = new Set(node.filteredFields.map(f => f.value));
+            const hiddenSelections = node.selectedFields.filter(f => !visibleValues.has(f));
+            node.selectedFields = [...hiddenSelections, ...event.detail.value];
             this.treeNodes = [...this.treeNodes];
             this._notifyChange();
         }
@@ -565,20 +575,55 @@ export default class DocGenColumnBuilder extends LightningElement {
         const node = this.activeNode;
         if (node) {
             const search = event.target.value.toLowerCase();
-            node.filteredFields = node.availableFields.filter(f =>
-                f.label.toLowerCase().includes(search)
-            ).slice(0, 200);
+            node.filteredFields = this._applyFieldFilter(node, search);
             this.treeNodes = [...this.treeNodes];
         }
+    }
+
+    handleToggleShowSelected() {
+        this.showSelectedOnly = !this.showSelectedOnly;
+        const node = this.activeNode;
+        if (node) {
+            node.filteredFields = this._applyFieldFilter(node, this._currentSearch);
+            this.treeNodes = [...this.treeNodes];
+        }
+    }
+
+    get showSelectedLabel() {
+        return this.showSelectedOnly ? 'Show All' : 'Show Selected';
+    }
+
+    _currentSearch = '';
+
+    _applyFieldFilter(node, search) {
+        this._currentSearch = search || '';
+        let fields = node.availableFields;
+        if (search) {
+            fields = fields.filter(f => f.label.toLowerCase().includes(search));
+        }
+        if (this.showSelectedOnly) {
+            const selected = new Set(node.selectedFields);
+            fields = fields.filter(f => selected.has(f.value));
+        }
+        return fields.slice(0, 200);
     }
 
     handleSelectAll() {
         const node = this.activeNode;
         if (node) {
-            const allVals = node.filteredFields.map(f => f.value);
+            const visibleVals = node.filteredFields.map(f => f.value);
+            const visibleSet = new Set(visibleVals);
             const current = new Set(node.selectedFields);
-            const allSelected = allVals.every(v => current.has(v));
-            node.selectedFields = allSelected ? [] : allVals;
+            const allVisibleSelected = visibleVals.every(v => current.has(v));
+
+            if (allVisibleSelected) {
+                // Deselect only visible fields, keep hidden selections
+                node.selectedFields = node.selectedFields.filter(f => !visibleSet.has(f));
+            } else {
+                // Add all visible fields, keep hidden selections
+                const hiddenSelections = node.selectedFields.filter(f => !visibleSet.has(f));
+                node.selectedFields = [...hiddenSelections, ...visibleVals];
+            }
             this.treeNodes = [...this.treeNodes];
             this._notifyChange();
         }

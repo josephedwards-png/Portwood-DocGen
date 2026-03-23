@@ -1054,6 +1054,31 @@ public with sharing class DocGenService {
                     }
                 }
                 cursor = tagClose + 1;
+            } else if (tagContent.startsWith('*')) {
+                // Barcode tag: {*FieldName} (Code 128)
+                // Outputs a marker that DocGenHtmlRenderer renders as CSS bars for PDF
+                String barcodeSpec = tagContent.substring(1).trim();
+                String barcodeField = barcodeSpec;
+                String barcodeType = 'code128';
+                if (barcodeSpec.contains(':')) {
+                    List<String> bParts = barcodeSpec.split(':', 2);
+                    barcodeField = bParts[0].trim();
+                    barcodeType = bParts[1].trim().toLowerCase();
+                }
+                Object val = resolveValue(data, barcodeField);
+                if (val != null) {
+                    String barcodeValue = String.valueOf(val).escapeXml();
+                    // Embed marker in DOCX XML text — HTML renderer will detect and render as CSS bars
+                    output += '##BARCODE:' + barcodeType + ':' + barcodeValue + '##';
+                }
+                cursor = tagClose + 1;
+            } else if (tagContent.contains(':') && isAggregateTag(tagContent)) {
+                // Aggregate tag: {SUM:ChildList.Field}, {COUNT:ChildList}, {AVG:...}, {MIN:...}, {MAX:...}
+                String aggResult = resolveAggregate(tagContent, data);
+                if (aggResult != null) {
+                    output += aggResult.escapeXml();
+                }
+                cursor = tagClose + 1;
             } else {
                 // Parse optional date format suffix: {FieldName:format}
                 String fieldName = tagContent;
@@ -1165,6 +1190,107 @@ public with sharing class DocGenService {
         return current;
     }
     
+    // ---------------------------------------------------------------------------
+    // Aggregate Tags: {SUM:List.Field}, {COUNT:List}, {AVG:...}, {MIN:...}, {MAX:...}
+    // ---------------------------------------------------------------------------
+
+    private static final Set<String> AGGREGATE_FUNCTIONS = new Set<String>{
+        'SUM', 'COUNT', 'AVG', 'MIN', 'MAX'
+    };
+
+    private static Boolean isAggregateTag(String tagContent) {
+        Integer colonIdx = tagContent.indexOf(':');
+        if (colonIdx <= 0) return false;
+        String fn = tagContent.substring(0, colonIdx).trim().toUpperCase();
+        return AGGREGATE_FUNCTIONS.contains(fn);
+    }
+
+    /**
+     * Resolves an aggregate tag like {SUM:QuoteLineItems.TotalPrice}.
+     * Walks the data map to find the child list, extracts field values, computes.
+     */
+    private static String resolveAggregate(String tagContent, Map<String, Object> data) {
+        Integer colonIdx = tagContent.indexOf(':');
+        String fn = tagContent.substring(0, colonIdx).trim().toUpperCase();
+        String path = tagContent.substring(colonIdx + 1).trim();
+
+        // Split path into list name and optional field: "QuoteLineItems.TotalPrice" → ["QuoteLineItems", "TotalPrice"]
+        String listName;
+        String fieldName = null;
+        Integer dotIdx = path.indexOf('.');
+        if (dotIdx > 0) {
+            listName = path.substring(0, dotIdx);
+            fieldName = path.substring(dotIdx + 1);
+        } else {
+            listName = path;
+        }
+
+        // COUNT doesn't require a field
+        if (fn == 'COUNT' && fieldName == null) {
+            List<Object> records = getChildRecords(data, listName);
+            return records != null ? String.valueOf(records.size()) : '0';
+        }
+
+        if (fieldName == null) return null;
+
+        // Get child records and extract numeric values
+        List<Object> records = getChildRecords(data, listName);
+        if (records == null || records.isEmpty()) return '0';
+
+        List<Decimal> values = new List<Decimal>();
+        for (Object item : records) {
+            if (item instanceof Map<String, Object>) {
+                Object fieldVal = resolveValue((Map<String, Object>) item, fieldName);
+                if (fieldVal != null) {
+                    try {
+                        values.add(Decimal.valueOf(String.valueOf(fieldVal)));
+                    } catch (Exception e) {
+                        // Skip non-numeric values
+                    }
+                }
+            }
+        }
+
+        if (values.isEmpty()) return '0';
+
+        Decimal result;
+        if (fn == 'SUM') {
+            result = 0;
+            for (Decimal v : values) result += v;
+        } else if (fn == 'AVG') {
+            result = 0;
+            for (Decimal v : values) result += v;
+            result = result.divide(values.size(), 2, RoundingMode.HALF_UP);
+        } else if (fn == 'MIN') {
+            result = values[0];
+            for (Decimal v : values) if (v < result) result = v;
+        } else if (fn == 'MAX') {
+            result = values[0];
+            for (Decimal v : values) if (v > result) result = v;
+        } else if (fn == 'COUNT') {
+            return String.valueOf(values.size());
+        } else {
+            return null;
+        }
+
+        // Format: strip trailing zeros (25000.00 → 25000)
+        return result.stripTrailingZeros().toPlainString();
+    }
+
+    /** Extracts the child record list from the data map. */
+    private static List<Object> getChildRecords(Map<String, Object> data, String listName) {
+        Object val = resolveValue(data, listName);
+        if (val instanceof Map<String, Object>) {
+            Map<String, Object> mapVal = (Map<String, Object>) val;
+            if (mapVal.containsKey('records') && mapVal.get('records') instanceof List<Object>) {
+                return (List<Object>) mapVal.get('records');
+            }
+        } else if (val instanceof List<Object>) {
+            return (List<Object>) val;
+        }
+        return null;
+    }
+
     /**
      * Converts rich text HTML to DOCX XML (w:p, w:r, w:t elements).
      * Preserves text, basic formatting (bold/italic/underline), multiple images, and paragraphs.

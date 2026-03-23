@@ -141,11 +141,14 @@
                     </div>
                 </template>
 
-                <!-- Field Search + Select All -->
+                <!-- Field Search + Select All + Show Selected -->
                 <lightning-input type="search" variant="label-hidden" placeholder="Search fields..." onchange={handleFieldSearch} style="margin-bottom: 0.5rem;"></lightning-input>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
                     <span class="slds-text-body_small slds-text-color_weak">{activeNode.selectedFields.length} fields selected</span>
-                    <lightning-button label="Select All" variant="base" size="small" onclick={handleSelectAll}></lightning-button>
+                    <div>
+                        <lightning-button label={showSelectedLabel} variant="base" size="small" onclick={handleToggleShowSelected} class="slds-var-m-right_x-small"></lightning-button>
+                        <lightning-button label="Select All" variant="base" size="small" onclick={handleSelectAll}></lightning-button>
+                    </div>
                 </div>
 
                 <!-- Field Checkboxes -->

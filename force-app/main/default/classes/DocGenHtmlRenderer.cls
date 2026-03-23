@@ -635,6 +635,11 @@ public with sharing class DocGenHtmlRenderer {
         String text = extractTextContent(rXml);
         if (String.isEmpty(text)) return '';
 
+        // Barcode marker — render as CSS bars instead of text
+        if (text.contains('##BARCODE:')) {
+            return renderBarcodeHtml(text);
+        }
+
         // Extract run properties
         String rPr = extractElement(rXml, 'w:rPr');
         if (String.isBlank(rPr)) {
@@ -1102,5 +1107,47 @@ public with sharing class DocGenHtmlRenderer {
     private class ListInfo {
         Boolean isList;
         Boolean isNumbered;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Barcode rendering — CSS bars for Blob.toPdf()
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Detects ##BARCODE:type:value## markers in text and renders as HTML/CSS bars.
+     * No images needed — Blob.toPdf() renders CSS perfectly.
+     */
+    private static String renderBarcodeHtml(String text) {
+        // Extract marker: ##BARCODE:code128:VALUE##
+        Integer startIdx = text.indexOf('##BARCODE:');
+        if (startIdx == -1) return text.escapeHtml4();
+        Integer endIdx = text.indexOf('##', startIdx + 10);
+        if (endIdx == -1) return text.escapeHtml4();
+
+        String marker = text.substring(startIdx + 10, endIdx);
+        List<String> parts = marker.split(':', 2);
+        String barcodeType = parts[0];
+        String value = parts.size() > 1 ? parts[1] : '';
+
+        // Unescape XML entities
+        value = value.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>');
+
+        String pattern = BarcodeGenerator.getPattern(value, barcodeType);
+        if (pattern == null) return value.escapeHtml4();
+
+        // Render as inline CSS bars
+        String html = '<div style="display:inline-block;white-space:nowrap;line-height:0;">';
+        for (Integer i = 0; i < pattern.length(); i++) {
+            String color = pattern.substring(i, i + 1) == '1' ? '#000' : '#fff';
+            html += '<span style="display:inline-block;width:1px;height:50px;background:' + color + ';"></span>';
+        }
+        html += '</div>';
+
+        // Include any text before/after the marker
+        String before = text.substring(0, startIdx);
+        String after = text.substring(endIdx + 2);
+        return (String.isNotBlank(before) ? before.escapeHtml4() : '') +
+               html +
+               (String.isNotBlank(after) ? after.escapeHtml4() : '');
     }
 }
