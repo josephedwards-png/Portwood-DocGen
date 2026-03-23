@@ -24,7 +24,7 @@ public with sharing class DocGenBulkFlowAction {
             Response res = new Response();
             try {
                 // Leverage existing Bulk Controller logic
-                Id jobId = DocGenBulkController.submitJob(req.templateId, req.queryCondition, null);
+                Id jobId = DocGenBulkController.submitJob(req.templateId, req.queryCondition, null, false, 1, false);
                 res.jobId = jobId;
             } catch (Exception e) {
                 res.errorMessage = e.getMessage();

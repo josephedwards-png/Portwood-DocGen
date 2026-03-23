@@ -23,6 +23,11 @@
                 <label>Completed</label>
             </value>
             <value>
+                <fullName>Merging</fullName>
+                <default>false</default>
+                <label>Merging</label>
+            </value>
+            <value>
                 <fullName>Failed</fullName>
                 <default>false</default>
                 <label>Failed</label>

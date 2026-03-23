@@ -2,7 +2,7 @@
 
 Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from any Salesforce record. Merge PDFs, add barcodes and QR codes, compute totals — 100% native, zero external dependencies, completely free.
 
-[![Version](https://img.shields.io/badge/version-2.5.0_Apollo+-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-2.6.0_Apollo+-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Buy Amanda a Coffee](https://img.shields.io/badge/Buy_Amanda_a_Coffee-%E2%98%95-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/davemoudya)
@@ -12,10 +12,10 @@ Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from 
 ## Install
 
 ```bash
-sf package install --package 04tdL000000RxFJQA0 --wait 10 --installation-key-bypass
+sf package install --package 04tdL000000RyT7QAK --wait 10 --installation-key-bypass
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RxFJQA0) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RxFJQA0)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RyT7QAK) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tdL000000RyT7QAK)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 

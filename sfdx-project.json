@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "Apollo+ — Child PDF Merge, Bulk Merge, Aggregate Fix, Security Hardening",
-      "versionNumber": "2.5.0.NEXT",
+      "versionName": "Apollo+ — Bulk Data Cache, Server-Side Merge, Notifications, Bug Fixes",
+      "versionNumber": "2.6.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "Document Generation",
@@ -58,6 +58,7 @@
     "Document Generation@2.3.0-2": "04tdL000000RvwfQAC",
     "Document Generation@2.3.0-3": "04tdL000000Rw9ZQAS",
     "Document Generation@2.4.0-1": "04tdL000000RwBBQA0",
-    "Document Generation@2.5.0-1": "04tdL000000RxFJQA0"
+    "Document Generation@2.5.0-1": "04tdL000000RxFJQA0",
+    "Document Generation@2.6.0-1": "04tdL000000RyT7QAK"
   }
 }

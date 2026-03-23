@@ -41,6 +41,52 @@ public with sharing class DocGenController {
         };
     }
 
+    /**
+     * Returns template metadata + file content combined with pre-cached record data.
+     * Used by DocGenBatch when bulk data cache is available, skipping per-record SOQL.
+     * resolveRichTextImages is NOT called here — it was already applied during caching.
+     *
+     * Template metadata and file content are cached statically — queried once,
+     * reused across all records in the batch. Only the record data changes.
+     */
+    private static Id cachedTemplateId;
+    private static Map<String, Object> cachedTemplateEnvelope;
+
+    public static Map<String, Object> generateDocumentDataFromCache(Id templateId, Map<String, Object> cachedRecordData) {
+        if (templateId == null) throw new DocGenException('Template ID is missing.');
+
+        // Cache template metadata + file content on first call
+        if (cachedTemplateId != templateId || cachedTemplateEnvelope == null) {
+            List<DocGen_Template__c> templates = [
+                SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
+                FROM DocGen_Template__c
+                WHERE Id = :templateId
+                WITH SYSTEM_MODE
+                LIMIT 1
+            ];
+
+            if (templates.isEmpty()) {
+                throw new DocGenException('Unable to access template. Verify it exists and you have permission.');
+            }
+            DocGen_Template__c template = templates[0];
+
+            String fileContent = DocGenTemplateManager.getTemplateFileContent(templateId);
+
+            cachedTemplateEnvelope = new Map<String, Object>{
+                'templateFile' => fileContent,
+                'templateType' => template.Type__c,
+                'outputFormat' => template.Output_Format__c,
+                'titleFormat' => template.Document_Title_Format__c
+            };
+            cachedTemplateId = templateId;
+        }
+
+        // Clone envelope and inject this record's data
+        Map<String, Object> result = cachedTemplateEnvelope.clone();
+        result.put('data', cachedRecordData);
+        return result;
+    }
+
     @AuraEnabled
     public static Id saveGeneratedDocument(Id recordId, String fileName, String base64Data, String extension) {
         try {
@@ -409,6 +455,7 @@ public with sharing class DocGenController {
     @AuraEnabled(cacheable=true)
     public static List<Map<String, String>> getObjectFields(String objectName) {
         List<Option> sortedFields = new List<Option>();
+        Map<String, String> fieldTypes = new Map<String, String>();
         SObjectType objType = Schema.getGlobalDescribe().get(objectName);
         if (objType == null) return new List<Map<String, String>>();
 
@@ -416,13 +463,18 @@ public with sharing class DocGenController {
             Schema.DescribeFieldResult describe = field.getDescribe();
             if (describe.isAccessible()) {
                 sortedFields.add(new Option(describe.getLabel() + ' (' + describe.getName() + ')', describe.getName()));
+                fieldTypes.put(describe.getName(), describe.getType().name());
             }
         }
         sortedFields.sort();
 
         List<Map<String, String>> fields = new List<Map<String, String>>();
         for (Option opt : sortedFields) {
-            fields.add(new Map<String, String>{'label' => opt.label, 'value' => opt.value});
+            fields.add(new Map<String, String>{
+                'label' => opt.label,
+                'value' => opt.value,
+                'type' => fieldTypes.get(opt.value)
+            });
         }
         return fields;
     }
@@ -582,7 +634,7 @@ public with sharing class DocGenController {
      * natively via the VF rendering engine. For DOCX, processRichTextImage fetches blobs
      * using the URL. No session IDs needed (AppExchange safe).
      */
-    private static void resolveRichTextImages(Object data) {
+    public static void resolveRichTextImages(Object data) {
         if (data instanceof Map<String, Object>) {
             Map<String, Object> mapData = (Map<String, Object>) data;
 

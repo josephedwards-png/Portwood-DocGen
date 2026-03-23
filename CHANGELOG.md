@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.6.0 — "Apollo+"
+- **Bulk Data Pre-Cache** — All record data queried in a single SOQL with an IN clause during batch `start()`, cached as a JSON ContentVersion on the Job record. Each `execute()` reads from cache instead of re-querying. Eliminates 500+ individual SOQL queries for V3 configs. Graceful fallback to per-record queries for V1/V2 or if cache exceeds 4MB.
+- **Template Static Cache** — Template metadata, file content, and pre-decomposed XML parts are cached statically across batch executions. First record queries the template; remaining records reuse it. Zero redundant template SOQL.
+- **Merge PDFs Mode** — New "Merge PDFs" checkbox in bulk runner. Generates individual PDFs per record AND produces a single merged PDF at the end. HTML captured as a byproduct of `renderPdf()` — zero extra processing per record.
+- **Merge Only Mode** — New "Merge Only" checkbox. Skips `Blob.toPdf()` and ContentVersion saves per record entirely. Only generates HTML snippets, assembles once in a Queueable, renders one merged PDF. ~5-8x faster than individual PDF generation for large batches.
+- **Server-Side PDF Assembly** — `DocGenMergeJob` Queueable reads HTML snippets by title prefix, concatenates with page breaks, calls `Blob.toPdf()` once, saves merged PDF linked to the Job record. Accessible anytime via `Merged_PDF_CV__c`.
+- **Custom Notifications** — Bell icon + Salesforce mobile push notification on all bulk job completions. Merge jobs notify with page count; normal jobs notify with success/fail count. Tapping navigates to the Job record. Uses `DocGen_Job_Complete` custom notification type.
+- **Configurable Batch Size** — New "Batch Size" input in bulk runner UI (1-200, default 1). Simple text-only templates can use 10-50 for faster throughput. Complex templates with images stay at 1 for max heap.
+- **lookupField Bug Fix** — Query tree builder now uses the actual lookup field API name from schema describe (`opt.lookupField`) instead of guessing from the parent object name. Fixes incorrect SOQL for custom objects where the lookup field name doesn't match the object name (e.g., `abc__Purchase_Order__c` vs `abc__PurchaseOrder__c`).
+- **DateTime Filter Fix** — `getObjectFields()` now returns field type metadata. Filter builder appends `T00:00:00Z` to date-only values on datetime fields. Report filter import applies the same fix for standard datetime fields like CreatedDate.
+- **Image Deduplication Confirmed** — Tested `Blob.toPdf()` image handling: same image URL repeated across pages is stored once in the PDF (confirmed via size analysis). Template logos on 500 pages = one embedded image, not 500.
+- **New Custom Objects/Fields** — `Data_Cache_CV__c` (bulk data cache), `Merged_PDF_CV__c` (merged PDF link), `Merge_Only__c` (merge-only flag) on DocGen_Job__c. "Merging" status added to Status picklist. `DocGen_Job_Complete` custom notification type.
+- **New Apex Classes** — `DocGenMergeJob` (Queueable for server-side PDF assembly).
+- **E2E Tests** — 19/19 passing. No regressions from bulk caching or merge changes.
+
 ## v2.5.0 — "Apollo+"
 - **Child Record PDF Merge** — New "Child Record PDFs" mode in the document generator. Pick a child relationship (e.g., Opportunities from Account), optionally filter with a WHERE clause, browse PDFs attached to each child record with grouped checkboxes and Select All, merge selected PDFs into one document. Download or save to parent record.
 - **Bulk Generate + Merge** — After a bulk PDF job completes, merge all generated PDFs into a single downloadable document. Merge icon button on each completed job in the Recent Jobs list for easy access later.

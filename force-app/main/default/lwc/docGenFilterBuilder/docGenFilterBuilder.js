@@ -105,41 +105,63 @@ export default class DocGenFilterBuilder extends LightningElement {
             return;
         }
 
+        // Build field type lookup from field options
+        const fieldTypeMap = {};
+        (this.fieldOptions || []).forEach(f => {
+            if (f.value && f.type) fieldTypeMap[f.value] = f.type;
+        });
+
+        const dateLiterals = ['TODAY','YESTERDAY','TOMORROW','LAST_WEEK','THIS_WEEK','NEXT_WEEK',
+            'LAST_MONTH','THIS_MONTH','NEXT_MONTH','LAST_QUARTER','THIS_QUARTER','NEXT_QUARTER',
+            'LAST_YEAR','THIS_YEAR','NEXT_YEAR','LAST_90_DAYS','NEXT_90_DAYS','LAST_N_DAYS','NEXT_N_DAYS'];
+
         let soql = '';
         this.rows.forEach((row, index) => {
             if (!row.field) return; // Skip incomplete
-            
+
             if (index > 0) {
                 soql += ` ${row.logic} `;
             }
-            
+
             let val = row.value;
             let op = row.operator;
-            
+            const fieldType = fieldTypeMap[row.field] || '';
+
             // Handle LIKE helpers
             if (op === 'LIKE_START') {
                  op = 'LIKE';
                  if (val && !val.includes('%')) val = `${val}%`;
-                 if (val && !val.startsWith("'")) val = `'${val}'`; // Quote check
+                 if (val && !val.startsWith("'")) val = `'${val}'`;
             } else if (op === 'LIKE') {
-                 // Check if it's strictly the "Includes" helper or raw LIKE
-                 // If value has %, assume raw. If not, wrap.
                  if (val && !val.includes('%')) val = `%${val}%`;
                  if (val && !val.startsWith("'")) val = `'${val}'`;
             } else if (op === 'IN') {
                  if (val && !val.startsWith('(')) val = `(${val})`;
             } else {
-                 // Standard quoting heuristic
-                 // Numeric? Boolean? String? 
-                 // Simple check: if not quoted and likely string
-                 if (val && !val.startsWith("'") && !val.endsWith("'") && isNaN(val) && val !== 'true' && val !== 'false' && val !== 'null') {
-                      val = `'${val}'`;
+                 // Type-aware value formatting
+                 const upper = (val || '').toUpperCase();
+                 const isDateLiteral = dateLiterals.some(d => upper === d || upper.startsWith(d + ':'));
+                 const isNLiteral = upper.startsWith('LAST_N_') || upper.startsWith('NEXT_N_');
+                 const isDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(val);
+                 const isDateTimeFormat = /^\d{4}-\d{2}-\d{2}T/.test(val);
+
+                 if (isDateLiteral || isNLiteral) {
+                     // Date literals: unquoted (TODAY, LAST_N_DAYS:30, etc.)
+                 } else if (fieldType === 'DATETIME' && isDateFormat) {
+                     // Datetime field with date-only value: append time component
+                     val = val + 'T00:00:00Z';
+                 } else if (fieldType === 'DATE' && isDateFormat) {
+                     // Date field with date value: use as-is, unquoted
+                 } else if (isDateTimeFormat) {
+                     // Already has time component: use as-is, unquoted
+                 } else if (val && !val.startsWith("'") && !val.endsWith("'") && isNaN(val) && val !== 'true' && val !== 'false' && val !== 'null') {
+                     val = `'${val}'`;
                  }
             }
-            
+
             soql += `${row.field} ${op} ${val}`;
         });
-        
+
         this._generatedSoql = soql;
         this.notifyChange();
     }

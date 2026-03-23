@@ -77,6 +77,9 @@ export default class DocGenBulkRunner extends LightningElement {
     // Recent jobs from server
     @track recentJobs = [];
     @track jobLabel = '';
+    @track batchSize = 1;
+    @track mergePdf = false;
+    @track mergeOnly = false;
     @track jobSearchTerm = '';
     @track mergingJobId = null;
 
@@ -131,9 +134,15 @@ export default class DocGenBulkRunner extends LightningElement {
                                 const vals = f.value.split(',').map(v => "'" + v.trim() + "'").join(', ');
                                 return f.field + ' ' + f.operator + ' (' + vals + ')';
                             }
-                            const v = f.value.trim();
+                            let v = f.value.trim();
                             const dateLiterals = ['TODAY','YESTERDAY','TOMORROW','LAST_WEEK','THIS_WEEK','NEXT_WEEK','LAST_MONTH','THIS_MONTH','NEXT_MONTH','LAST_QUARTER','THIS_QUARTER','NEXT_QUARTER','LAST_YEAR','THIS_YEAR','NEXT_YEAR','LAST_90_DAYS','NEXT_90_DAYS'];
                             const upper = v.toUpperCase();
+                            // Date-only value on a datetime field (e.g. CreatedDate): append time component
+                            const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(v);
+                            const isDateTimeField = f.field && (f.field.toLowerCase().includes('date') || f.field.toLowerCase().includes('time')) && !f.field.toLowerCase().endsWith('__c');
+                            if (isDateOnly && isDateTimeField) {
+                                v = v + 'T00:00:00Z';
+                            }
                             if (dateLiterals.includes(upper) || upper.startsWith('LAST_N_') || upper.startsWith('NEXT_N_') || /^\d+\.?\d*$/.test(v) || /^\d{4}-\d{2}-\d{2}/.test(v) || upper === 'TRUE' || upper === 'FALSE' || upper === 'NULL') {
                                 return f.field + ' ' + f.operator + ' ' + v;
                             }
@@ -245,6 +254,23 @@ export default class DocGenBulkRunner extends LightningElement {
 
     handleJobLabelChange(event) {
         this.jobLabel = event.target.value;
+    }
+
+    handleBatchSizeChange(event) {
+        const val = parseInt(event.target.value, 10);
+        this.batchSize = (val >= 1 && val <= 200) ? val : 1;
+    }
+
+    handleMergePdfChange(event) {
+        this.mergePdf = event.target.checked;
+        // If unchecking merge, also uncheck merge-only
+        if (!this.mergePdf) this.mergeOnly = false;
+    }
+
+    handleMergeOnlyChange(event) {
+        this.mergeOnly = event.target.checked;
+        // Merge-only implies merge
+        if (this.mergeOnly) this.mergePdf = true;
     }
 
     handleJobSearchChange(event) {
@@ -473,7 +499,14 @@ export default class DocGenBulkRunner extends LightningElement {
         this.jobProgress = { success: 0, error: 0, total: 0, percent: 0 };
 
         try {
-            this.jobId = await submitJob({ templateId: this.selectedTemplateId, condition: this.condition, jobLabel: this.jobLabel });
+            this.jobId = await submitJob({
+                templateId: this.selectedTemplateId,
+                condition: this.condition,
+                jobLabel: this.jobLabel,
+                mergePdf: this.mergePdf || false,
+                batchSize: this.batchSize || 1,
+                mergeOnly: this.mergeOnly || false
+            });
             this.showToast('Success', 'Job started. Status will auto-refresh every 5 seconds.', 'success');
             this.startPolling();
         } catch (error) {

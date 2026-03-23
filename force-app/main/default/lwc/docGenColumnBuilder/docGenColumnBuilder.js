@@ -516,11 +516,11 @@ export default class DocGenColumnBuilder extends LightningElement {
             return;
         }
 
-        // Determine lookup field — it's the field on the child object that points to the parent
-        // For child relationships, the field name follows a pattern based on the parent object
+        // Use the actual lookup field from schema describe (not guessed from object name)
         const childObjName = opt.childObjectApiName;
+        const lookupField = opt.lookupField || this._guessLookupField(parentNode.objectApiName, relName);
         const newNode = this._createNode(childObjName, opt.label, false, this.addNodeParentId,
-            this._guessLookupField(parentNode.objectApiName, relName), relName);
+            lookupField, relName);
 
         this.treeNodes = [...this.treeNodes, newNode];
         this.activeNodeId = newNode.id;

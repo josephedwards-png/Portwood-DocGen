@@ -49,24 +49,26 @@ public with sharing class DocGenBulkController {
     }
 
     @AuraEnabled
-    public static Id submitJob(Id templateId, String condition, String jobLabel) {
+    public static Id submitJob(Id templateId, String condition, String jobLabel, Boolean mergePdf, Integer batchSize, Boolean mergeOnly) {
         try {
+            Boolean isMergeOnly = (mergeOnly == true);
+            Boolean isMergeMode = (mergePdf == true) || isMergeOnly;
+
             // 1. Create Job Record
             DocGen_Job__c job = new DocGen_Job__c(
                 Template__c = templateId,
                 Query_Condition__c = condition,
                 Label__c = String.isNotBlank(jobLabel) ? jobLabel : null,
-                Status__c = 'Queued'
+                Status__c = 'Queued',
+                Merge_Only__c = isMergeOnly
             );
             // Package-internal object — CRUD controlled by DocGen permission sets
             insert job; // NOPMD ApexCRUDViolation - package-internal custom object; access controlled by DocGen permission sets
 
-            // 2. Run Batch
-            // Batch Size 1: each record needs its own transaction so callouts
-            // (rich text image resolution) happen before DML (ContentVersion insert).
-            // Salesforce blocks callouts after uncommitted DML in the same transaction.
-            DocGenBatch batch = new DocGenBatch(job.Id);
-            Database.executeBatch(batch, 1);
+            // 2. Run Batch — user-configurable batch size (default 1, max 200)
+            Integer size = (batchSize != null && batchSize >= 1 && batchSize <= 200) ? batchSize : 1;
+            DocGenBatch batch = new DocGenBatch(job.Id, isMergeMode, isMergeOnly);
+            Database.executeBatch(batch, size);
 
             return job.Id;
         } catch (Exception e) {

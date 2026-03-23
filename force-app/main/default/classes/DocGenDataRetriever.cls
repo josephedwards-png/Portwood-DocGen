@@ -38,6 +38,21 @@ public with sharing class DocGenDataRetriever {
         String targetOrderBy;
     }
 
+    /**
+     * Returns the query config version (1, 2, or 3) for a given fieldsConfig string.
+     * Used by DocGenBatch to decide whether bulk caching is available.
+     */
+    public static Integer getConfigVersion(String fieldsConfig) {
+        if (String.isBlank(fieldsConfig) || !fieldsConfig.trim().startsWith('{')) return 1;
+        try {
+            Map<String, Object> jsonConfig = (Map<String, Object>) JSON.deserializeUntyped(fieldsConfig.trim());
+            Object versionObj = jsonConfig.get('v');
+            return (versionObj != null) ? Integer.valueOf(String.valueOf(versionObj)) : 2;
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
     public static Map<String, Object> getRecordData(Id recordId, String baseObject, String fieldsConfig) {
         if (String.isBlank(baseObject) || String.isBlank(fieldsConfig) || recordId == null) {
             throw new AuraHandledException('Invalid parameters for data retrieval.');
@@ -372,6 +387,85 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
+     * Bulk version of getRecordDataV3. Queries all records with a single IN clause
+     * and processes all children in bulk. Returns a Map keyed by record Id.
+     * Used by DocGenBatch to pre-cache data for all records in one transaction.
+     */
+    public static Map<Id, Map<String, Object>> getRecordDataV3Bulk(Set<Id> recordIds, Map<String, Object> config) {
+        if (recordIds == null || recordIds.isEmpty()) return new Map<Id, Map<String, Object>>();
+
+        // Parse all nodes (same as single-record version)
+        List<TreeNode> allNodes = new List<TreeNode>();
+        Map<String, TreeNode> nodeMap = new Map<String, TreeNode>();
+
+        List<Object> nodesJson = (List<Object>) config.get('nodes');
+        if (nodesJson == null || nodesJson.isEmpty()) {
+            throw new AuraHandledException('No query nodes defined.');
+        }
+
+        for (Object nodeObj : nodesJson) {
+            Map<String, Object> n = (Map<String, Object>) nodeObj;
+            TreeNode tn = new TreeNode();
+            tn.id = (String) n.get('id');
+            tn.objectApiName = (String) n.get('object');
+            tn.parentNodeId = (String) n.get('parentNode');
+            tn.lookupField = (String) n.get('lookupField');
+            tn.relationshipName = (String) n.get('relationshipName');
+            tn.whereClause = (String) n.get('where');
+            tn.orderByClause = (String) n.get('orderBy');
+            tn.limitClause = (String) n.get('limit');
+            tn.junction = (Map<String, Object>) n.get('junction');
+
+            tn.fields = new List<String>();
+            List<Object> flds = (List<Object>) n.get('fields');
+            if (flds != null) for (Object f : flds) tn.fields.add(String.valueOf(f));
+
+            tn.parentFields = new List<String>();
+            List<Object> pFlds = (List<Object>) n.get('parentFields');
+            if (pFlds != null) for (Object f : pFlds) tn.parentFields.add(String.valueOf(f));
+
+            allNodes.add(tn);
+            nodeMap.put(tn.id, tn);
+        }
+
+        // Find root node
+        TreeNode root = null;
+        for (TreeNode tn : allNodes) {
+            if (tn.parentNodeId == null) { root = tn; break; }
+        }
+        if (root == null) {
+            throw new AuraHandledException('No root node found in query tree.');
+        }
+
+        // Bulk root query: SELECT fields FROM object WHERE Id IN :recordIds
+        List<String> rootSelect = new List<String>();
+        rootSelect.addAll(root.fields);
+        rootSelect.addAll(root.parentFields);
+        if (rootSelect.isEmpty()) rootSelect.add('Id');
+        if (!rootSelect.contains('Id')) rootSelect.add(0, 'Id');
+
+        String rootQuery = 'SELECT ' + String.join(rootSelect, ', ') +
+            ' FROM ' + String.escapeSingleQuotes(root.objectApiName) +
+            ' WHERE Id IN :recordIds';
+
+        Map<Id, Map<String, Object>> allData = new Map<Id, Map<String, Object>>();
+        try {
+            List<SObject> results = Database.query(rootQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 tree node fields from query config; object name escaped; runs with USER_MODE
+            for (SObject rec : results) {
+                allData.put(rec.Id, mapSObject(rec));
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'DocGen: V3 bulk root query error: ' + e.getMessage());
+            throw new AuraHandledException('Error bulk-querying records: ' + e.getMessage());
+        }
+
+        // Walk the tree in bulk: process children for all root records at once
+        processChildNodesBulk(root.id, allData, allNodes, nodeMap);
+
+        return allData;
+    }
+
+    /**
      * Recursively processes child nodes, querying and stitching results.
      * @param parentId The tree node ID of the parent
      * @param parentDataMap The parent's data map (single record) or null for batch
@@ -471,6 +565,113 @@ public with sharing class DocGenDataRetriever {
                 for (Map<String, Object> childRec : childRecords) {
                     processChildNodes(child.id, childRec, allNodes, nodeMap, true);
                 }
+            }
+        }
+    }
+
+    /**
+     * Bulk version of processChildNodes. Processes children for ALL parent records
+     * in a single SOQL query per child node level, then stitches results back.
+     * @param parentNodeId The tree node ID of the parent
+     * @param parentDataMaps Map of parent record Id → data map (all parents at this level)
+     * @param allNodes All tree nodes
+     * @param nodeMap Map of node ID → TreeNode
+     */
+    private static void processChildNodesBulk(String parentNodeId, Map<Id, Map<String, Object>> parentDataMaps,
+            List<TreeNode> allNodes, Map<String, TreeNode> nodeMap) {
+
+        // Find children of this parent node
+        List<TreeNode> children = new List<TreeNode>();
+        for (TreeNode tn : allNodes) {
+            if (tn.parentNodeId == parentNodeId) children.add(tn);
+        }
+
+        for (TreeNode child : children) {
+            if (String.isBlank(child.lookupField) || String.isBlank(child.relationshipName)) continue;
+
+            // Collect ALL parent record IDs
+            Set<Id> parentIds = parentDataMaps.keySet();
+            if (parentIds.isEmpty()) continue;
+
+            // Build child query
+            List<String> selectFields = new List<String>();
+            if (!child.fields.contains('Id')) selectFields.add('Id');
+            selectFields.addAll(child.fields);
+            selectFields.addAll(child.parentFields);
+            selectFields.add(child.lookupField);
+
+            // Junction fields
+            if (child.junction != null) {
+                String targetIdField = (String) child.junction.get('targetIdField');
+                if (String.isNotBlank(targetIdField) && !selectFields.contains(targetIdField)) {
+                    selectFields.add(targetIdField);
+                }
+                List<Object> jFields = (List<Object>) child.junction.get('junctionFields');
+                if (jFields != null) {
+                    for (Object jf : jFields) {
+                        String jfs = String.valueOf(jf);
+                        if (!selectFields.contains(jfs)) selectFields.add(jfs);
+                    }
+                }
+            }
+
+            // Single query for ALL parents
+            String childQuery = 'SELECT ' + String.join(selectFields, ', ') +
+                ' FROM ' + String.escapeSingleQuotes(child.objectApiName) +
+                ' WHERE ' + String.escapeSingleQuotes(child.lookupField) + ' IN :parentIds';
+            if (String.isNotBlank(child.whereClause)) childQuery += ' AND ' + sanitizeClause(child.whereClause, 'WHERE');
+            if (String.isNotBlank(child.orderByClause)) childQuery += ' ORDER BY ' + sanitizeClause(child.orderByClause, 'ORDER BY');
+            if (String.isNotBlank(child.limitClause)) childQuery += ' LIMIT ' + sanitizeClause(child.limitClause, 'LIMIT');
+
+            List<SObject> childResults;
+            try {
+                childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 child node fields from query config; clauses sanitized; runs with USER_MODE
+            } catch (Exception e) {
+                System.debug(LoggingLevel.WARN, 'DocGen: V3 bulk child query error for ' + child.objectApiName + ': ' + e.getMessage());
+                continue;
+            }
+
+            // Group by parent lookup field
+            Map<Id, List<Map<String, Object>>> grouped = new Map<Id, List<Map<String, Object>>>();
+            for (SObject rec : childResults) {
+                Id parentRecId = (Id) rec.get(child.lookupField);
+                if (!grouped.containsKey(parentRecId)) {
+                    grouped.put(parentRecId, new List<Map<String, Object>>());
+                }
+                grouped.get(parentRecId).add(mapSObject(rec));
+            }
+
+            // Stitch into each parent's data map
+            Map<Id, Map<String, Object>> allChildDataMaps = new Map<Id, Map<String, Object>>();
+            for (Id parentRecId : parentDataMaps.keySet()) {
+                Map<String, Object> parentData = parentDataMaps.get(parentRecId);
+                List<Map<String, Object>> childRecords = grouped.containsKey(parentRecId)
+                    ? grouped.get(parentRecId) : new List<Map<String, Object>>();
+
+                parentData.put(child.relationshipName, new Map<String, Object>{
+                    'totalSize' => childRecords.size(),
+                    'records' => childRecords
+                });
+
+                // Junction stitching
+                if (child.junction != null) {
+                    stitchJunctionForTree(childRecords, child.junction);
+                }
+
+                // Collect child records for next-level recursion
+                for (Map<String, Object> childRec : childRecords) {
+                    Object childIdVal = childRec.get('Id');
+                    if (childIdVal != null) {
+                        try {
+                            allChildDataMaps.put(Id.valueOf(String.valueOf(childIdVal)), childRec);
+                        } catch (Exception e) { /* skip */ }
+                    }
+                }
+            }
+
+            // Recurse: process this child node's children for all child records
+            if (!allChildDataMaps.isEmpty()) {
+                processChildNodesBulk(child.id, allChildDataMaps, allNodes, nodeMap);
             }
         }
     }

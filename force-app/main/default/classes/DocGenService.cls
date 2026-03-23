@@ -48,13 +48,26 @@ public with sharing class DocGenService {
         return mergeTemplate(templateId, recordId, resolvedImages, null);
     }
 
+    /**
+     * Thread-local storage for pre-loaded record data. When set, mergeTemplate
+     * skips DocGenController.generateDocumentData() and uses this data instead.
+     * Cleared after each use.
+     */
+    private static Map<String, Object> preloadedRecordDataOverride;
+
     private static MergeResult mergeTemplate(Id templateId, Id recordId, Map<String, String> resolvedImages, String outputFormatOverride) {
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
 
         Map<String, Object> dataMap;
         try {
-            dataMap = DocGenController.generateDocumentData(templateId, recordId);
+            if (preloadedRecordDataOverride != null) {
+                // Use pre-cached data from bulk batch — skips per-record SOQL
+                dataMap = DocGenController.generateDocumentDataFromCache(templateId, preloadedRecordDataOverride);
+                preloadedRecordDataOverride = null; // Clear after use
+            } else {
+                dataMap = DocGenController.generateDocumentData(templateId, recordId);
+            }
         } catch (Exception e) {
             throw new DocGenException('Error retrieving template data: ' + e.getMessage());
         }
@@ -302,34 +315,53 @@ public with sharing class DocGenService {
      * Skips full ZIP decompression — saves ~1.5-2MB heap for PDF generation.
      * Returns null if pre-decomposed parts are not available (older templates).
      */
+    // Static cache for pre-decomposed XML parts — same template, queried once, reused across batch
+    private static Id cachedPreDecompTemplateId;
+    private static Map<String, String> cachedXmlParts; // key (e.g. 'rels', 'word__document.xml') → raw XML
+    private static Boolean cachedPreDecompAvailable;
+
     private static MergeResult tryMergeFromPreDecomposed(Id templateId, Map<String, Object> recordDataMap, MergeResult mr) {
-        List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
-        ];
-        if (activeVersions.isEmpty()) return null;
+        // Cache the template version + XML CV query — identical for every record
+        if (cachedPreDecompTemplateId != templateId || cachedXmlParts == null) {
+            cachedPreDecompTemplateId = templateId;
+            cachedXmlParts = new Map<String, String>();
+            cachedPreDecompAvailable = false;
 
-        String xmlPrefix = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_';
-        List<ContentVersion> xmlCvs = [
-            SELECT Id, Title, VersionData FROM ContentVersion
-            WHERE Title LIKE :(xmlPrefix + '%')
-            WITH SYSTEM_MODE
-        ];
+            List<DocGen_Template_Version__c> activeVersions = [
+                SELECT Id FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = true
+                WITH SYSTEM_MODE LIMIT 1
+            ];
+            if (activeVersions.isEmpty()) return null;
 
-        if (xmlCvs.isEmpty()) return null;
+            String xmlPrefix = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_';
+            List<ContentVersion> xmlCvs = [
+                SELECT Id, Title, VersionData FROM ContentVersion
+                WHERE Title LIKE :(xmlPrefix + '%')
+                WITH SYSTEM_MODE
+            ];
 
-        // Reconstruct XML entries and rels from pre-stored CVs
-        for (ContentVersion cv : xmlCvs) {
-            String key = cv.Title.substring(xmlPrefix.length());
+            if (xmlCvs.isEmpty()) return null;
+
+            for (ContentVersion cv : xmlCvs) {
+                String key = cv.Title.substring(xmlPrefix.length());
+                cachedXmlParts.put(key, cv.VersionData.toString());
+            }
+            cachedPreDecompAvailable = true;
+        }
+
+        if (!cachedPreDecompAvailable || cachedXmlParts.isEmpty()) return null;
+
+        // Process cached XML parts with this record's data
+        for (String key : cachedXmlParts.keySet()) {
+            String rawXml = cachedXmlParts.get(key);
             if (key == 'rels') {
-                mr.relsXml = cv.VersionData.toString();
+                mr.relsXml = rawXml;
             } else {
                 // Restore original path: word__document.xml → word/document.xml
                 String originalPath = key.replace('__', '/');
-                String xml = cv.VersionData.toString();
                 currentTemplateType = mr.templateType;
-                xml = mergeRunsInTags(xml);
+                String xml = mergeRunsInTags(rawXml);
                 xml = processXml(xml, recordDataMap);
                 mr.processedXmlEntries.put(originalPath, xml);
                 if (originalPath == 'word/document.xml') {
@@ -704,13 +736,19 @@ public with sharing class DocGenService {
      * Single entry point for all PDF rendering — used by generateDocument()
      * and generatePdfBlob().
      */
+    // Captured HTML from the last renderPdf() call. Used by bulk batch merge mode
+    // to accumulate HTML without re-merging the template. Cleared after reading.
+    public static String lastRenderedHtml;
+
     private static Blob renderPdf(MergeResult mr, Id templateId, Id recordId) {
         if (Test.isRunningTest()) {
-            return Blob.toPdf('<html><body><p>Test PDF</p></body></html>');
+            lastRenderedHtml = '<html><body><p>Test PDF</p></body></html>';
+            return Blob.toPdf(lastRenderedHtml);
         }
 
         Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
         String html = DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
+        lastRenderedHtml = html;
 
         // Blob.toPdf() with the Spring '26 Release Update resolves relative Salesforce
         // ContentVersion URLs (/sfc/servlet.shepherd/...) natively via the VF rendering engine.
@@ -826,6 +864,31 @@ public with sharing class DocGenService {
         // Native DOCX/PPTX path
         Blob resultBlob = assembleZip(mr);
         return saveFile(resultBlob, mr.docTitle, recordId, mr.outputFormat, mr.templateType);
+    }
+
+    /**
+     * Generates a document using pre-cached record data, bypassing data retrieval SOQL.
+     * Sets the static override so mergeTemplate() uses cached data instead of querying.
+     * Used by DocGenBatch when bulk data cache is available.
+     */
+    public static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
+        preloadedRecordDataOverride = preloadedRecordData;
+        return generateDocument(templateId, recordId);
+    }
+
+    /**
+     * Generates the HTML for a single record without calling Blob.toPdf() or saving a file.
+     * Used by bulk batch to accumulate HTML for all records, then render one merged PDF at the end.
+     * Accepts optional pre-loaded record data to skip per-record SOQL.
+     */
+    public static String generateHtmlForRecord(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
+        if (preloadedRecordData != null) {
+            preloadedRecordDataOverride = preloadedRecordData;
+        }
+        MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
+
+        Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
+        return DocGenHtmlRenderer.convertToHtml(mr.documentXml, pdfImages);
     }
 
     /**

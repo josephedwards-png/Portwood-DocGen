@@ -239,6 +239,38 @@
                         disabled={isProcessing}>
                     </lightning-input>
                 </div>
+                <div class="slds-col slds-size_1-of-6">
+                    <lightning-input
+                        type="number"
+                        label="Batch Size"
+                        value={batchSize}
+                        onchange={handleBatchSizeChange}
+                        min="1"
+                        max="200"
+                        disabled={isProcessing}
+                        field-level-help="Records per transaction. Use 1 for complex templates with images. Higher values (10-50) for simple text-only templates.">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-var-p-top_large">
+                    <lightning-input
+                        type="checkbox"
+                        label="Merge PDFs"
+                        checked={mergePdf}
+                        onchange={handleMergePdfChange}
+                        disabled={isProcessing}
+                        field-level-help="Generate individual PDFs per record AND produce a single merged PDF at the end.">
+                    </lightning-input>
+                </div>
+                <div class="slds-col slds-var-p-top_large">
+                    <lightning-input
+                        type="checkbox"
+                        label="Merge Only"
+                        checked={mergeOnly}
+                        onchange={handleMergeOnlyChange}
+                        disabled={isProcessing}
+                        field-level-help="Skip individual PDFs entirely. Only produces the merged PDF. Much faster for large batches.">
+                    </lightning-input>
+                </div>
                 <div class="slds-col">
                     <lightning-button
                         label="Run Bulk Generation"
