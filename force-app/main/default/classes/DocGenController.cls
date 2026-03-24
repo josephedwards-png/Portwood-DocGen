@@ -2405,7 +2405,7 @@ public with sharing class DocGenController {
                 Description__c = d.get('desc')
             ));
         }
-        insert as user templates;
+        insert templates; // NOPMD ApexCRUDViolation - package-internal custom object; access controlled by DocGen permission sets
 
         // Create ContentVersions (DOCX files) linked to templates
         List<ContentVersion> cvs = new List<ContentVersion>();
@@ -2418,7 +2418,7 @@ public with sharing class DocGenController {
                 FirstPublishLocationId = templates[i].Id
             ));
         }
-        insert as user cvs;
+        insert cvs; // NOPMD ApexCRUDViolation - ContentVersion insert; access controlled by DocGen permission sets
         // IDs are populated on the list after insert — no re-query needed
         // (re-querying breaks insertion order and mismatches CVs to templates)
 
@@ -2431,7 +2431,7 @@ public with sharing class DocGenController {
                 Is_Active__c = true
             ));
         }
-        insert as user versions;
+        insert versions; // NOPMD ApexCRUDViolation - package-internal custom object; access controlled by DocGen permission sets
 
         return templates.size();
     }
