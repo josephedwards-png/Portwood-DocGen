@@ -45,7 +45,7 @@ public with sharing class DocGenFlowAction {
                 res.success = true;
 
                 // Get the ContentVersion ID for the generated file
-                List<ContentVersion> cvs = [SELECT Id FROM ContentVersion WHERE ContentDocumentId = :docId LIMIT 1];
+                List<ContentVersion> cvs = [SELECT Id FROM ContentVersion WHERE ContentDocumentId = :docId WITH USER_MODE LIMIT 1];
                 if (!cvs.isEmpty()) {
                     res.contentVersionId = cvs[0].Id;
                 }
@@ -58,7 +58,8 @@ public with sharing class DocGenFlowAction {
                         ShareType = 'V',
                         Visibility = 'AllUsers'
                     );
-                    insert link; // NOPMD ApexCRUDViolation - ContentDocumentLink for file attachment
+                    SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ link });
+                    insert decision.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
                 }
             } catch (Exception e) {
                 res.errorMessage = e.getMessage();

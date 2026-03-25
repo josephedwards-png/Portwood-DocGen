@@ -301,6 +301,45 @@ String maxResult = DocGenService.processXmlForTest(maxXml, oppData);
 if (maxResult.contains('10')) { pass++; } else { fail++; System.debug('FAIL T20: MAX:Quantity expected 10, got: ' + maxResult); }
 
 // =====================================================================
+// 9. V4 APEX DATA PROVIDER TEST (custom data source)
+// =====================================================================
+
+// Test 21: Generate document from custom data map (same path as V4 provider)
+Map<String, Object> providerData = new Map<String, Object>{
+    'CompanyName' => 'Portwood Global Solutions',
+    'InvoiceNumber' => 'INV-2026-001',
+    'Amount' => 50000.00,
+    'TaxAmount' => 4125.00,
+    'Total' => 54125.00,
+    'Account' => new Map<String, Object>{ 'Name' => acc.Name },
+    'LineItems' => new Map<String, Object>{
+        'records' => new List<Object>{
+            new Map<String, Object>{ 'Product' => 'Widget', 'Qty' => 10 },
+            new Map<String, Object>{ 'Product' => 'Support', 'Qty' => 5 }
+        }
+    }
+};
+try {
+    Id providerDocId = DocGenService.generateDocumentFromData(tmpl.Id, acc.Id, providerData);
+    if (providerDocId != null) {
+        pass++;
+        System.debug('V4 provider path: generated doc ' + providerDocId);
+    } else { fail++; System.debug('FAIL T21: V4 provider returned null'); }
+} catch (Exception e) {
+    fail++;
+    System.debug('FAIL T21: V4 provider error: ' + e.getMessage());
+}
+
+// Test 22: V4 config routing — error for missing class
+try {
+    DocGenDataRetriever.getRecordData(acc.Id, 'Account', '{"v":4,"provider":"FakeClass"}');
+    fail++;
+    System.debug('FAIL T22: should have thrown');
+} catch (DocGenException e) {
+    if (e.getMessage().contains('FakeClass')) { pass++; } else { fail++; System.debug('FAIL T22: wrong error'); }
+}
+
+// =====================================================================
 // RESULTS
 // =====================================================================
 
@@ -314,7 +353,8 @@ System.debug('  T4 Opps(1), T5 Product2.Name, T6 LineItems(2),');
 System.debug('  T7 Description CV, T8 Legacy V1, T9 Image CV format,');
 System.debug('  T10 Image CV access, T11 Doc generation, T12 Doc not empty,');
 System.debug('  T13 Image render size, T14 Junction stitching, T15 COUNT,');
-System.debug('  T16 SUM, T17 SUM:currency, T18 AVG, T19 MIN, T20 MAX');
+System.debug('  T16 SUM, T17 SUM:currency, T18 AVG, T19 MIN, T20 MAX,');
+System.debug('  T21 V4 provider doc gen, T22 V4 missing class error');
 System.debug('  (Sample template tests: run scripts/e2e-sample-templates.apex)');
 
 // =====================================================================
