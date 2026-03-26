@@ -6,9 +6,22 @@ Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Code Analyzer](https://img.shields.io/badge/Critical-0-brightgreen)](#code-quality)
-[![Code Analyzer](https://img.shields.io/badge/High-0-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-507%2F507_passing-brightgreen)](#code-quality)
+[![Coverage](https://img.shields.io/badge/Coverage-83%25-green)](#code-quality)
+[![E2E](https://img.shields.io/badge/E2E-22%2F22_passing-brightgreen)](#code-quality)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
+
+### Salesforce Code Analyzer Results
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| Critical | 0 | :white_check_mark: |
+| High | 0 | :white_check_mark: |
+| Moderate | 344 | Style/complexity only |
+| Low | 617 | ApexDoc, SLDS suggestions |
+| Info | 60 | Whitespace, copy-paste |
+
+Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule set used by Salesforce Security Review. Zero security violations.
 
 ---
 
@@ -250,24 +263,35 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## Code Quality
 
-Scanned with [Salesforce Code Analyzer](https://developer.salesforce.com/docs/platform/salesforce-code-analyzer/overview) v5.9.0 (engines: PMD, ESLint, RetireJS, CPD, Flow Scanner).
+Scanned with [Salesforce Code Analyzer](https://developer.salesforce.com/docs/platform/salesforce-code-analyzer/overview) v5.9.0 using the `recommended` rule selector — the same rules used by Salesforce Security Review.
 
 ### Security & Severity Scorecard
 
-| Severity | Count | Status |
-|----------|-------|--------|
-| Critical | 0 | Passed |
-| High | 0 | Passed |
-| Moderate | 413 | Style / complexity |
-| Low | 511 | Informational |
-| Info | 26 | Duplicate detection |
+| Severity | Count | Status | Notes |
+|----------|-------|--------|-------|
+| **Critical** | **0** | :white_check_mark: Pass | No security vulnerabilities |
+| **High** | **0** | :white_check_mark: Pass | No CRUD/FLS, SOQL injection, or XSS issues |
+| **Moderate** | 344 | :information_source: | Cyclomatic complexity, missing braces (style only) |
+| **Low** | 617 | :information_source: | Missing ApexDoc, SLDS class suggestions |
+| **Info** | 60 | :information_source: | Trailing whitespace, copy-paste detection |
+
+**Run it yourself:**
+```bash
+sf code-analyzer run --rule-selector "recommended" --target force-app
+```
+
+### Apex Test Results
+
+- **507 / 507 tests passing** (100% pass rate)
+- **83% org-wide code coverage**
+- All tests use `System.runAs()`, assertion messages, and real data
 
 ### E2E Test Results
 
 ```
 sf apex run --target-org <org> -f scripts/e2e-test.apex
 
-PASS: 19  FAIL: 0  ALL TESTS PASSED
+PASS: 22  FAIL: 0  ALL TESTS PASSED
 ```
 
 | # | Test | Result |
@@ -284,13 +308,16 @@ PASS: 19  FAIL: 0  ALL TESTS PASSED
 | T10 | Image CV file accessibility | PASS |
 | T11 | PDF document generation (Blob.toPdf) | PASS |
 | T12 | Generated file not empty | PASS |
-| T13 | Junction stitching (OCR -> Contact) | PASS |
-| T14 | COUNT:Contacts aggregate | PASS |
-| T15 | SUM:LineItems.TotalPrice aggregate | PASS |
-| T16 | SUM with :currency formatting | PASS |
-| T17 | AVG:UnitPrice aggregate | PASS |
-| T18 | MIN:Quantity aggregate | PASS |
-| T19 | MAX:Quantity aggregate | PASS |
+| T13 | Document generation size check | PASS |
+| T14 | Junction stitching (OCR -> Contact) | PASS |
+| T15 | COUNT:Contacts aggregate | PASS |
+| T16 | SUM:LineItems.TotalPrice aggregate | PASS |
+| T17 | SUM with :currency formatting | PASS |
+| T18 | AVG:UnitPrice aggregate | PASS |
+| T19 | MIN:Quantity aggregate | PASS |
+| T20 | MAX:Quantity aggregate | PASS |
+| T21 | V4 Apex Data Provider generation | PASS |
+| T22 | V4 missing class error handling | PASS |
 
 ### QR Code Verification
 
