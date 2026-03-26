@@ -50,16 +50,23 @@ public with sharing class DocGenFlowAction {
                     res.contentVersionId = cvs[0].Id;
                 }
 
-                // Optionally link to the source record
+                // Optionally link to the source record (skip if already linked)
                 if (req.saveToRecord == true && docId != null) {
-                    ContentDocumentLink link = new ContentDocumentLink(
-                        ContentDocumentId = docId,
-                        LinkedEntityId = req.recordId,
-                        ShareType = 'V',
-                        Visibility = 'AllUsers'
-                    );
-                    SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ link });
-                    insert decision.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
+                    List<ContentDocumentLink> existing = [
+                        SELECT Id FROM ContentDocumentLink
+                        WHERE ContentDocumentId = :docId AND LinkedEntityId = :req.recordId
+                        WITH USER_MODE LIMIT 1
+                    ];
+                    if (existing.isEmpty()) {
+                        ContentDocumentLink link = new ContentDocumentLink(
+                            ContentDocumentId = docId,
+                            LinkedEntityId = req.recordId,
+                            ShareType = 'V',
+                            Visibility = 'AllUsers'
+                        );
+                        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ link });
+                        insert decision.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
+                    }
                 }
             } catch (Exception e) {
                 res.errorMessage = e.getMessage();

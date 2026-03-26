@@ -571,7 +571,7 @@ public with sharing class DocGenController {
                         providers.add(cls.Name);
                     }
                 } catch (Exception e) {
-                    // Skip classes that can't be instantiated
+                    System.debug(LoggingLevel.FINE, 'searchDataProviders: skipping ' + cls.Name + ' — ' + e.getMessage());
                 }
             }
         }

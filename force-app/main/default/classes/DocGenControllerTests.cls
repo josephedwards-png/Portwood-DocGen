@@ -2923,4 +2923,104 @@ private class DocGenControllerTests {
             System.assertEquals('Opportunity', result, 'Label starting with "Opportunities" should resolve to Opportunity');
         }
     }
+
+    // -----------------------------------------------------------------------
+    // searchDataProviders
+    // -----------------------------------------------------------------------
+
+    @IsTest
+    static void testSearchDataProvidersNoFilter() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            List<String> providers = DocGenController.searchDataProviders(null);
+            Test.stopTest();
+
+            // Result depends on whether any classes implement DocGenDataProvider in the org.
+            // The key is exercising the code path without errors.
+            System.assertNotEquals(null, providers, 'Providers list should not be null');
+        }
+    }
+
+    @IsTest
+    static void testSearchDataProvidersWithSearchTerm() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            List<String> providers = DocGenController.searchDataProviders('NonExistentClassName12345');
+            Test.stopTest();
+
+            System.assertNotEquals(null, providers, 'Providers list should not be null even with no matches');
+            System.assertEquals(0, providers.size(), 'Should return empty list for non-matching search term');
+        }
+    }
+
+    @IsTest
+    static void testSearchDataProvidersEmptyString() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            List<String> providers = DocGenController.searchDataProviders('');
+            Test.stopTest();
+
+            System.assertNotEquals(null, providers, 'Providers list should not be null for empty search term');
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // validateDataProvider
+    // -----------------------------------------------------------------------
+
+    @IsTest
+    static void testValidateDataProviderBlankClassName() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            Map<String, Object> result = DocGenController.validateDataProvider('');
+            Test.stopTest();
+
+            System.assertEquals(false, result.get('valid'), 'Should be invalid for blank class name');
+            System.assertEquals('Class name is required.', result.get('error'), 'Error should indicate class name is required');
+        }
+    }
+
+    @IsTest
+    static void testValidateDataProviderNullClassName() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            Map<String, Object> result = DocGenController.validateDataProvider(null);
+            Test.stopTest();
+
+            System.assertEquals(false, result.get('valid'), 'Should be invalid for null class name');
+            System.assertEquals('Class name is required.', result.get('error'), 'Error should indicate class name is required for null');
+        }
+    }
+
+    @IsTest
+    static void testValidateDataProviderNonExistentClass() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Test.startTest();
+            Map<String, Object> result = DocGenController.validateDataProvider('CompletelyFakeClassName99999');
+            Test.stopTest();
+
+            System.assertEquals(false, result.get('valid'), 'Should be invalid for non-existent class');
+            String errorMsg = (String) result.get('error');
+            System.assert(errorMsg.contains('not found'), 'Error should indicate class not found, got: ' + errorMsg);
+        }
+    }
+
+    @IsTest
+    static void testValidateDataProviderNonImplementingClass() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            // Account is a real class/type but does not implement DocGenDataProvider
+            Test.startTest();
+            Map<String, Object> result = DocGenController.validateDataProvider('Account');
+            Test.stopTest();
+
+            System.assertEquals(false, result.get('valid'), 'Should be invalid for class that does not implement DocGenDataProvider');
+        }
+    }
 }

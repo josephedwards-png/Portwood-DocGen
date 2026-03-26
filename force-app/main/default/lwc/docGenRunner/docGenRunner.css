@@ -176,6 +176,34 @@
     border-color: #d1d5db;
 }
 
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+    .widget-header {
+        padding: 0.75rem 1rem;
+    }
+    .widget-body {
+        padding: 1rem;
+    }
+    .header-title h2 {
+        font-size: 1rem;
+    }
+    .seg-btn {
+        padding: 10px 4px;
+        font-size: 0.7rem;
+    }
+    .pill-btn {
+        padding: 10px 8px;
+        font-size: 0.8rem;
+    }
+    .cool-brand-btn {
+        padding: 14px 24px;
+        font-size: 1rem;
+    }
+    .custom-mini-pills {
+        flex-wrap: wrap;
+    }
+}
+
 /* Loading & Alerts */
 .loading-state {
     display: flex;

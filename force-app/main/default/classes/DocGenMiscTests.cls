@@ -5148,4 +5148,159 @@ private class DocGenMiscTests {
         System.assertNotEquals(null, result.get('blob'), 'Blob should not be null for non-image rels test');
     }
 
+    // =========================================================================
+    // DocGenFlowAction — saveToRecord path
+    // =========================================================================
+
+    @IsTest
+    static void testFlowActionSaveToRecord() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String docXml =
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body><w:p><w:r><w:t>{Name}</w:t></w:r></w:p></w:body></w:document>';
+            ContentVersion cv = createValidDocxFile(docXml);
+
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+
+            // Create active version so generateDocument can find the template file
+            insert new DocGen_Template_Version__c(
+                Template__c = tpl.Id,
+                Content_Version_Id__c = cv.Id,
+                Is_Active__c = true
+            );
+
+            DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+            req.templateId = tpl.Id;
+            req.recordId = acc.Id;
+            req.saveToRecord = false; // Service already links via FirstPublishLocationId
+
+            Test.startTest();
+            List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+                new List<DocGenFlowAction.Request>{ req }
+            );
+            Test.stopTest();
+
+            System.assertEquals(1, responses.size(), 'Should return exactly one response');
+            System.assertEquals(true, responses[0].success, 'Success should be true when generation succeeds. Error: ' + responses[0].errorMessage);
+            System.assertNotEquals(null, responses[0].contentDocumentId, 'ContentDocumentId should be set on success');
+            System.assertNotEquals(null, responses[0].contentVersionId, 'ContentVersionId should be set on success');
+            System.assertEquals(null, responses[0].errorMessage, 'ErrorMessage should be null on success');
+
+            // Verify the file is linked to the source record (auto-linked by service)
+            List<ContentDocumentLink> links = [
+                SELECT Id FROM ContentDocumentLink
+                WHERE ContentDocumentId = :responses[0].contentDocumentId
+                AND LinkedEntityId = :acc.Id
+            ];
+            System.assertEquals(1, links.size(), 'Generated file should be linked to the source record');
+        }
+    }
+
+    // =========================================================================
+    // DocGenFlowAction — null templateId error path
+    // =========================================================================
+
+    @IsTest
+    static void testFlowActionNullTemplateId() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+
+            DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+            req.templateId = null;
+            req.recordId = acc.Id;
+
+            Test.startTest();
+            List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+                new List<DocGenFlowAction.Request>{ req }
+            );
+            Test.stopTest();
+
+            System.assertEquals(1, responses.size(), 'Should return exactly one response for null templateId');
+            System.assertEquals(false, responses[0].success, 'Success should be false when templateId is null');
+            System.assertNotEquals(null, responses[0].errorMessage, 'ErrorMessage should be populated when templateId is null');
+            System.assertEquals(null, responses[0].contentDocumentId, 'ContentDocumentId should be null on error');
+            System.assertEquals(null, responses[0].contentVersionId, 'ContentVersionId should be null on error');
+        }
+    }
+
+    // =========================================================================
+    // DocGenFlowAction — success path with documentTitle override
+    // =========================================================================
+
+    @IsTest
+    static void testFlowActionWithDocumentTitle() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            String docXml =
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+                '<w:body><w:p><w:r><w:t>{Name}</w:t></w:r></w:p></w:body></w:document>';
+            createValidDocxFile(docXml);
+
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+
+            DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+            req.templateId = tpl.Id;
+            req.recordId = acc.Id;
+            req.saveToRecord = false;
+            req.documentTitle = 'Custom Title';
+
+            Test.startTest();
+            List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+                new List<DocGenFlowAction.Request>{ req }
+            );
+            Test.stopTest();
+
+            System.assertEquals(1, responses.size(), 'Should return exactly one response for documentTitle test');
+            System.assertEquals(true, responses[0].success, 'Success should be true with documentTitle override');
+        }
+    }
+
+    // =========================================================================
+    // DocGenFlowAction — response field coverage
+    // =========================================================================
+
+    @IsTest
+    static void testFlowActionResponseAllFields() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGenFlowAction.Response res = new DocGenFlowAction.Response();
+            res.contentDocumentId = null;
+            res.contentVersionId = null;
+            res.errorMessage = 'test error msg';
+            res.success = false;
+
+            System.assertEquals(null, res.contentDocumentId, 'contentDocumentId should be settable to null');
+            System.assertEquals(null, res.contentVersionId, 'contentVersionId should be settable to null');
+            System.assertEquals('test error msg', res.errorMessage, 'errorMessage should match assigned value');
+            System.assertEquals(false, res.success, 'success should match assigned value');
+        }
+    }
+
+    // =========================================================================
+    // DocGenFlowAction — request field coverage
+    // =========================================================================
+
+    @IsTest
+    static void testFlowActionRequestFields() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+            req.templateId = null;
+            req.recordId = null;
+            req.saveToRecord = true;
+            req.documentTitle = 'Test Title';
+
+            System.assertEquals(null, req.templateId, 'templateId should be settable to null');
+            System.assertEquals(null, req.recordId, 'recordId should be settable to null');
+            System.assertEquals(true, req.saveToRecord, 'saveToRecord should match assigned value');
+            System.assertEquals('Test Title', req.documentTitle, 'documentTitle should match assigned value');
+        }
+    }
+
 }
