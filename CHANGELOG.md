@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.7 — "Runner Mobile Support & Community Hub (Parked)" (Portwood DocGen)
+
+- **DocGen Runner Mobile Support** — Record Page and App Page targets now include mobile form factor support (`Small` + `Large`), enabling the runner on Salesforce mobile.
+- **Community Hub (Parked)** — Full VF-based community forum built and committed to `devhub-tools/` — rich text editor, @mentions, reply notifications via Resend, profile pages, org management, category hub with topic cards, breadcrumb navigation, vendor directory. Parked for now to stay focused on core document generation. Code ready to activate when needed.
+- **Removed Community Link** — Removed "Join Community" from Command Hub sidebar and landing page nav.
+
 ## v1.1.6 — "Template Import/Export & Community Repo Migration" (Portwood DocGen)
 
 - **Template Import/Export** — Export any template as a portable `.docgen.json` file containing all metadata, query config, saved queries, and the template file (DOCX/XLSX/PPTX). Import the JSON into any org to recreate the template with a single click. Pre-decomposed parts and images are auto-regenerated on import. Export via row action menu; Import via toolbar button.
