@@ -3594,6 +3594,18 @@ private class DocGenControllerTests {
         System.runAs(u) {
             DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
 
+            // Deactivate any existing versions from the factory so ours is the only active one
+            List<DocGen_Template_Version__c> existingVersions = [
+                SELECT Id FROM DocGen_Template_Version__c
+                WHERE Template__c = :tpl.Id AND Is_Active__c = true
+            ];
+            for (DocGen_Template_Version__c v : existingVersions) {
+                v.Is_Active__c = false;
+            }
+            if (!existingVersions.isEmpty()) {
+                update existingVersions;
+            }
+
             // Create a version with a file so export includes the file
             ContentVersion cv = new ContentVersion(
                 Title = 'ExportTestFile',

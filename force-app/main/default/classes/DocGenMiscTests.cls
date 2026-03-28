@@ -2674,9 +2674,18 @@ private class DocGenMiscTests {
             System.assert(result.containsKey('Opportunities'), 'V3 should contain Opportunities');
             Map<String, Object> oppData = (Map<String, Object>) result.get('Opportunities');
             List<Object> oppRecords = (List<Object>) oppData.get('records');
-            System.assertEquals(1, oppRecords.size(), 'V3 should have 1 Opportunity');
+            // Factory also creates an Opp on this Account, so find our specific one by name
+            System.assert(oppRecords.size() >= 1, 'V3 should have at least 1 Opportunity');
 
-            Map<String, Object> oppRec = (Map<String, Object>) oppRecords[0];
+            Map<String, Object> oppRec = null;
+            for (Object o : oppRecords) {
+                Map<String, Object> candidate = (Map<String, Object>) o;
+                if (candidate.get('Name') == 'V3 Multi Opp') {
+                    oppRec = candidate;
+                    break;
+                }
+            }
+            System.assertNotEquals(null, oppRec, 'V3 should contain the V3 Multi Opp record');
             System.assert(oppRec.containsKey('OpportunityLineItems'), 'V3 Opp should contain OLI children');
             Map<String, Object> oliData = (Map<String, Object>) oppRec.get('OpportunityLineItems');
             List<Object> oliRecords = (List<Object>) oliData.get('records');
@@ -2749,7 +2758,16 @@ private class DocGenMiscTests {
             System.assertNotEquals(null, result, 'V3 junction result should not be null');
             Map<String, Object> oppsData = (Map<String, Object>) result.get('Opportunities');
             List<Object> opps = (List<Object>) oppsData.get('records');
-            Map<String, Object> oppRec = (Map<String, Object>) opps[0];
+            // Factory also creates an Opp on this Account — find the one with OCR by name
+            Map<String, Object> oppRec = null;
+            for (Object o : opps) {
+                Map<String, Object> candidate = (Map<String, Object>) o;
+                if (candidate.get('Name') == 'V3 Junction Opp') {
+                    oppRec = candidate;
+                    break;
+                }
+            }
+            System.assertNotEquals(null, oppRec, 'V3 should contain the V3 Junction Opp record');
             System.assert(oppRec.containsKey('OpportunityContactRoles'), 'V3 should have OCR on Opp');
 
             Map<String, Object> ocrContainer = (Map<String, Object>) oppRec.get('OpportunityContactRoles');
@@ -2870,7 +2888,16 @@ private class DocGenMiscTests {
             Map<String, Object> accData = results.get(acc.Id);
             Map<String, Object> oppsContainer = (Map<String, Object>) accData.get('Opportunities');
             List<Object> opps = (List<Object>) oppsContainer.get('records');
-            Map<String, Object> oppRec = (Map<String, Object>) opps[0];
+            // Factory also creates an Opp on this Account — find the one with OCR by name
+            Map<String, Object> oppRec = null;
+            for (Object o : opps) {
+                Map<String, Object> candidate = (Map<String, Object>) o;
+                if (candidate.get('Name') == 'Bulk Junction Opp') {
+                    oppRec = candidate;
+                    break;
+                }
+            }
+            System.assertNotEquals(null, oppRec, 'Bulk should contain the Bulk Junction Opp record');
             Map<String, Object> ocrContainer = (Map<String, Object>) oppRec.get('OpportunityContactRoles');
             List<Object> ocrs = (List<Object>) ocrContainer.get('records');
             Map<String, Object> ocrRec = (Map<String, Object>) ocrs[0];

@@ -632,7 +632,15 @@ private class DocGenBulkTests {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
             // V1 config (plain string) should NOT create a data cache CV
-            DocGen_Template__c t = TestDataFactory.getTestTemplate();
+            // Create a dedicated template with V1 config (the factory one has V3)
+            DocGen_Template__c t = new DocGen_Template__c(
+                Name = 'V1 Skip Cache Template',
+                Base_Object_API__c = 'Account',
+                Type__c = 'Word',
+                Output_Format__c = 'PDF',
+                Query_Config__c = 'Name, Industry'
+            );
+            insert t;
 
             DocGen_Job__c job = new DocGen_Job__c(
                 Template__c = t.Id,
