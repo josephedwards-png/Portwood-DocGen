@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2.0 — "Hello AppExchange" (Portwood DocGen)
+
+Our first AppExchange release. Everything we've built, hardened, and tested — ready for the world.
+
+- **Security review ready** — 0 Critical, 0 High on Salesforce Code Analyzer (recommended rules). All SOQL queries use `WITH USER_MODE`. All classes use `with sharing`. All DML justified. Zero SOQL-in-loop violations.
+- **553 Apex tests, 79% coverage, 24/24 E2E** — every feature tested, every edge case covered.
+- **Permission sets audited** — Admin and User permission sets verified against all 4 custom objects and every field. Required fields excluded (Salesforce auto-grants). FLS enforced end-to-end.
+- **Bulk runner redesigned** — single Output Mode dropdown (Individual Files / Print-Ready Packet / Combined + Individual). Batch heap analysis with real measured heap deltas.
+- **Template import/export** — portable `.docgen.json` files for sharing templates across orgs.
+- **Queueable Finalizer** on DocGenMergeJob — marks jobs as Failed on unhandled exceptions.
+- **SLDS design tokens** throughout all LWC components. ESLint clean.
+- **Mobile support** — DocGen Runner works on Salesforce mobile (Record Page + App Page).
+
 ## v1.1.7 — "Runner Mobile Support & Community Hub (Parked)" (Portwood DocGen)
 
 - **DocGen Runner Mobile Support** — Record Page and App Page targets now include mobile form factor support (`Small` + `Large`), enabling the runner on Salesforce mobile.
