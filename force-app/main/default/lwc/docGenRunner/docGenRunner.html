@@ -100,6 +100,12 @@
                     <button class="cool-brand-btn" onclick={generateDocument} disabled={isGenerateDisabled}>
                         {generateButtonLabel}
                     </button>
+
+                    <template lwc:if={selectedTemplateId}>
+                        <div class="slds-m-top_x-small">
+                            <lightning-button label="Giant Query" variant="neutral" size="small" onclick={handleGiantQuery} disabled={isGenerateDisabled}></lightning-button>
+                        </div>
+                    </template>
                 </template>
 
                 <!-- PACKET MODE -->

@@ -9,6 +9,7 @@ import saveGeneratedDocument from '@salesforce/apex/DocGenController.saveGenerat
 import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
 import getChildRecordPdfs from '@salesforce/apex/DocGenController.getChildRecordPdfs';
 import getRecordPdfs from '@salesforce/apex/DocGenController.getRecordPdfs';
+import generateDocumentGiantQuery from '@salesforce/apex/DocGenController.generateDocumentGiantQuery';
 import { NavigationMixin } from 'lightning/navigation';
 import { downloadBase64 as downloadBase64Util } from 'c/docGenUtils';
 import { buildDocx } from './docGenZipWriter';
@@ -304,6 +305,35 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             }
         } catch (e) {
             this.error = 'Generation Error: ' + (e.body ? e.body.message : e.message || 'Unknown error');
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async handleGiantQuery() {
+        this.isLoading = true;
+        this.error = null;
+        try {
+            this.showToast('Info', 'Checking dataset size...', 'info');
+            const result = await generateDocumentGiantQuery({
+                templateId: this.selectedTemplateId,
+                recordId: this.recordId
+            });
+            if (result.isGiantQuery) {
+                this.showToast('Success', 'Large dataset detected \u2014 generating asynchronously. Check Job History for progress.', 'success');
+            } else if (result.base64) {
+                const saveToRecord = this.outputMode === 'save';
+                const docTitle = result.title || 'Document';
+                if (saveToRecord) {
+                    await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: result.base64, extension: 'pdf' });
+                    this.showToast('Success', 'PDF saved to record.', 'success');
+                } else {
+                    this.downloadBase64(result.base64, docTitle + '.pdf', 'application/pdf');
+                    this.showToast('Success', 'Document downloaded.', 'success');
+                }
+            }
+        } catch (e) {
+            this.error = 'Giant Query Error: ' + (e.body ? e.body.message : e.message || 'Unknown error');
         } finally {
             this.isLoading = false;
         }
