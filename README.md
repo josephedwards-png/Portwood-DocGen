@@ -30,10 +30,10 @@ Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule s
 **New install:**
 
 ```bash
-sf package install --package 04tal000006PFA5AAO --wait 10 --target-org <your-org>
+sf package install --package 04tal000006PFEvAAO --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PFA5AAO) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PFA5AAO)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PFEvAAO) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PFEvAAO)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
