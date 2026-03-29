@@ -545,10 +545,17 @@ export default class DocGenColumnBuilder extends LightningElement {
         // Clean up label — strip API name in parens, use friendly names
         let friendlyLabel = label || objectApiName;
         // "OpportunityLineItems (Opportunity Product)" → "Opportunity Products"
+        // But NOT for root objects where label is "Friendly Name (API_Name__c)"
         if (friendlyLabel.includes('(') && friendlyLabel.includes(')')) {
-            friendlyLabel = friendlyLabel.substring(friendlyLabel.indexOf('(') + 1, friendlyLabel.indexOf(')'));
-            // Pluralize if it doesn't end in 's'
-            if (!friendlyLabel.endsWith('s')) friendlyLabel += 's';
+            const inner = friendlyLabel.substring(friendlyLabel.indexOf('(') + 1, friendlyLabel.indexOf(')'));
+            // If the inner text looks like an API name (contains __), use the part before the parens
+            if (inner.includes('__')) {
+                friendlyLabel = friendlyLabel.substring(0, friendlyLabel.indexOf('(')).trim();
+            } else {
+                friendlyLabel = inner;
+                // Pluralize if it doesn't end in 's'
+                if (!friendlyLabel.endsWith('s')) friendlyLabel += 's';
+            }
         }
         // "Contact (via OpportunityContactRoles)" → "Contacts"
         if (friendlyLabel.includes(' (via ')) {
@@ -633,7 +640,9 @@ export default class DocGenColumnBuilder extends LightningElement {
         }
 
         // Use the actual lookup field from schema describe (not guessed from object name)
-        const childObjName = opt.childObjectApiName;
+        // Fallback: if childObjectApiName is missing, derive from relationship name
+        // e.g., Record_Consolidation__cs → Record_Consolidation__c
+        const childObjName = opt.childObjectApiName || relName.replace(/__cs$/, '__c').replace(/__r$/, '__c');
         const lookupField = opt.lookupField || this._guessLookupField(parentNode.objectApiName, relName);
         const newNode = this._createNode(childObjName, opt.label, false, this.addNodeParentId,
             lookupField, relName);
@@ -647,14 +656,23 @@ export default class DocGenColumnBuilder extends LightningElement {
         Promise.resolve().then(() => { this.treeNodes = [...this.treeNodes]; });
     }
 
-    _guessLookupField(parentObjectName) {
-        // Common patterns: Account → AccountId, Opportunity → OpportunityId
-        // Custom objects: MyObj__c → MyObj__c (lookup field)
-        // For standard objects, the lookup field is typically ParentObjectName + 'Id'
-        if (parentObjectName.endsWith('__c')) {
-            return parentObjectName; // Custom: the lookup IS the object name
+    _guessLookupField(parentObjectName, relationshipName) {
+        // Custom relationship suffixes: __r → __c, __cs → __c (Custom Settings)
+        if (relationshipName) {
+            if (relationshipName.endsWith('__r')) {
+                return relationshipName.replace(/__r$/, '__c');
+            }
+            if (relationshipName.endsWith('__cs')) {
+                // Custom Setting relationship: the lookup field strips the trailing 's'
+                return relationshipName.replace(/__cs$/, '__c');
+            }
         }
-        return parentObjectName + 'Id';
+        // Standard relationships: Account → AccountId, Opportunity → OpportunityId
+        if (!parentObjectName.endsWith('__c')) {
+            return parentObjectName + 'Id';
+        }
+        // Custom parent with standard-named relationship: use the object name as-is
+        return parentObjectName;
     }
 
     handleRemoveNode(event) {
@@ -886,7 +904,8 @@ export default class DocGenColumnBuilder extends LightningElement {
                     }
                     const junctionRel = jInfo ? (jInfo.junctionRel || '') : '';
                     const junctionObjName = jInfo ? (jInfo.junctionObject || junctionRel.replace(/s$/, '')) : junctionRel.replace(/s$/, '');
-                    const baseLookupField = jInfo ? (jInfo.baseLookupField || result.baseObject + 'Id') : result.baseObject + 'Id';
+                    const defaultLookup = result.baseObject.endsWith('__c') ? result.baseObject : result.baseObject + 'Id';
+                    const baseLookupField = jInfo ? (jInfo.baseLookupField || defaultLookup) : defaultLookup;
                     const targetRelName = jInfo ? (jInfo.targetRelName || targetObjName) : targetObjName;
 
                     // Create node for the junction object as a regular child
@@ -1015,7 +1034,8 @@ export default class DocGenColumnBuilder extends LightningElement {
         this._loadNodeFields(rootNode);
 
         for (const child of children) {
-            const childNode = this._createNode(child.rel, child.rel, false, rootNode.id, null, child.rel);
+            const lookupField = this._guessLookupField(this.selectedObject, child.rel);
+            const childNode = this._createNode(child.rel, child.rel, false, rootNode.id, lookupField, child.rel);
             childNode.selectedFields = child.fields;
             nodes.push(childNode);
             this._loadNodeFields(childNode);
@@ -1049,7 +1069,8 @@ export default class DocGenColumnBuilder extends LightningElement {
         // Children
         if (config.children) {
             for (const child of config.children) {
-                const childNode = this._createNode(child.rel, child.rel, false, rootNode.id, null, child.rel);
+                const lookupField = this._guessLookupField(objName, child.rel);
+                const childNode = this._createNode(child.rel, child.rel, false, rootNode.id, lookupField, child.rel);
                 childNode.selectedFields = child.fields || [];
                 nodes.push(childNode);
                 this._loadNodeFields(childNode);
@@ -1059,7 +1080,8 @@ export default class DocGenColumnBuilder extends LightningElement {
         // Junctions
         if (config.junctions) {
             for (const junc of config.junctions) {
-                const juncNode = this._createNode(junc.junctionRel, junc.junctionRel, false, rootNode.id, null, junc.junctionRel, {
+                const juncLookupField = this._guessLookupField(objName, junc.junctionRel);
+                const juncNode = this._createNode(junc.junctionRel, junc.junctionRel, false, rootNode.id, juncLookupField, junc.junctionRel, {
                     targetObject: junc.targetObject,
                     targetIdField: junc.targetIdField,
                     targetFields: junc.targetFields || []

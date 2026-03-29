@@ -1701,6 +1701,31 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     childProperCaseMaps.put(childObjName, cpm);
                 }
             }
+        } else {
+            // Dynamic child discovery for custom object report types not in the hardcoded map.
+            // Scan the base object's child relationships and build field maps for any queryable
+            // children so report columns can be matched by label.
+            for (Schema.ChildRelationship cr : objType.getDescribe().getChildRelationships()) {
+                if (cr.getRelationshipName() == null) { continue; }
+                String childObjName = cr.getChildSObject().getDescribe().getName();
+                if (childObjName.endsWith('History') || childObjName.endsWith('Share') || childObjName.endsWith('Feed')) { continue; }
+                if (childRelNameByObject.containsKey(childObjName)) { continue; }
+                Schema.DescribeSObjectResult childDesc = cr.getChildSObject().getDescribe();
+                if (!childDesc.isQueryable() || childDesc.isDeprecatedAndHidden()) { continue; }
+                childRelNameByObject.put(childObjName, cr.getRelationshipName());
+                Map<String, SObjectField> cfm = childDesc.fields.getMap();
+                if (cfm.size() < 3) { continue; } // Skip trivial objects
+                childFieldMaps.put(childObjName, cfm);
+                Map<String, String> clm = new Map<String, String>();
+                Map<String, String> cpm = new Map<String, String>();
+                for (String fn : cfm.keySet()) {
+                    Schema.DescribeFieldResult cdfr = cfm.get(fn).getDescribe();
+                    clm.put(cdfr.getLabel().toLowerCase(), cdfr.getName());
+                    cpm.put(fn.toLowerCase(), cdfr.getName());
+                }
+                childLabelMaps.put(childObjName, clm);
+                childProperCaseMaps.put(childObjName, cpm);
+            }
         }
 
         // Also discover grandchildren (e.g., Quote → QuoteLineItems) so their
@@ -2024,13 +2049,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             if (relName.startsWith('__junction_')) { continue; }
             if (!childFields.containsKey(relName)) { continue; } // Only include objects with matched fields
 
-            // Find which parent this child belongs to
+            // Find which parent this child belongs to and the correct lookup field
             String parentObj = findParentObject(childObjName, baseObject, childRelNameByObject);
+            String lookupFieldName = findLookupField(childObjName, parentObj);
 
             childHierarchy.put(relName, new Map<String, String>{
                 'objectName' => childObjName,
                 'parentObject' => parentObj,
-                'lookupField' => parentObj + 'Id'
+                'lookupField' => lookupFieldName
             });
         }
 
@@ -2071,6 +2097,27 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             }
         }
         return baseObject;
+    }
+
+    /**
+     * Finds the lookup field on childObjName that references parentObjName.
+     * Uses schema describe to find the correct field, falling back to parentObj+'Id' or parentObj for custom.
+     */
+    private static String findLookupField(String childObjName, String parentObjName) {
+        SObjectType childType = Schema.getGlobalDescribe().get(childObjName);
+        if (childType != null) {
+            for (Schema.SObjectField sof : childType.getDescribe().fields.getMap().values()) {
+                Schema.DescribeFieldResult dfr = sof.getDescribe();
+                if (dfr.getType() != Schema.DisplayType.REFERENCE || dfr.getReferenceTo() == null) { continue; }
+                for (Schema.SObjectType ref : dfr.getReferenceTo()) {
+                    if (ref.getDescribe().getName() == parentObjName) {
+                        return dfr.getName();
+                    }
+                }
+            }
+        }
+        // Fallback: standard convention
+        return parentObjName.endsWith('__c') ? parentObjName : parentObjName + 'Id';
     }
 
     /**
@@ -2295,11 +2342,29 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // Strategy 6: Custom report type with __c — try to resolve via name minus suffix
         if (reportTypeName.contains('__c')) {
             String basePart = reportTypeName.substringBefore('__c');
-            // Remove common prefixes/suffixes from custom report type developer names
+            // 6a. Try the full custom object name (basePart + '__c') — it may be the object itself
+            String customObjName = basePart + '__c';
+            if (globalDescribe.containsKey(customObjName)) { return customObjName; }
+            // 6b. Try with namespace prefix stripped (e.g., ns__My_Report__c → My_Report__c → My_Object__c)
+            if (basePart.contains('__')) {
+                String withoutNs = basePart.substringAfter('__') + '__c';
+                if (globalDescribe.containsKey(withoutNs)) { return withoutNs; }
+            }
+            // 6c. Fallback: check if any part matches a standard object name
             for (String objName : commonObjects) {
                 if (basePart.containsIgnoreCase(objName) && globalDescribe.containsKey(objName)) {
                     return objName;
                 }
+            }
+            // 6d. Scan all custom objects for a name contained in the report type
+            for (String objName : globalDescribe.keySet()) {
+                if (!objName.endsWith('__c')) { continue; }
+                Schema.DescribeSObjectResult objDesc = globalDescribe.get(objName).getDescribe();
+                if (!objDesc.isQueryable() || objDesc.isDeprecatedAndHidden()) { continue; }
+                String objBase = objName.removeEnd('__c');
+                // Strip namespace from object name for matching
+                if (objBase.contains('__')) { objBase = objBase.substringAfter('__'); }
+                if (basePart.containsIgnoreCase(objBase)) { return objDesc.getName(); }
             }
         }
 

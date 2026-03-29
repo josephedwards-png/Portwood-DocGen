@@ -2,7 +2,7 @@
 
 Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from any Salesforce record. Merge PDFs, add barcodes and QR codes, compute totals — 100% native, zero external dependencies, completely free.
 
-[![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -17,9 +17,9 @@ Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from 
 |----------|-------|--------|
 | Critical | 0 | :white_check_mark: |
 | High | 0 | :white_check_mark: |
-| Moderate | 376 | Style/complexity only |
-| Low | 462 | ApexDoc, SLDS suggestions |
-| Info | 70 | Whitespace, copy-paste |
+| Moderate | 379 | Style/complexity only |
+| Low | 464 | ApexDoc, SLDS suggestions |
+| Info | 71 | Whitespace, copy-paste |
 
 Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule set used by Salesforce Security Review. Zero security violations.
 

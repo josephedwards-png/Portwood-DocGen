@@ -401,11 +401,17 @@ public with sharing class DocGenDataRetriever {
             throw DocGenService.ahe('No query nodes defined.');
         }
 
+        Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
         for (Object nodeObj : nodesJson) {
             Map<String, Object> n = (Map<String, Object>) nodeObj;
             TreeNode tn = new TreeNode();
             tn.id = (String) n.get('id');
             tn.objectApiName = (String) n.get('object');
+            // Fix __cs suffix: Custom Setting relationship name sometimes stored as object name
+            if (tn.objectApiName != null && tn.objectApiName.endsWith('__cs')
+                    && gd.get(tn.objectApiName) == null) {
+                tn.objectApiName = tn.objectApiName.removeEnd('s');
+            }
             tn.parentNodeId = (String) n.get('parentNode');
             tn.lookupField = (String) n.get('lookupField');
             tn.relationshipName = (String) n.get('relationshipName');
@@ -494,11 +500,17 @@ public with sharing class DocGenDataRetriever {
             throw DocGenService.ahe('No query nodes defined.');
         }
 
+        Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
         for (Object nodeObj : nodesJson) {
             Map<String, Object> n = (Map<String, Object>) nodeObj;
             TreeNode tn = new TreeNode();
             tn.id = (String) n.get('id');
             tn.objectApiName = (String) n.get('object');
+            // Fix __cs suffix: Custom Setting relationship name sometimes stored as object name
+            if (tn.objectApiName != null && tn.objectApiName.endsWith('__cs')
+                    && gd.get(tn.objectApiName) == null) {
+                tn.objectApiName = tn.objectApiName.removeEnd('s');
+            }
             tn.parentNodeId = (String) n.get('parentNode');
             tn.lookupField = (String) n.get('lookupField');
             tn.relationshipName = (String) n.get('relationshipName');

@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.6.0 — Sample Flows + Fixes",
-      "versionNumber": "1.6.0.NEXT",
-      "ancestorId": "04tal000006PEnVAAW",
+      "versionName": "1.7.0 — Custom Object Query Builder Fix",
+      "versionNumber": "1.7.0.NEXT",
+      "ancestorId": "04tal000006PFA5AAO",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",

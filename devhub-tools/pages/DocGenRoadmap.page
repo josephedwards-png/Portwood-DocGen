@@ -275,7 +275,7 @@
     <!-- ───── TIMELINE ───── -->
     <section class="section">
         <h2>The Journey</h2>
-        <p class="subtitle">From first commit to AppExchange and beyond</p>
+        <p class="subtitle">From first commit to production and beyond</p>
 
         <div class="timeline">
 
@@ -304,7 +304,7 @@
                 <div class="tl-card">
                     <span class="tl-label done">Shipped</span>
                     <h3>v1.1 — Security &amp; Polish</h3>
-                    <p>Hardened for AppExchange. Every class audited, every query secured.</p>
+                    <p>Hardened for production. Every class audited, every query secured.</p>
                     <ul>
                         <li>0 Critical, 0 High on Salesforce Code Analyzer</li>
                         <li>CRUD/FLS enforcement on all queries</li>
@@ -334,18 +334,79 @@
                 </div>
             </div>
 
+            <!-- Done: v1.3 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.3 — Giant Query PDF</h3>
+                    <p>Giant Query now works for PDF output too. Server-side batch processing with full template fidelity.</p>
+                    <ul>
+                        <li>Giant Query PDF: server-side batch + progressive assembly</li>
+                        <li>Column formatting via CSS for large tables</li>
+                        <li>Parent lookup fields in Giant Query</li>
+                        <li>Flying Saucer CSS2.1 compatibility fixes</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Done: v1.4 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.4 — Stability &amp; Regex Hotfix</h3>
+                    <p>Hardened for real-world scale. Fixed regex performance issues with 10K+ row documents.</p>
+                    <ul>
+                        <li>Replaced regex barcode stripping with string ops for massive documents</li>
+                        <li>Resolve merge tags before row injection for stability</li>
+                        <li>State/Country Picklist handling in E2E tests</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Done: v1.5 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.5 — Install Tracking &amp; Package Lineage</h3>
+                    <p>Established package ancestor chain and added visibility into adoption.</p>
+                    <ul>
+                        <li>Live install count badge on landing page</li>
+                        <li>Child records comparison row in feature matrix</li>
+                        <li>Package ancestor chain established for upgrade path</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Done: v1.6 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.6 — Sample Flows</h3>
+                    <p>Pre-built Flow templates so admins can see DocGen automation in action immediately.</p>
+                    <ul>
+                        <li>Sample Flows demonstrating DocGen Flow action integration</li>
+                        <li>Flow entry criteria fix for reliable automation triggers</li>
+                        <li>Giant Query PDF section added to README + architecture docs</li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- NOW -->
             <div class="tl-item">
                 <div class="tl-dot current"></div>
                 <div class="tl-card active">
                     <span class="tl-label now">Now — Early Adoption</span>
-                    <h3>AppExchange Security Review</h3>
-                    <p>We're preparing for AppExchange listing. Right now, DocGen is <strong>100% free</strong> with every feature unlocked. Early adopters help us build momentum for the security review — every install and review counts.</p>
+                    <h3>Growing the Community</h3>
+                    <p>DocGen is live and in production. Right now, DocGen is <strong>100% free</strong> with every feature unlocked. Early adopters help shape the product — your feedback drives what we build next.</p>
                     <ul>
-                        <li>Security review submission in progress</li>
                         <li>Collecting early adopter feedback</li>
                         <li>Bug fixes and stability improvements</li>
-                        <li>Building the install base for AppExchange credibility</li>
+                        <li>Expanding documentation and how-to guides</li>
+                        <li>Building the install base and community</li>
                     </ul>
                 </div>
             </div>
@@ -355,13 +416,12 @@
                 <div class="tl-dot upcoming"></div>
                 <div class="tl-card">
                     <span class="tl-label next">Next</span>
-                    <h3>Freemium Launch</h3>
-                    <p>A generous free tier that covers most use cases, with a Pro tier for power users. Every new install gets 30 days of Pro features free.</p>
+                    <h3>Premium Launch</h3>
+                    <p>A generous free tier that covers most use cases, with a Premium tier for power users who need advanced features.</p>
                     <ul>
-                        <li>30-day Pro trial for all new installs</li>
                         <li>Free tier: full document generation, forever</li>
-                        <li>Pro tier: Giant Query, bulk generation, Flow actions, and more</li>
-                        <li>Nonprofits: 100% free, aligned with Salesforce Power of Us</li>
+                        <li>Premium tier: $10/user/month for Giant Query, bulk generation, Flow actions, and more</li>
+                        <li>Nonprofits: first 10 users free, then $8/user/month (20% off)</li>
                     </ul>
                 </div>
             </div>
@@ -404,8 +464,8 @@
 
     <!-- ───── TIER COMPARISON ───── -->
     <section class="section" style="padding-top: 0;">
-        <h2>Free vs. Pro</h2>
-        <p class="subtitle">A generous free tier that never expires. Pro for teams that need more.</p>
+        <h2>Free vs. Premium</h2>
+        <p class="subtitle">A generous free tier that never expires. Premium for teams that need more.</p>
 
         <div class="tiers">
 
@@ -429,10 +489,10 @@
                 </ul>
             </div>
 
-            <!-- Pro -->
+            <!-- Premium -->
             <div class="tier-card pro">
-                <span class="tier-badge paid">30-Day Free Trial</span>
-                <h3>Pro</h3>
+                <span class="tier-badge paid">Power Features</span>
+                <h3>Premium</h3>
                 <div class="tier-price">$10 <span>/ user / month</span></div>
                 <p class="tier-note">Everything in Free, plus power features for teams</p>
                 <ul class="tier-list">
@@ -440,6 +500,7 @@
                     <li>Giant Query (15,000+ child records)</li>
                     <li>Bulk generation (list views &amp; reports)</li>
                     <li>Flow actions (generate from automation)</li>
+                    <li>Sample Flows for quick setup</li>
                     <li>Template sharing (multi-user access control)</li>
                     <li>Template export / import</li>
                     <li>Custom data providers (Apex interface)</li>
@@ -453,15 +514,15 @@
 
         <!-- Nonprofit callout -->
         <div class="nonprofit-callout">
-            <h3>Nonprofits: 100% Free. Always.</h3>
-            <p>Organizations using Salesforce through the Power of Us program get full Pro features at no cost. We believe nonprofits should spend their budgets on their mission, not on document generation software.</p>
+            <h3>Nonprofits: Deeply Discounted</h3>
+            <p>Organizations using Salesforce through the Power of Us program get Premium features <strong>free for their first 10 users</strong>. After that, just <strong>$8/user/month</strong> (20% off list price). We believe nonprofits should spend their budgets on their mission, not on document generation software.</p>
         </div>
     </section>
 
     <!-- ───── CTA ───── -->
     <section class="cta-banner">
-        <h2>Help Us Get to AppExchange</h2>
-        <p>Every install matters. Early adopters get all Pro features free during the review period — and your feedback shapes the product. Install today and leave a review when we're listed.</p>
+        <h2>Get Started Free</h2>
+        <p>Every install matters. All features are unlocked during early adoption — and your feedback shapes the product. Install today and help us build the best document generator on the platform.</p>
         <a href="/DocGenLanding" class="btn btn-primary">Install Free</a>
         <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen" class="btn btn-secondary">Star on GitHub</a>
     </section>

@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.7.0 — "Custom Object Query Builder Fix" (Portwood DocGen Managed)
+
+Fixed query builder label processing that broke custom objects with `__c` suffix. The label cleanup logic was extracting the API name from the display label and pluralizing it (e.g., `Record_Consolidation__c` → `Record_Consolidation__cs`), causing invalid object references at generation time.
+
+- **fix: Custom object label pluralization** — `_createNode` no longer pluralizes API names extracted from parenthesized labels. Custom objects like `Record_Consolidation__c` now display their friendly label instead of a mangled API name.
+- **fix: Lookup field resolution** — Report import and V2 config parsing now use schema describe to find the correct lookup field instead of hardcoding `parentObj + 'Id'`. Custom object lookups (e.g., `Account__c` instead of `AccountId`) resolve correctly.
+- **fix: `_guessLookupField` for custom relationships** — Handles `__r` → `__c` and `__cs` → `__c` relationship suffixes. V1/V2 config parsers now pass lookup fields instead of null.
+- **fix: Report import for custom objects** — Dynamic child discovery via schema describe when the hardcoded report type map doesn't match. `resolveReportBaseObject` now resolves custom object report types directly.
+- **Defensive `__cs` correction** — V3 data retriever auto-corrects `__cs` object names to `__c` at runtime if the object doesn't exist in global describe.
+- **Ancestor Chain** — v1.7.0 → v1.6.0 → v1.5.0. Seamless upgrades.
+
 ## v1.6.0 — "Sample Flows" (Portwood DocGen Managed)
 
 Sample Flows demonstrating DocGen Flow action integration. Proper upgrade chain from v1.5.0.
