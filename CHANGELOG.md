@@ -7,7 +7,7 @@ First managed package release. Giant Query, security review prep, and 615 tests.
 - **Giant Query** — Generate documents from records with 15,000+ child records. Client-side DOCX assembly with cursor-based pagination (500 rows/page). Auto-detects large datasets on Generate click. Works with V1, V2, and V3 query configs. Barcode fonts render natively in DOCX.
 - **Managed Package** — Switched from Unlocked to Managed 2GP for AppExchange listing. IP-protected Apex, proper upgrade path.
 - **TestDataFactory** — Centralized test data creation across all 5 test classes. `createStandardTestData()`, `attachRealDocxToTestTemplate()`, consistent Account/Template names.
-- **Security Review Ready** — 0 Critical, 0 High on Code Analyzer. All SOQL uses WITH USER_MODE. All classes use `with sharing`. SOQL-in-loop eliminated.
+- **Security Review Ready** — 0 Critical, 0 High on Code Analyzer. Package-internal queries use `WITH SYSTEM_MODE`; user-facing queries use `WITH USER_MODE`. All classes use `with sharing`. SOQL-in-loop eliminated.
 - **V1/V2/V3 Scout** — Giant Query auto-detection works with all query config formats including manual V1 flat strings.
 - **Save-to-Record UX** — Save option hidden for non-PDF output (DOCX always downloads). Giant Query sets download-only mode automatically.
 - **615 Apex tests**, 79% coverage, 24/24 E2E, 100% pass rate.
