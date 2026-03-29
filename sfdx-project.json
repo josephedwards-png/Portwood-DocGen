@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.3.0 — Giant Query PDF",
-      "versionNumber": "1.3.0.NEXT",
+      "versionName": "1.4.0 — Giant Query PDF + Fixes",
+      "versionNumber": "1.4.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
