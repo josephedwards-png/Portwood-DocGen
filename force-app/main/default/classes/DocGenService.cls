@@ -3366,7 +3366,8 @@ public with sharing class DocGenService {
             Map<String, Object> dataMap = new Map<String, Object>();
             for (String field : fieldNames) {
                 try {
-                    // Handle parent fields (e.g., Product2.Name)
+                    // Handle parent fields (e.g., Product2.Name) — store as nested map
+                    // so resolveValue() can traverse: dataMap['Product2']['Name']
                     if (field.contains('.')) {
                         List<String> parts = field.split('\\.');
                         SObject current = rec;
@@ -3374,11 +3375,16 @@ public with sharing class DocGenService {
                             current = current.getSObject(parts[i]);
                             if (current == null) { break; }
                         }
-                        if (current != null) {
-                            dataMap.put(field, current.get(parts[parts.size() - 1]));
-                        } else {
-                            dataMap.put(field, null);
+                        Object val = (current != null) ? current.get(parts[parts.size() - 1]) : null;
+                        // Build nested map structure for resolveValue traversal
+                        Map<String, Object> nested = dataMap;
+                        for (Integer i = 0; i < parts.size() - 1; i++) {
+                            if (!nested.containsKey(parts[i])) {
+                                nested.put(parts[i], new Map<String, Object>());
+                            }
+                            nested = (Map<String, Object>) nested.get(parts[i]);
                         }
+                        nested.put(parts[parts.size() - 1], val);
                     } else {
                         dataMap.put(field, rec.get(field));
                     }
