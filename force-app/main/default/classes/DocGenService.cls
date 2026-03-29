@@ -877,11 +877,18 @@ public with sharing class DocGenService {
             }
         }
 
+        // Extract per-column CSS from the loop row's formatting
+        String columnCss = '';
+        if (loopParts != null) {
+            columnCss = DocGenGiantQueryBatch.extractColumnCss(loopParts.get('innerXml'));
+        }
+
         return new Map<String, Object>{
             'tablePropertiesXml' => tablePropertiesXml,
             'headerRowXml' => headerRowXml,
             'stylesXml' => capturedStylesXml,
-            'sectPrXml' => sectPrXml
+            'sectPrXml' => sectPrXml,
+            'columnCss' => columnCss
         };
     }
 

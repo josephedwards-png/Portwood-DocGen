@@ -134,8 +134,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
     }
 
     /**
-     * Lightweight DOCX XML → HTML row converter. Extracts text from <w:t> tags
-     * in each cell, builds simple <tr><td> output. 50 rows = ~5KB, minimal heap.
+     * Lightweight DOCX XML → HTML row converter. Extracts text from <w:t> tags.
+     * No inline formatting — column styles applied via nth-child CSS in the assembler.
+     * Barcode markers stripped to plain text values.
      */
     private static String xmlRowsToHtmlRows(String xml) {
         String result = '';
@@ -150,34 +151,18 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
             String row = '<tr>';
             Integer cellIdx = 0;
             while (cellIdx < trXml.length()) {
-                // Match <w:tc> or <w:tc  — NOT <w:tcPr> or <w:tcW>
-                Integer cellStart = -1;
-                Integer searchFrom = cellIdx;
-                while (searchFrom < trXml.length()) {
-                    Integer candidate = trXml.indexOf('<w:tc', searchFrom);
-                    if (candidate == -1) { break; }
-                    String nextChar = trXml.substring(candidate + 5, Math.min(candidate + 6, trXml.length()));
-                    if (nextChar == '>' || nextChar == ' ') { cellStart = candidate; break; }
-                    searchFrom = candidate + 1;
-                }
+                Integer cellStart = findTag(trXml, '<w:tc', cellIdx);
                 if (cellStart == -1) { break; }
                 Integer cellEnd = trXml.indexOf('</w:tc>', cellStart);
                 if (cellEnd == -1) { break; }
                 String cellXml = trXml.substring(cellStart, cellEnd);
                 cellIdx = cellEnd + 7;
+
+                // Extract all <w:t> text content
                 String txt = '';
                 Integer txtIdx = 0;
                 while (txtIdx < cellXml.length()) {
-                    // Match <w:t> or <w:t  — NOT <w:tcPr>, <w:tcW>, <w:tblPr> etc.
-                    Integer wtStart = -1;
-                    Integer wtSearch = txtIdx;
-                    while (wtSearch < cellXml.length()) {
-                        Integer wc = cellXml.indexOf('<w:t', wtSearch);
-                        if (wc == -1) { break; }
-                        String nc = cellXml.substring(wc + 4, Math.min(wc + 5, cellXml.length()));
-                        if (nc == '>' || nc == ' ') { wtStart = wc; break; }
-                        wtSearch = wc + 1;
-                    }
+                    Integer wtStart = findTag(cellXml, '<w:t', txtIdx);
                     if (wtStart == -1) { break; }
                     Integer wtContentStart = cellXml.indexOf('>', wtStart) + 1;
                     Integer wtEnd = cellXml.indexOf('</w:t>', wtContentStart);
@@ -185,11 +170,90 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
                     txt += cellXml.substring(wtContentStart, wtEnd);
                     txtIdx = wtEnd + 6;
                 }
+
+                // Strip barcode markers to plain text value
+                if (txt.contains('##BARCODE:')) {
+                    txt = txt.replaceAll('##BARCODE:[^:]*:[^:]*:([^#]*)##', '$1');
+                }
+
                 row += '<td>' + txt + '</td>';
             }
             result += row + '</tr>';
         }
         return result;
+    }
+
+    /** Finds a tag like <w:tc> or <w:tc  but NOT <w:tcPr>, <w:tcW> etc. */
+    private static Integer findTag(String xml, String tag, Integer fromIdx) {
+        Integer tagLen = tag.length();
+        Integer searchFrom = fromIdx;
+        while (searchFrom < xml.length()) {
+            Integer candidate = xml.indexOf(tag, searchFrom);
+            if (candidate == -1) { return -1; }
+            String nc = xml.substring(candidate + tagLen, Math.min(candidate + tagLen + 1, xml.length()));
+            if (nc == '>' || nc == ' ') { return candidate; }
+            searchFrom = candidate + 1;
+        }
+        return -1;
+    }
+
+    /**
+     * Extracts per-column CSS from the template's loop row XML. Reads bold, italic,
+     * font-size from <w:rPr> and alignment from <w:pPr> for each cell, returns
+     * nth-child CSS rules. Called once during config extraction, injected into
+     * the assembler's HTML <style> block.
+     */
+    public static String extractColumnCss(String loopRowXml) {
+        String css = '';
+        Integer colNum = 0;
+        Integer cellIdx = 0;
+        while (cellIdx < loopRowXml.length()) {
+            Integer cellStart = findTag(loopRowXml, '<w:tc', cellIdx);
+            if (cellStart == -1) { break; }
+            Integer cellEnd = loopRowXml.indexOf('</w:tc>', cellStart);
+            if (cellEnd == -1) { break; }
+            String cellXml = loopRowXml.substring(cellStart, cellEnd);
+            cellIdx = cellEnd + 7;
+            colNum++;
+
+            List<String> styles = new List<String>();
+
+            // Alignment
+            if (cellXml.contains('<w:jc ')) {
+                Integer jcIdx = cellXml.indexOf('<w:jc ');
+                Integer valIdx = cellXml.indexOf('w:val="', jcIdx);
+                if (valIdx != -1) {
+                    Integer valStart = valIdx + 7;
+                    Integer valEnd = cellXml.indexOf('"', valStart);
+                    String jcVal = cellXml.substring(valStart, valEnd);
+                    if (jcVal == 'center') { styles.add('text-align:center'); }
+                    else if (jcVal == 'right' || jcVal == 'end') { styles.add('text-align:right'); }
+                }
+            }
+
+            // Bold / Italic
+            if (cellXml.contains('<w:b/>') || cellXml.contains('<w:b ')) { styles.add('font-weight:bold'); }
+            if (cellXml.contains('<w:i/>') || cellXml.contains('<w:i ')) { styles.add('font-style:italic'); }
+
+            // Font size from <w:sz>
+            if (cellXml.contains('<w:sz ')) {
+                Integer szIdx = cellXml.indexOf('<w:sz ');
+                Integer szValIdx = cellXml.indexOf('w:val="', szIdx);
+                if (szValIdx != -1) {
+                    Integer szStart = szValIdx + 7;
+                    Integer szEnd = cellXml.indexOf('"', szStart);
+                    try {
+                        Integer halfPts = Integer.valueOf(cellXml.substring(szStart, szEnd));
+                        styles.add('font-size:' + (halfPts / 2) + 'pt');
+                    } catch (Exception e) { /* skip */ }
+                }
+            }
+
+            if (!styles.isEmpty()) {
+                css += 'td:nth-child(' + colNum + '){' + String.join(styles, ';') + '} ';
+            }
+        }
+        return css;
     }
 
     /**

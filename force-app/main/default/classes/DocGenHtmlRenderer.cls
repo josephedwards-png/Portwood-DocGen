@@ -1487,7 +1487,7 @@ public with sharing class DocGenHtmlRenderer {
      * Detects ##BARCODE:type:value## markers in text and renders as HTML/CSS bars.
      * No images needed — Blob.toPdf() renders CSS perfectly.
      */
-    private static String renderBarcodeHtml(String text) {
+    public static String renderBarcodeHtml(String text) {
         // Extract marker: ##BARCODE:type:size:VALUE##
         Integer startIdx = text.indexOf('##BARCODE:');
                 if (startIdx == -1) { return text.escapeHtml4(); }

@@ -122,10 +122,17 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         }
 
         if (html != null) {
-            // Inject td styling into the existing <style> block
+            // Inject td styling + per-column formatting into the existing <style> block
+            String columnCss = '';
+            try {
+                Map<String, Object> cfg = DocGenService.extractGiantQueryFragmentConfig(templateId, giantRelationshipName);
+                columnCss = cfg.get('columnCss') != null ? (String) cfg.get('columnCss') : '';
+            } catch (Exception e) { /* non-fatal */ }
+
             if (html.contains('</style>')) {
                 html = html.replace('</style>',
-                    'td { border: 0.5pt solid #ccc; padding: 3px 5px; } tr { page-break-inside: avoid; } </style>');
+                    'td { border: 0.5pt solid #ccc; padding: 3px 5px; } tr { page-break-inside: avoid; } ' +
+                    columnCss + '</style>');
             }
 
             // Replace the loop ROW (not the whole table) — preserve the header row
@@ -199,13 +206,19 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                 // Non-fatal — merge tags stay as placeholders
             }
         } else {
-            // No pre-baked HTML — simple fallback with CSS-based cell styling (no inline styles)
+            // No pre-baked HTML — simple fallback
+            String fallbackColCss = '';
+            try {
+                Map<String, Object> cfg = DocGenService.extractGiantQueryFragmentConfig(templateId, giantRelationshipName);
+                fallbackColCss = cfg.get('columnCss') != null ? (String) cfg.get('columnCss') : '';
+            } catch (Exception e) { /* non-fatal */ }
             html = '<html><head><style>' +
                 '@page { size: letter; margin: 0.75in; }' +
                 'body { font-family: Helvetica, sans-serif; font-size: 9pt; margin: 0; }' +
                 'table { width: 100%; border-collapse: collapse; }' +
                 'td { border: 0.5pt solid #ccc; padding: 3px 5px; }' +
                 'tr { page-break-inside: avoid; }' +
+                fallbackColCss +
                 '</style></head><body><table>' + allRows + '</table></body></html>';
         }
         allRows = null;
