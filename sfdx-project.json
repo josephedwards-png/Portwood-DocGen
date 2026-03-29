@@ -1,12 +1,12 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.1.0 — Giant Query",
-      "versionNumber": "1.1.0.NEXT",
+      "versionName": "1.2.0 — Giant Query & AppExchange Ready",
+      "versionNumber": "1.2.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
-      "versionDescription": "Free, native document generation for Salesforce. Create PDF and DOCX documents from any record with merge tags, unlimited-depth relationships, images, and rich text. Visual query builder, report import, bulk generation, Flow actions, zero-heap PDF rendering, and self-contained E2E testing. No external dependencies."
+      "versionDescription": "Free, native document generation for Salesforce. Create PDF and DOCX documents from any record with merge tags, unlimited-depth relationships, images, and rich text. Visual query builder, report import, bulk generation, Flow actions, zero-heap PDF rendering, Giant Query for 15,000+ child records, and self-contained E2E testing. No external dependencies."
     }
   ],
   "name": "Portwood DocGen",
@@ -16,6 +16,7 @@
   "packageAliases": {
     "Portwood DocGen Managed": "0Hoal0000003d9hCAA",
     "Portwood DocGen": "0Hoal0000003TwjCAE",
-    "Portwood DocGen Managed@1.0.0-1": "04tal000006PEPJAA4"
+    "Portwood DocGen Managed@1.0.0-1": "04tal000006PEPJAA4",
+    "Portwood DocGen Managed@1.1.0-1": "04tal000006PEVlAAO"
   }
 }

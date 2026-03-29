@@ -6,8 +6,8 @@ Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-507%2F507_passing-brightgreen)](#code-quality)
-[![Coverage](https://img.shields.io/badge/Coverage-77%25-green)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-615%2F615_passing-brightgreen)](#code-quality)
+[![Coverage](https://img.shields.io/badge/Coverage-79%25-green)](#code-quality)
 [![E2E](https://img.shields.io/badge/E2E-24%2F24_passing-brightgreen)](#code-quality)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
 
@@ -17,9 +17,9 @@ Generate PDFs, Word docs, Excel spreadsheets, and PowerPoint presentations from 
 |----------|-------|--------|
 | Critical | 0 | :white_check_mark: |
 | High | 0 | :white_check_mark: |
-| Moderate | 387 | Style/complexity only |
-| Low | 656 | ApexDoc, SLDS suggestions |
-| Info | 56 | Whitespace, copy-paste |
+| Moderate | 339 | Style/complexity only |
+| Low | 436 | ApexDoc, SLDS suggestions |
+| Info | 69 | Whitespace, copy-paste |
 
 Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule set used by Salesforce Security Review. Zero security violations.
 
