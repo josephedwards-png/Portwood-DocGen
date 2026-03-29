@@ -135,43 +135,18 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                     columnCss + '</style>');
             }
 
-            // Replace the loop ROW (not the whole table) — preserve the header row
-            String openTag = '{#' + giantRelationshipName + '}';
-            if (html.contains(openTag)) {
-                Integer openIdx = html.indexOf(openTag);
-                // Find the <tr> that contains the loop tag — replace from there to </table>
-                Integer loopTrStart = html.lastIndexOf('<tr', openIdx);
-                Integer tableEnd = html.indexOf('</table>', openIdx);
-                if (loopTrStart != -1 && tableEnd != -1) {
-                    String before = html.substring(0, loopTrStart);
-                    String after = html.substring(tableEnd); // keeps </table> and everything after
-                    html = null;
-                    html = before + allRows + after;
-                    allRows = null;
-                }
-            } else {
-                Integer bodyEnd = html.lastIndexOf('</body>');
-                String before = html.substring(0, bodyEnd);
-                String after = html.substring(bodyEnd);
-                html = null;
-                html = before + '<table style="width:100%;border-collapse:collapse;">' + allRows + '</table>' + after;
-                allRows = null;
-            }
-
-            // Resolve parent merge tags — query the record and replace {Field} placeholders
+            // Resolve parent merge tags BEFORE injecting rows (regex on ~2KB template, not 1MB+ with rows)
             try {
                 List<DocGen_Template__c> tpls = [
-                    SELECT Base_Object_API__c, Query_Config__c FROM DocGen_Template__c
+                    SELECT Base_Object_API__c FROM DocGen_Template__c
                     WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
                 ];
                 if (!tpls.isEmpty()) {
                     String baseObj = tpls[0].Base_Object_API__c;
-                    // Get all fields referenced in the HTML as {FieldName}
                     Set<String> fieldNames = new Set<String>{'Name'};
                     Pattern p = Pattern.compile('\\{(\\w[\\w.]*)\\}');
                     Matcher m = p.matcher(html);
                     while (m.find()) { fieldNames.add(m.group(1)); }
-                    // Query the record
                     List<String> validFields = new List<String>();
                     Map<String, Schema.SObjectField> fieldMap = Schema.getGlobalDescribe().get(baseObj)?.getDescribe()?.fields?.getMap();
                     if (fieldMap != null) {
@@ -196,15 +171,40 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                                     } else {
                                         val = recs[0].get(fn);
                                     }
-                                } catch (Exception fieldErr) { String noop = fieldErr.getMessage(); } // NOPMD EmptyCatchBlock — skip unresolvable field
+                                } catch (Exception fieldErr) { String noop = fieldErr.getMessage(); } // NOPMD
                                 html = html.replace('{' + fn + '}', val != null ? String.valueOf(val) : '');
                             }
                         }
                     }
                 }
             } catch (Exception mergeErr) {
-                String noop = mergeErr.getMessage(); // NOPMD EmptyCatchBlock — non-fatal, merge tags stay as placeholders
+                String noop = mergeErr.getMessage(); // NOPMD
             }
+
+            // Replace the loop ROW (not the whole table) — preserve the header row
+            String openTag = '{#' + giantRelationshipName + '}';
+            if (html.contains(openTag)) {
+                Integer openIdx = html.indexOf(openTag);
+                // Find the <tr> that contains the loop tag — replace from there to </table>
+                Integer loopTrStart = html.lastIndexOf('<tr', openIdx);
+                Integer tableEnd = html.indexOf('</table>', openIdx);
+                if (loopTrStart != -1 && tableEnd != -1) {
+                    String before = html.substring(0, loopTrStart);
+                    String after = html.substring(tableEnd); // keeps </table> and everything after
+                    html = null;
+                    html = before + allRows + after;
+                    allRows = null;
+                }
+            } else {
+                Integer bodyEnd = html.lastIndexOf('</body>');
+                String before = html.substring(0, bodyEnd);
+                String after = html.substring(bodyEnd);
+                html = null;
+                html = before + '<table style="width:100%;border-collapse:collapse;">' + allRows + '</table>' + after;
+                allRows = null;
+            }
+
+            // Parent merge tags already resolved above (before row injection)
         } else {
             // No pre-baked HTML — simple fallback
             String fallbackColCss = '';
