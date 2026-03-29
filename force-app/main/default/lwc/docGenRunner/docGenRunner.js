@@ -942,7 +942,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 this.progressPercent = 100;
                 this.showToast('Success', `PDF downloaded (${fileSizeMB}MB) — ${totalRecords.toLocaleString()} ${giantRelationship} rows.`, 'success');
                 // Clean up parts
-                try { await cleanupGiantQueryFragments({ jobId }); } catch (_) { /* non-fatal */ }
+                try { await cleanupGiantQueryFragments({ jobId }); } catch (cleanupErr) { console.warn('Cleanup:', cleanupErr); }
             } else {
                 throw new Error('PDF generation completed but no output found.');
             }

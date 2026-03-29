@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.5.0 — "Giant Query PDF" (Portwood DocGen Managed)
+
+Same features as v1.3.0/v1.4.0 with critical fixes and proper package ancestor chain for upgrades.
+
+- **Ancestor Chain Established** — v1.5.0 is the first version with a proper upgrade path. All future versions chain from here. Subscribers can upgrade in-place going forward.
+- **fix: Regex too complicated** — `Pattern.compile` on 1MB+ HTML with 10K data rows hit Apex regex limits. Moved parent merge tag resolution to run on the template HTML (~2KB) before row injection. Barcode markers stripped via string ops instead of regex.
+- **fix: E2E State/Country Picklists** — New developer orgs with State/Country picklists enabled caused silent DML failures. Now detects picklist fields via Schema and uses code fields when available. (PR #2 by @AtlasCan)
+- **Live Install Count** — Landing page hero badge shows "Proudly serving X orgs" via real-time PackageSubscriber query.
+- **Competitor Comparison** — "Child Records per Document" row added to comparison table: DocGen 50,000+ vs competitors at ~200-1,000.
+- **615 Apex tests**, 76% coverage, 24/24 E2E, 0 Critical, 0 High.
+
 ## v1.3.0 — "Giant Query PDF" (Portwood DocGen Managed)
 
 Server-side PDF generation for records with 3,000-50,000+ child records. No external dependencies, no heap limits, no callouts.
