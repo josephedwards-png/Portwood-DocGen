@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.10.0 — Giant Query Flow Action",
-      "versionNumber": "1.10.0.NEXT",
-      "ancestorId": "04tal000006PFRpAAO",
+      "versionName": "1.11.0 — RTL Language Support (Hebrew/Arabic)",
+      "versionNumber": "1.11.0.NEXT",
+      "ancestorId": "04tal000006PFWfAAO",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",

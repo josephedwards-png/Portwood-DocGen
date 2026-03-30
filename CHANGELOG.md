@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.11.0 — RTL Language Support (Hebrew/Arabic)
+
+PDF output now renders right-to-left languages correctly.
+
+- **feat: RTL paragraph support** — Detects `<w:bidi/>` in DOCX paragraph properties, applies `direction:rtl` CSS and `dir="rtl"` HTML attribute. Hebrew and Arabic paragraphs render right-to-left with correct alignment.
+- **feat: RTL run-level support** — Detects `<w:rtl/>` on text runs for mixed-direction paragraphs. Uses Complex Script font (`w:cs`) mapped to Arial Unicode MS for proper glyph rendering.
+- **feat: Bidi-aware indentation** — Paragraph indentation now falls back to `w:start`/`w:end` attributes when `w:left`/`w:right` are absent (standard in RTL DOCX files).
+- **Supported languages**: Hebrew, Arabic, Farsi, Urdu, and other RTL scripts.
+- **Font**: Arial Unicode MS (built into `Blob.toPdf()` engine) — no custom font upload needed.
+
 ## v1.10.0 — Giant Query Flow Action
 
 - **feat: Generate Document (Auto Giant Query)** — New `DocGenGiantQueryFlowAction` invocable action. Scouts child counts automatically — under 2,000 rows generates synchronously, over 2,000 launches async Giant Query batch. PDF saved to record when complete. Returns `isGiantQuery` flag and `jobId` for Screen Flow status tracking.

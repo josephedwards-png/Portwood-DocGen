@@ -441,11 +441,13 @@ public with sharing class DocGenHtmlRenderer {
         Integer headingLevel = 0;
         Boolean pageBreakBefore = false;
         Boolean isTitle = false;
+        Boolean isRtl = false;
 
         // Extract paragraph properties
         String pPr = extractElement(pXml, 'w:pPr');
         if (String.isNotBlank(pPr)) {
             style = parseParagraphStyle(pPr);
+            isRtl = pPr.contains('<w:bidi/>') || pPr.contains('<w:bidi ');
 
             // Check for heading style
             String pStyleVal = extractAttr(pPr, 'w:pStyle', 'w:val');
@@ -484,25 +486,26 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         String pageBreakDiv = pageBreakBefore ? '<div style="page-break-before:always"></div>' : '';
+        String dirAttr = isRtl ? ' dir="rtl"' : '';
 
         // Empty paragraph = line break
         if (String.isBlank(content)) {
-            return pageBreakDiv + '<p' + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>&nbsp;</p>';
+            return pageBreakDiv + '<p' + dirAttr + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>&nbsp;</p>';
         }
 
         // Heading
         if (headingLevel > 0) {
             String tag = 'h' + headingLevel;
-            return pageBreakDiv + '<' + tag + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</' + tag + '>';
+            return pageBreakDiv + '<' + tag + dirAttr + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</' + tag + '>';
         }
 
         // Title style
         if (isTitle) {
-            return pageBreakDiv + '<h1 style="font-size:26pt;font-weight:normal' +
+            return pageBreakDiv + '<h1' + dirAttr + ' style="font-size:26pt;font-weight:normal' +
                 (String.isNotBlank(style) ? ';' + style : '') + '">' + content + '</h1>';
         }
 
-        return pageBreakDiv + '<p' + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</p>';
+        return pageBreakDiv + '<p' + dirAttr + (String.isNotBlank(style) ? ' style="' + style + '"' : '') + '>' + content + '</p>';
     }
 
     /**
@@ -510,6 +513,12 @@ public with sharing class DocGenHtmlRenderer {
      */
     private static String parseParagraphStyle(String pPr) {
         List<String> styles = new List<String>();
+
+        // RTL / Bidi: <w:bidi/> marks right-to-left paragraph (Hebrew, Arabic)
+        if (pPr.contains('<w:bidi/>') || pPr.contains('<w:bidi ')) {
+            styles.add('direction:rtl');
+            styles.add('unicode-bidi:embed');
+        }
 
         // Alignment: <w:jc w:val="center"/>
         String jcVal = extractAttr(pPr, 'w:jc', 'w:val');
@@ -546,12 +555,15 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         // Indent: <w:ind w:left="720" w:right="0" w:firstLine="360" w:hanging="360"/>
+        // Also supports bidi-aware w:start/w:end as fallback for w:left/w:right
         String indLeft = extractAttr(pPr, 'w:ind', 'w:left');
+        if (indLeft == null) { indLeft = extractAttr(pPr, 'w:ind', 'w:start'); }
         String indHanging = extractAttr(pPr, 'w:ind', 'w:hanging');
         if (indLeft != null && indLeft.isNumeric()) {
             styles.add('margin-left:' + twipsToPt(Integer.valueOf(indLeft)) + 'pt');
         }
         String indRight = extractAttr(pPr, 'w:ind', 'w:right');
+        if (indRight == null) { indRight = extractAttr(pPr, 'w:ind', 'w:end'); }
         if (indRight != null && indRight.isNumeric()) {
             styles.add('margin-right:' + twipsToPt(Integer.valueOf(indRight)) + 'pt');
         }
@@ -917,11 +929,23 @@ public with sharing class DocGenHtmlRenderer {
     private static String parseRunStyle(String rPr) {
         List<String> styles = new List<String>();
 
-        // Font: <w:rFonts w:ascii="Calibri"/>
+        // Font: <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="David"/>
+        // w:cs = Complex Script font (Hebrew, Arabic) — try this first for RTL content
         String font = extractAttr(rPr, 'w:rFonts', 'w:ascii');
-                if (font == null) { font = extractAttr(rPr, 'w:rFonts', 'w:hAnsi'); }
-        if (font != null) {
+        if (font == null) { font = extractAttr(rPr, 'w:rFonts', 'w:hAnsi'); }
+        String fontCs = extractAttr(rPr, 'w:rFonts', 'w:cs');
+        // RTL run detection: <w:rtl/> marks a run as right-to-left
+        Boolean isRtlRun = rPr.contains('<w:rtl/>') || rPr.contains('<w:rtl ');
+        if (isRtlRun && fontCs != null) {
+            // Use complex script font for RTL runs, fall back to Arial Unicode MS
+            styles.add('font-family:\'Arial Unicode MS\',\'' + fontCs.escapeHtml4() + '\',sans-serif');
+        } else if (font != null) {
             styles.add('font-family:\'' + font.escapeHtml4() + '\',sans-serif');
+        }
+        // Also apply direction on the run level for mixed LTR/RTL paragraphs
+        if (isRtlRun) {
+            styles.add('direction:rtl');
+            styles.add('unicode-bidi:embed');
         }
 
         // Font size: <w:sz w:val="24"/> (half-points)
