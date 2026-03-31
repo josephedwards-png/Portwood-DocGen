@@ -163,7 +163,6 @@
             margin-bottom: 1rem;
         }
         .tier-badge.free { background: #d1fae5; color: #065f46; }
-        .tier-badge.paid { background: #dbeafe; color: #1e40af; }
         .tier-card h3 {
             font-size: 1.5rem;
             font-weight: 800;
@@ -261,15 +260,15 @@
         <a href="/DocGenLanding" class="logo">Portwood <span>DocGen</span></a>
         <nav class="header-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
-            <a href="mailto:hello@portwoodglobalsolutions.com">Support</a>
         </nav>
     </header>
 
     <!-- Hero -->
     <section class="hero">
         <h1>Product <em>Roadmap</em></h1>
-        <p>Where we've been, where we are, and where we're going. Portwood DocGen is building the best free document generation tool on the Salesforce platform.</p>
+        <p>Where we've been and where we're going. DocGen is 100% free, community-driven, and built to be the #1 document generator on Salesforce.</p>
     </section>
 
     <!-- ───── TIMELINE ───── -->
@@ -399,38 +398,24 @@
             <div class="tl-item">
                 <div class="tl-dot current"></div>
                 <div class="tl-card active">
-                    <span class="tl-label now">Now — Early Adoption</span>
-                    <h3>Growing the Community</h3>
-                    <p>DocGen is live and in production. Right now, DocGen is <strong>100% free</strong> with every feature unlocked. Early adopters help shape the product — your feedback drives what we build next.</p>
+                    <span class="tl-label now">Now — Community-Driven</span>
+                    <h3>100% Free, Forever</h3>
+                    <p>DocGen is live, in production, and <strong>completely free</strong> — every feature, every user, no limits. The community drives what gets built next. Request features, vote on priorities, and help shape the product.</p>
                     <ul>
-                        <li>Collecting early adopter feedback</li>
+                        <li>All features unlocked for everyone — no paid tiers, no gating</li>
+                        <li>Community discussion board for help and collaboration</li>
+                        <li>Feature requests and voting drive the roadmap</li>
                         <li>Bug fixes and stability improvements</li>
-                        <li>Expanding documentation and how-to guides</li>
-                        <li>Building the install base and community</li>
+                        <li>Targeting #1 on AppExchange</li>
                     </ul>
                 </div>
             </div>
 
-            <!-- NEXT: Freemium -->
+            <!-- NEXT: Community-requested features -->
             <div class="tl-item">
                 <div class="tl-dot upcoming"></div>
                 <div class="tl-card">
-                    <span class="tl-label next">Next</span>
-                    <h3>Premium Launch</h3>
-                    <p>A generous free tier that covers most use cases, with a Premium tier for power users who need advanced features.</p>
-                    <ul>
-                        <li>Free tier: full document generation, forever</li>
-                        <li>Premium tier: $10/user/month for Giant Query, bulk generation, Flow actions, and more</li>
-                        <li>Nonprofits: first 10 users free, then $8/user/month (20% off)</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- FUTURE: Signatures -->
-            <div class="tl-item">
-                <div class="tl-dot upcoming"></div>
-                <div class="tl-card">
-                    <span class="tl-label next">Future</span>
+                    <span class="tl-label next">Up Next</span>
                     <h3>Signature Integrations</h3>
                     <p>Generate with DocGen, sign with the provider you trust. Adapter pattern for clean handoff.</p>
                     <ul>
@@ -446,8 +431,8 @@
                 <div class="tl-dot upcoming"></div>
                 <div class="tl-card">
                     <span class="tl-label next">Future</span>
-                    <h3>Advanced Features</h3>
-                    <p>Expanding the platform based on community feedback.</p>
+                    <h3>Community-Requested Features</h3>
+                    <p>What gets built next is up to you. Vote and discuss in the community.</p>
                     <ul>
                         <li>Scheduled generation (time-based triggers)</li>
                         <li>Email delivery (generate + send as attachment)</li>
@@ -462,19 +447,18 @@
         </div>
     </section>
 
-    <!-- ───── TIER COMPARISON ───── -->
+    <!-- ───── WHAT YOU GET ───── -->
     <section class="section" style="padding-top: 0;">
-        <h2>Free vs. Premium</h2>
-        <p class="subtitle">A generous free tier that never expires. Premium for teams that need more.</p>
+        <h2>Everything Included. No Catch.</h2>
+        <p class="subtitle">Every feature, every user, zero cost. This is a community project.</p>
 
-        <div class="tiers">
+        <div class="tiers" style="grid-template-columns: 1fr;">
 
-            <!-- Free -->
-            <div class="tier-card">
+            <div class="tier-card pro" style="max-width: 600px; margin: 0 auto;">
                 <span class="tier-badge free">Free Forever</span>
-                <h3>Community</h3>
-                <div class="tier-price">$0 <span>/ forever</span></div>
-                <p class="tier-note">Full document generation for individuals and small teams</p>
+                <h3>Full Feature Set</h3>
+                <div class="tier-price">$0 <span>/ forever / unlimited users</span></div>
+                <p class="tier-note">Everything. No gating, no tiers, no "upgrade to unlock."</p>
                 <ul class="tier-list">
                     <li>PDF and DOCX output</li>
                     <li>Merge tags and child record loops</li>
@@ -483,56 +467,40 @@
                     <li>Rich text / inline HTML</li>
                     <li>Visual query builder</li>
                     <li>Unlimited templates</li>
-                    <li>Report-based queries</li>
-                    <li>Aggregate functions (SUM, COUNT, AVG...)</li>
-                    <li>Single-record generation</li>
-                </ul>
-            </div>
-
-            <!-- Premium -->
-            <div class="tier-card pro">
-                <span class="tier-badge paid">Power Features</span>
-                <h3>Premium</h3>
-                <div class="tier-price">$10 <span>/ user / month</span></div>
-                <p class="tier-note">Everything in Free, plus power features for teams</p>
-                <ul class="tier-list">
-                    <li>Everything in Community, plus:</li>
-                    <li>Giant Query (15,000+ child records)</li>
+                    <li>Giant Query (50,000+ child records)</li>
                     <li>Bulk generation (list views &amp; reports)</li>
                     <li>Flow actions (generate from automation)</li>
-                    <li>Sample Flows for quick setup</li>
-                    <li>Template sharing (multi-user access control)</li>
-                    <li>Template export / import</li>
+                    <li>Aggregate functions (SUM, COUNT, AVG...)</li>
                     <li>Custom data providers (Apex interface)</li>
-                    <li>Custom document title formats</li>
-                    <li>Barcode fonts in DOCX</li>
-                    <li>Priority support</li>
+                    <li>Template export / import</li>
+                    <li>Barcode and QR code support</li>
+                    <li>Community support via discussion board</li>
                 </ul>
             </div>
 
         </div>
 
-        <!-- Nonprofit callout -->
+        <!-- Community callout -->
         <div class="nonprofit-callout">
-            <h3>Nonprofits: Deeply Discounted</h3>
-            <p>Organizations using Salesforce through the Power of Us program get Premium features <strong>free for their first 10 users</strong>. After that, just <strong>$8/user/month</strong> (20% off list price). We believe nonprofits should spend their budgets on their mission, not on document generation software.</p>
+            <h3>Shape the Roadmap</h3>
+            <p>DocGen is built by and for the Salesforce community. <a href="/DocGenCommunity" style="color: #065f46; font-weight: 700;">Join the discussion board</a> to request features, vote on priorities, share templates, and help other admins. Your voice determines what gets built next.</p>
         </div>
     </section>
 
     <!-- ───── CTA ───── -->
     <section class="cta-banner">
-        <h2>Get Started Free</h2>
-        <p>Every install matters. All features are unlocked during early adoption — and your feedback shapes the product. Install today and help us build the best document generator on the platform.</p>
+        <h2>Install Free. Join the Community.</h2>
+        <p>Every feature included. No paid tiers. No upgrade prompts. Just install, generate documents, and join the community that's building the best free document generator on Salesforce.</p>
         <a href="/DocGenLanding" class="btn btn-primary">Install Free</a>
-        <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen" class="btn btn-secondary">Star on GitHub</a>
+        <a href="/DocGenCommunity" class="btn btn-secondary">Join the Community</a>
     </section>
 
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
-            <a href="mailto:hello@portwoodglobalsolutions.com">Support</a>
             <a href="/DocGenTerms">Terms of Service</a>
             <a href="/DocGenPrivacy">Privacy Policy</a>
         </div>

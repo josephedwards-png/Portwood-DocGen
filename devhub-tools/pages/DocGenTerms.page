@@ -32,14 +32,14 @@
         <a href="/DocGenLanding" class="logo" style="text-decoration:none;">Portwood <span>DocGen</span></a>
         <nav class="header-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
-            <a href="mailto:hello@portwoodglobalsolutions.com">Support</a>
         </nav>
     </header>
 
     <div class="content">
         <h1>Terms of Service</h1>
-        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: March 28, 2026</p>
+        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: March 31, 2026</p>
 
         <h2>1. Acceptance</h2>
         <p>By installing, accessing, or using Portwood DocGen ("the Software"), you agree to these Terms of Service. If you do not agree, do not install or use the Software.</p>
@@ -51,10 +51,10 @@
         <p>Portwood DocGen is a document generation application that runs entirely within the Salesforce platform. It creates PDFs, Word documents, Excel spreadsheets, and PowerPoint presentations from Salesforce records using templates with merge tags.</p>
 
         <h2>4. Pricing</h2>
-        <p>The Software is provided free of charge with no user limits, template limits, or generation limits. Portwood Global Solutions reserves the right to introduce optional paid tiers with additional features in the future. Any free features available at the time of your installation will remain free.</p>
+        <p>The Software is provided completely free of charge with no user limits, template limits, or generation limits. All features are included for all users. There are no paid tiers.</p>
 
-        <h2>5. Nonprofit Program</h2>
-        <p>Verified 501(c)(3) nonprofit organizations are eligible for 10 free seats with full feature access, matching Salesforce's Power of Us program. Eligibility is verified via TechSoup or equivalent documentation.</p>
+        <h2>5. Community</h2>
+        <p>DocGen is a community-driven project. Feature requests, bug reports, and discussions are managed through the <a href="/DocGenCommunity">community discussion board</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. The community helps shape the product roadmap.</p>
 
         <h2>6. Data and Privacy</h2>
         <p>The Software runs entirely within your Salesforce org. No data is transmitted to, collected by, or stored by Portwood Global Solutions. We do not have access to your Salesforce data, templates, generated documents, or any other information in your org. See our <a href="/DocGenPrivacy">Privacy Policy</a> for full details.</p>
@@ -66,7 +66,7 @@
         <p>To the maximum extent permitted by law, Portwood Global Solutions' total liability for any claims arising from the use of the Software shall not exceed the amount you paid for the Software.</p>
 
         <h2>9. Support</h2>
-        <p>Community support is available via <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. Professional services, implementation assistance, and priority support are available at standard hourly rates. Contact <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a> for details.</p>
+        <p>Community support is available via the <a href="/DocGenCommunity">DocGen Community discussion board</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. Professional implementation services are available from <a href="https://portwoodglobalsolutions.com">Portwood Global Solutions</a>.</p>
 
         <h2>10. Partner Referrals</h2>
         <p>Portwood Global Solutions may recommend third-party Salesforce consulting partners for implementation services. These partners operate independently and are not employees or agents of Portwood Global Solutions. We may receive a referral fee from partners. Any engagement with a partner is a separate agreement between you and that partner.</p>
@@ -95,10 +95,10 @@
     <footer class="footer">
         <div class="footer-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenCommunity">Community</a>
             <a href="/DocGenTerms">Terms</a>
             <a href="/DocGenPrivacy">Privacy</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
-            <a href="mailto:hello@portwoodglobalsolutions.com">Support</a>
         </div>
         <p>Built by <a href="https://portwoodglobalsolutions.com">Portwood Global Solutions</a></p>
     </footer>
