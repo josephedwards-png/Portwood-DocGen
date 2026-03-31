@@ -118,7 +118,7 @@ Free — all features, all users, no limits.
 - Package type: Managed (2GP Unlocked)
 - Namespace: portwoodglobal
 - License: Apache 2.0
-- Current version: 1.12.0
+- Current version: 1.13.0
 
 ## Support Description
 

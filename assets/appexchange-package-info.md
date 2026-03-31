@@ -7,22 +7,22 @@
 | Package Name | Portwood DocGen |
 | Package Type | Managed 2GP |
 | Namespace | portwoodglobal |
-| Version | 1.12.0 |
-| Subscriber Package Version ID | 04tal000006PH2DAAW |
+| Version | 1.13.0 |
+| Subscriber Package Version ID | 04tal000006PJqPAAW |
 | Package ID | 0Hoal0000003d9hCAA |
 | DevHub Org ID | 00Dal00001QGGvlEAH |
 
 ## Install Links
 
 **Production:**
-https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PH2DAAW
+https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PJqPAAW
 
 **Sandbox:**
-https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PH2DAAW
+https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PJqPAAW
 
 **CLI:**
 ```bash
-sf package install --package 04tal000006PH2DAAW --wait 10 --target-org <your-org>
+sf package install --package 04tal000006PJqPAAW --wait 10 --target-org <your-org>
 ```
 
 ## Post-Install Setup
