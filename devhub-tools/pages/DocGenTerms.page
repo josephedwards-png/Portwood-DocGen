@@ -54,7 +54,7 @@
         <p>The Software is provided completely free of charge with no user limits, template limits, or generation limits. All features are included for all users. There are no paid tiers.</p>
 
         <h2>5. Community</h2>
-        <p>DocGen is a community-driven project. Feature requests, bug reports, and discussions are managed through the <a href="/DocGenCommunity">community discussion board</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. The community helps shape the product roadmap.</p>
+        <p>DocGen is a community-driven project. Feature requests, bug reports, and discussions are managed through the <a href="/DocGenCommunity">DocGen Slack community</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. The community helps shape the product roadmap.</p>
 
         <h2>6. Data and Privacy</h2>
         <p>The Software runs entirely within your Salesforce org. No data is transmitted to, collected by, or stored by Portwood Global Solutions. We do not have access to your Salesforce data, templates, generated documents, or any other information in your org. See our <a href="/DocGenPrivacy">Privacy Policy</a> for full details.</p>
@@ -63,30 +63,33 @@
         <p class="uppercase">The Software is provided "as is" without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall Portwood Global Solutions be liable for any claim, damages, or other liability arising from the use of the Software, including but not limited to data loss, service interruption, or document generation errors.</p>
 
         <h2>8. Limitation of Liability</h2>
-        <p>To the maximum extent permitted by law, Portwood Global Solutions' total liability for any claims arising from the use of the Software shall not exceed the amount you paid for the Software.</p>
+        <p>To the maximum extent permitted by law, Portwood Global Solutions shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether incurred directly or indirectly, arising from the use of the Software. Because the Software is provided free of charge, Portwood Global Solutions' total aggregate liability for any claims shall not exceed $100 USD.</p>
 
         <h2>9. Support</h2>
-        <p>Community support is available via the <a href="/DocGenCommunity">DocGen Community discussion board</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. Professional implementation services are available from <a href="https://portwoodglobalsolutions.com">Portwood Global Solutions</a>.</p>
+        <p>Community support is available via the <a href="/DocGenCommunity">DocGen Slack community</a> and <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues">GitHub Issues</a>. Professional implementation services, custom template design, and hands-on setup assistance are available from <a href="https://portwoodglobalsolutions.com">Portwood Global Solutions</a>. Contact <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a> for details.</p>
 
-        <h2>10. Partner Referrals</h2>
+        <h2>10. Slack Community</h2>
+        <p>Portwood Global Solutions operates a free Slack workspace for DocGen users. By joining the Slack community, you agree to Slack's own <a href="https://slack.com/terms-of-service">Terms of Service</a> and <a href="https://slack.com/privacy-policy">Privacy Policy</a>. Your Slack account, messages, and shared files are governed by Slack Technologies, Inc. Portwood Global Solutions moderates the community but is not responsible for content posted by other members.</p>
+
+        <h2>11. Partner Referrals</h2>
         <p>Portwood Global Solutions may recommend third-party Salesforce consulting partners for implementation services. These partners operate independently and are not employees or agents of Portwood Global Solutions. We may receive a referral fee from partners. Any engagement with a partner is a separate agreement between you and that partner.</p>
 
-        <h2>11. Updates</h2>
+        <h2>12. Updates</h2>
         <p>Package updates are delivered through Salesforce's standard managed package upgrade process. We may release new versions at any time. You are not required to upgrade. We recommend keeping your installation current for security and feature improvements.</p>
 
-        <h2>12. Intellectual Property</h2>
+        <h2>13. Intellectual Property</h2>
         <p>The Software is open source under the Apache License 2.0. The Portwood DocGen name, Portwood Global Solutions name, and associated logos are trademarks of Portwood Global Solutions. The Apache License does not grant permission to use our trademarks.</p>
 
-        <h2>13. Termination</h2>
+        <h2>14. Termination</h2>
         <p>You may stop using the Software at any time by uninstalling the package from your Salesforce org. We reserve the right to discontinue the Software, though we will provide reasonable notice before doing so.</p>
 
-        <h2>14. Governing Law</h2>
+        <h2>15. Governing Law</h2>
         <p>These Terms are governed by the laws of the State of Texas, United States, without regard to conflict of law principles.</p>
 
-        <h2>15. Changes</h2>
+        <h2>16. Changes</h2>
         <p>We may update these Terms from time to time. Changes will be posted on this page. Continued use of the Software after changes constitutes acceptance.</p>
 
-        <h2>16. Contact</h2>
+        <h2>17. Contact</h2>
         <p>Portwood Global Solutions<br/>
         <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a><br/>
         <a href="https://portwoodglobalsolutions.com">portwoodglobalsolutions.com</a></p>

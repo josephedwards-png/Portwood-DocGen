@@ -41,7 +41,7 @@
 
     <div class="content">
         <h1>Privacy Policy</h1>
-        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: March 28, 2026</p>
+        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: March 31, 2026</p>
 
         <div class="tldr">
             <h2>The Short Version</h2>
@@ -82,25 +82,28 @@
         <h2>6. Open Source</h2>
         <p>The full source code of Portwood DocGen is publicly available at <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">github.com/Portwood-Global-Solutions/Portwood-DocGen</a> under the Apache License 2.0. You can audit every line of code to verify our privacy claims.</p>
 
-        <h2>7. Support Communications</h2>
-        <p>If you contact us for support at <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a> or via GitHub Issues, we will receive and store the information you voluntarily provide (name, email, description of your issue). We use this information solely to provide support and will not sell or share it with third parties.</p>
+        <h2>7. Slack Community</h2>
+        <p>We operate a Slack workspace for the DocGen community. When you join, Slack Technologies, Inc. collects and processes your account information (name, email, profile data, messages, files) according to their <a href="https://slack.com/privacy-policy">Privacy Policy</a>. Portwood Global Solutions can see messages and files posted in the workspace but does not export, sell, or share this data. We use it solely to provide community support and improve the product.</p>
 
-        <h2>8. Partner Referrals</h2>
+        <h2>8. Support Communications</h2>
+        <p>If you contact us for support via Slack, <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a>, or GitHub Issues, we will receive and store the information you voluntarily provide (name, email, description of your issue). We use this information solely to provide support and will not sell or share it with third parties.</p>
+
+        <h2>9. Partner Referrals</h2>
         <p>If you request implementation services, we may refer you to third-party Salesforce consulting partners. In doing so, we may share your name and contact information with the referred partner so they can reach out to you. We will only do this with your explicit consent.</p>
 
-        <h2>9. Website</h2>
+        <h2>10. Website</h2>
         <p>Our website at portwoodglobalsolutions.com is hosted on Salesforce Sites. Standard Salesforce session cookies are used for site functionality. We do not use Google Analytics, Facebook Pixel, or any third-party tracking tools on our website.</p>
 
-        <h2>10. Children's Privacy</h2>
+        <h2>11. Children's Privacy</h2>
         <p>Portwood DocGen is a business application and is not directed at children under 13. We do not knowingly collect information from children.</p>
 
-        <h2>11. International Data</h2>
+        <h2>12. International Data</h2>
         <p>Because all data stays within your Salesforce org, data residency is determined by your Salesforce instance location and your Salesforce contract. We do not transfer data across borders.</p>
 
-        <h2>12. Changes</h2>
+        <h2>13. Changes</h2>
         <p>We may update this Privacy Policy from time to time. Changes will be posted on this page. The "Last updated" date at the top reflects the most recent revision.</p>
 
-        <h2>13. Contact</h2>
+        <h2>14. Contact</h2>
         <p>Portwood Global Solutions<br/>
         <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a><br/>
         <a href="https://portwoodglobalsolutions.com">portwoodglobalsolutions.com</a></p>
