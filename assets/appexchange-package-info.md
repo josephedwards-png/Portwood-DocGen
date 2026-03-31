@@ -58,7 +58,7 @@ License: Apache 2.0
 
 | Channel | Link |
 |---------|------|
-| Slack Community | https://portwoodglobalsolutions.com/DocGenCommunity |
+| Community Channel (Slack) | https://portwoodglobalsolutions.com/DocGenCommunity |
 | GitHub Issues | https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues |
 | Website | https://portwoodglobalsolutions.com |
 | Roadmap | https://portwoodglobalsolutions.com/DocGenRoadmap |

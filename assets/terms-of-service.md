@@ -41,7 +41,7 @@ Community support is available via the DocGen Slack community and GitHub Issues.
 
 ## 10. Slack Community
 
-Portwood Global Solutions operates a free Slack workspace for DocGen users. By joining the Slack community, you agree to Slack's own Terms of Service and Privacy Policy. Your Slack account, messages, and shared files are governed by Slack Technologies, Inc. Portwood Global Solutions moderates the community but is not responsible for content posted by other members.
+Portwood Global Solutions operates a free Slack community channel for DocGen users. By joining the community channel, you agree to Slack's own Terms of Service and Privacy Policy. Your messages and shared files are governed by Slack Technologies, Inc. Portwood Global Solutions moderates the community but is not responsible for content posted by other members.
 
 ## 11. Partner Referrals
 

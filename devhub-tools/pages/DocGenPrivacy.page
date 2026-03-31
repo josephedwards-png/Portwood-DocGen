@@ -85,7 +85,7 @@
 
         <h2>4. Third-Party Services</h2>
         <p>The Portwood DocGen package installed in your org does not make external callouts, webhooks, or API connections. No data from your org is transmitted to any third-party service. The package operates entirely within the Salesforce platform boundary.</p>
-        <p>Separately, we use <strong>Slack</strong> (Slack Technologies, Inc.) to host the DocGen community workspace. If you choose to join the Slack community, your interactions there are governed by Slack's own privacy policy. The Slack workspace is not connected to and has no access to your Salesforce org.</p>
+        <p>Separately, we use <strong>Slack</strong> (Slack Technologies, Inc.) to host the DocGen community channel. If you choose to join the Slack community channel, your interactions there are governed by Slack's own privacy policy. The Slack channel is not connected to and has no access to your Salesforce org.</p>
 
         <h2>5. Salesforce Platform</h2>
         <p>Your use of Portwood DocGen is subject to Salesforce's own Privacy Policy and Terms of Service. Salesforce processes and stores your org data according to their policies. We recommend reviewing Salesforce's privacy documentation at <a href="https://www.salesforce.com/company/privacy/">salesforce.com/company/privacy</a>.</p>
@@ -94,7 +94,7 @@
         <p>The full source code of Portwood DocGen is publicly available at <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">github.com/Portwood-Global-Solutions/Portwood-DocGen</a> under the Apache License 2.0. You can audit every line of code to verify our privacy claims.</p>
 
         <h2>7. Slack Community</h2>
-        <p>We operate a Slack workspace for the DocGen community. When you join, Slack Technologies, Inc. collects and processes your account information (name, email, profile data, messages, files) according to their <a href="https://slack.com/privacy-policy">Privacy Policy</a>. Portwood Global Solutions can see messages and files posted in the workspace but does not export, sell, or share this data. We use it solely to provide community support and improve the product.</p>
+        <p>We operate a Slack community channel for DocGen users. When you join, Slack Technologies, Inc. collects and processes your account information (name, email, profile data, messages, files) according to their <a href="https://slack.com/privacy-policy">Privacy Policy</a>. Portwood Global Solutions can see messages and files posted in the channel but does not export, sell, or share this data. We use it solely to provide community support and improve the product.</p>
 
         <h2>8. Support Communications</h2>
         <p>If you contact us for support via Slack, <a href="mailto:hello@portwoodglobalsolutions.com">hello@portwoodglobalsolutions.com</a>, or GitHub Issues, we will receive and store the information you voluntarily provide (name, email, description of your issue). We use this information solely to provide support and will not sell or share it with third parties.</p>

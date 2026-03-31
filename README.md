@@ -2,7 +2,7 @@
 
 Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes and QR codes, compute totals — 100% native, zero external dependencies, 100% free forever. All features, all users, no paid tiers. PowerPoint and Excel coming soon.
 
-[Join the Slack Community](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
+[Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
 [![Version](https://img.shields.io/badge/version-1.13.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -379,24 +379,14 @@ DocGen is 100% free, open source, and community-driven. Published through [Portw
 
 | Channel | What It's For |
 |---------|---------------|
-| [Slack](https://portwoodglobalsolutions.com/DocGenCommunity) | Real-time help, feature requests, template sharing, show-and-tell |
+| [Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | Real-time help, feature requests, template sharing — join from your own Slack workspace |
 | [GitHub Issues](https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues) | Bug reports and tracked feature requests |
 | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap) | See what's shipped and what's coming next |
 | [Website](https://portwoodglobalsolutions.com) | Install links, live demo, feature comparison |
 
-### Slack Channels
+Join the community channel directly from your own Slack workspace — no separate account needed. Get help, request features, share templates, report bugs, and connect with other DocGen users.
 
-| Channel | Purpose |
-|---------|---------|
-| `#announcements` | Release notes, new features, important updates |
-| `#feature-requests` | Suggest and vote on what gets built next |
-| `#help` | Get help with templates, merge tags, Flows, and setup |
-| `#bug-reports` | Report issues — we triage and fix fast |
-| `#template-sharing` | Share and discover ready-to-use Word templates |
-| `#show-and-tell` | Share what you've built with DocGen |
-| `#general` | Tips, tricks, and community chat |
-
-Need dedicated support? We create **private client channels** for orgs that need hands-on implementation help.
+Need dedicated support? Contact us at [hello@portwoodglobalsolutions.com](mailto:hello@portwoodglobalsolutions.com) for hands-on implementation help.
 
 ## Contributing
 

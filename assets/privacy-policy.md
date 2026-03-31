@@ -49,7 +49,7 @@ This data is subject to your org's Salesforce security settings, sharing rules, 
 
 The Portwood DocGen package installed in your org does not make external callouts, webhooks, or API connections. No data from your org is transmitted to any third-party service. The package operates entirely within the Salesforce platform boundary.
 
-Separately, we use **Slack** (Slack Technologies, Inc.) to host the DocGen community workspace. If you choose to join the Slack community, your interactions there are governed by Slack's own privacy policy. The Slack workspace is not connected to and has no access to your Salesforce org.
+Separately, we use **Slack** (Slack Technologies, Inc.) to host the DocGen community channel. If you choose to join the Slack community channel, your interactions there are governed by Slack's own privacy policy. The Slack channel is not connected to and has no access to your Salesforce org.
 
 ## 5. Salesforce Platform
 
@@ -61,7 +61,7 @@ The full source code of Portwood DocGen is publicly available at github.com/Port
 
 ## 7. Slack Community
 
-We operate a Slack workspace for the DocGen community. When you join, Slack Technologies, Inc. collects and processes your account information (name, email, profile data, messages, files) according to their Privacy Policy. Portwood Global Solutions can see messages and files posted in the workspace but does not export, sell, or share this data. We use it solely to provide community support and improve the product.
+We operate a Slack community channel for DocGen users. When you join, Slack Technologies, Inc. collects and processes your account information (name, email, profile data, messages, files) according to their Privacy Policy. Portwood Global Solutions can see messages and files posted in the channel but does not export, sell, or share this data. We use it solely to provide community support and improve the product.
 
 ## 8. Support Communications
 

@@ -68,7 +68,7 @@ Portwood DocGen is a completely free, 100% native document generation app for Sa
 
 **Security:** Zero critical or high findings on Salesforce Code Analyzer using the Security Review rule set. CRUD/FLS enforced on all queries. No session IDs stored or transmitted. No external callouts. 615 Apex tests passing with 76% coverage.
 
-**Community:** Join the DocGen Slack community for real-time help, feature requests, template sharing, and to help shape the roadmap. The community drives what gets built next.
+**Community:** Join the DocGen community channel on Slack for real-time help, feature requests, template sharing, and to help shape the roadmap. The community drives what gets built next.
 
 **Getting started:** Install the package, assign the DocGen Admin permission set, enable the Blob.toPdf() Release Update, and open the DocGen app. Create your first template in under 5 minutes.
 
@@ -122,9 +122,9 @@ Free — all features, all users, no limits.
 
 ## Support Description
 
-Community support via Slack and GitHub — free for all users.
+Community support via Slack community channel and GitHub — free for all users.
 
-Join the DocGen Slack community for real-time help from the team and other admins. Post questions, share screenshots, and get answers fast. Bug reports and feature requests are tracked on GitHub Issues.
+Join the DocGen community channel on Slack for real-time help from the team and other admins. Post questions, share screenshots, and get answers fast. Bug reports and feature requests are tracked on GitHub Issues.
 
 - Slack: https://portwoodglobalsolutions.com/DocGenCommunity
 - GitHub Issues: https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues
@@ -173,4 +173,4 @@ https://portwoodglobalsolutions.com
 6. Generate from a Flow — show the Flow action config and trigger (15s)
 7. Bulk generate from a list view (10s)
 8. Merge multiple PDFs with drag-and-drop (10s)
-9. End card: "Free forever. Install today." with Slack community link (5s)
+9. End card: "Free forever. Install today." with community channel link (5s)

@@ -95,7 +95,7 @@
     <!-- Hero -->
     <section class="hero">
         <h1>Join the DocGen <em>Community</em></h1>
-        <p>Connect with Salesforce admins and developers building documents with DocGen. Get help, request features, share templates, and shape the roadmap — all on Slack.</p>
+        <p>Connect with Salesforce admins and developers building documents with DocGen. Get help, request features, share templates, and shape the roadmap — join our community channel on Slack.</p>
         <div class="hero-actions">
             <a href="{!slackInviteUrl}" class="btn btn-slack" target="_blank">
                 <svg class="slack-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#fff"/></svg>
@@ -105,52 +105,48 @@
         </div>
     </section>
 
-    <!-- Channels -->
+    <!-- What You Get -->
     <section class="section">
-        <h2>Channels</h2>
-        <p class="subtitle">Jump into the conversation that matters to you</p>
+        <h2>What You Get</h2>
+        <p class="subtitle">One channel, everything you need</p>
         <div class="channel-grid">
-            <div class="channel-card cc-announce">
-                <div class="channel-name"><span>#</span> announcements</div>
-                <p>Release notes, new features, and important updates from the DocGen team.</p>
+            <div class="channel-card cc-qa">
+                <div class="channel-name">Get Help</div>
+                <p>Ask questions about templates, merge tags, query configs, Flows, and anything else DocGen-related.</p>
             </div>
             <div class="channel-card cc-features">
-                <div class="channel-name"><span>#</span> feature-requests</div>
-                <p>Suggest new features and vote on what gets built next. The community drives the roadmap.</p>
-            </div>
-            <div class="channel-card cc-qa">
-                <div class="channel-name"><span>#</span> help</div>
-                <p>Get help with templates, merge tags, query configs, Flows, and anything else DocGen-related.</p>
+                <div class="channel-name">Request Features</div>
+                <p>Suggest new features and help shape the roadmap. The community drives what gets built next.</p>
             </div>
             <div class="channel-card cc-bugs">
-                <div class="channel-name"><span>#</span> bug-reports</div>
-                <p>Found something broken? Report it here. We triage and fix bugs fast.</p>
+                <div class="channel-name">Report Bugs</div>
+                <p>Found something broken? Report it in the channel. We triage and fix fast.</p>
             </div>
             <div class="channel-card cc-templates">
-                <div class="channel-name"><span>#</span> template-sharing</div>
+                <div class="channel-name">Share Templates</div>
                 <p>Share and discover ready-to-use Word templates. Help others get started faster.</p>
             </div>
             <div class="channel-card cc-show">
-                <div class="channel-name"><span>#</span> show-and-tell</div>
+                <div class="channel-name">Show &amp; Tell</div>
                 <p>Share what you've built with DocGen — invoices, contracts, reports, creative use cases.</p>
             </div>
-            <div class="channel-card cc-general">
-                <div class="channel-name"><span>#</span> general</div>
-                <p>Everything else — tips and tricks, Salesforce news, off-topic chat.</p>
+            <div class="channel-card cc-announce">
+                <div class="channel-name">Stay Updated</div>
+                <p>Release notes, new features, and important updates from the DocGen team.</p>
             </div>
         </div>
 
-        <!-- Client channels callout -->
+        <!-- Dedicated support callout -->
         <div class="client-callout">
             <h3>Need dedicated support?</h3>
-            <p>We create private client channels for orgs that need hands-on help with implementation, custom templates, or complex setups. Join Slack and let us know — we'll spin one up for you.</p>
+            <p>Need hands-on help with implementation, custom templates, or complex setups? Reach out in the channel or email <a href="mailto:hello@portwoodglobalsolutions.com" style="color: #60a5fa;">hello@portwoodglobalsolutions.com</a>.</p>
         </div>
     </section>
 
-    <!-- Why Slack -->
+    <!-- Why a Slack Channel -->
     <section class="section" style="padding-top: 0;">
-        <h2>Why Slack?</h2>
-        <p class="subtitle">Modern community for modern admins</p>
+        <h2>Why a Slack Channel?</h2>
+        <p class="subtitle">Join from your own workspace — no extra account needed</p>
         <div class="why-grid">
             <div class="why-card">
                 <span class="why-icon">&#x26A1;</span>
@@ -158,9 +154,9 @@
                 <p>Get answers in minutes, not days. Live chat with the team and community.</p>
             </div>
             <div class="why-card">
-                <span class="why-icon">&#x1F514;</span>
-                <h4>Notifications</h4>
-                <p>Desktop, mobile, and email notifications. Never miss a reply or @mention.</p>
+                <span class="why-icon">&#x1F3E0;</span>
+                <h4>Stay in Your Workspace</h4>
+                <p>No new account or workspace to manage. The channel shows up right in your existing Slack.</p>
             </div>
             <div class="why-card">
                 <span class="why-icon">&#x1F4CE;</span>
@@ -172,23 +168,13 @@
                 <h4>Searchable</h4>
                 <p>Every conversation is searchable. Find answers to questions already asked.</p>
             </div>
-            <div class="why-card">
-                <span class="why-icon">&#x1F4F1;</span>
-                <h4>Mobile App</h4>
-                <p>Stay connected on the go with Slack's iOS and Android apps.</p>
-            </div>
-            <div class="why-card">
-                <span class="why-icon">&#x1F6E1;</span>
-                <h4>Private Channels</h4>
-                <p>Dedicated client channels for orgs that need direct support.</p>
-            </div>
         </div>
     </section>
 
     <!-- CTA -->
     <section class="cta-section">
         <h2>Ready to join?</h2>
-        <p>It takes 10 seconds. Free forever. No email required — just click and you're in.</p>
+        <p>It takes 10 seconds. Free forever. Click the link to join our community channel — no need to leave your own Slack workspace.</p>
         <a href="{!slackInviteUrl}" class="btn btn-slack" target="_blank" style="background: #fff; color: #4A154B;">
             <svg style="width: 22px; height: 22px; vertical-align: middle; margin-right: 0.5rem;" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#4A154B"/></svg>
             Join the DocGen Slack

@@ -5,7 +5,7 @@
 Community-first release: Slack community, 100% free model, and AppExchange submission readiness.
 
 ### Community
-- **Slack community** — Replaced custom forum with Slack-based community. Channels for feature requests, Q&A, bug reports, template sharing, show & tell, and general discussion.
+- **Slack community channel** — Replaced custom forum with Slack community channel. Join from your own Slack workspace — no separate account needed.
 - **Community link in Command Hub** — "Join the Community" link added to the sidebar, above "Made with love."
 - **Slack invite URL from MDT** — `Slack_Invite_Url__c` field on `DocGen_Landing_Config__mdt`. Update one record when the link expires — no code deploy needed.
 
@@ -13,7 +13,7 @@ Community-first release: Slack community, 100% free model, and AppExchange submi
 - **100% free model** — Removed all paid tier references, premium pricing, and freemium language across all pages.
 - **Community promotion** — Landing page help form replaced with community section (Discussion Board, Feature Requests, Report Issues).
 - **Roadmap rework** — Removed Premium Launch and tier comparison. Single "Full Feature Set" card at $0. Community-driven roadmap.
-- **Terms & Privacy updated** — Accurate PackageSubscriber data disclosure, Slack community terms, free model pricing, $100 liability cap.
+- **Terms & Privacy updated** — Accurate PackageSubscriber data disclosure, Slack community channel terms, free model pricing, $100 liability cap.
 
 ### AppExchange
 - **Security review docs** — Solution architecture, submission form, code analyzer summary — all as `.doc` files ready for upload.
