@@ -4,11 +4,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.14.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.15.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-615%2F615_passing-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-629%2F629_passing-brightgreen)](#code-quality)
 [![Coverage](https://img.shields.io/badge/Coverage-76%25-green)](#code-quality)
 [![E2E](https://img.shields.io/badge/E2E-24%2F24_passing-brightgreen)](#code-quality)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
@@ -19,11 +19,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 |----------|-------|--------|
 | Critical | 0 | :white_check_mark: |
 | High | 0 | :white_check_mark: |
-| Moderate | 379 | Style/complexity only |
-| Low | 464 | ApexDoc, SLDS suggestions |
-| Info | 71 | Whitespace, copy-paste |
+| Moderate | 386 | Style/complexity only |
+| Low | 461 | ApexDoc suggestions |
+| Info | 42 | Whitespace, copy-paste |
 
-Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule set used by Salesforce Security Review. Zero security violations.
+Scanned with `sf code-analyzer run --rule-selector "Security" --rule-selector "AppExchange"` — **0 violations** on all security and AppExchange rules including Salesforce Graph Engine (SFGE) taint analysis.
 
 ---
 
@@ -32,10 +32,10 @@ Scanned with `sf code-analyzer run --rule-selector "recommended"` — the rule s
 **New install:**
 
 ```bash
-sf package install --package 04tal000006PM3VAAW --wait 10 --target-org <your-org>
+sf package install --package 04tal000006PMUvAAO --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PM3VAAW) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PM3VAAW)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PMUvAAO) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PMUvAAO)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
