@@ -107,7 +107,7 @@
     <section class="hero">
         <div class="hero-badge">Pay What You Can</div>
         <h1>Support the <em>Project</em></h1>
-        <p>DocGen is free because every nonprofit, every small business, and every org deserves great document generation &mdash; whether they can pay or not. If you can, here's how a little goes a long way.</p>
+        <p>DocGen is free because every nonprofit, every small business, and every org deserves great document generation. Whether you can pay or not, the product is yours. If you're able to give back, here's how a little goes a long way.</p>
     </section>
 
     <!-- About Me -->
@@ -117,15 +117,13 @@
 
         <div class="about-grid">
             <!-- Photo: replace src with your family photo Static Resource or ContentVersion URL -->
-            <div class="about-photo-placeholder">
-                Family photo coming soon
-            </div>
+            <img src="{!URLFOR($Resource.FamilyPhoto)}" alt="The Moudy Family" class="about-photo" />
 
             <div class="about-content">
                 <h3>Hey, I'm Dave.</h3>
                 <p>My Salesforce journey started with <span class="highlight">Pathfinder during Covid</span>. Like a lot of people in 2020, I was looking for a new direction. Salesforce gave me one.</p>
-                <p>I went after the developer certification first. <span class="highlight">I failed it. Multiple times.</span> Instead of pushing through, I went back and learned what I didn't know. I got my <span class="highlight">Admin cert</span> and started from there &mdash; where I think every Salesforce professional should start. Understand the platform before you try to code on it.</p>
-                <p>From there I ventured out into the broader world of tech &mdash; different tools, different platforms, different ecosystems. And you know what I discovered? <span class="highlight">It can all be done on Salesforce.</span> So why not do it all in one system?</p>
+                <p>I went after the developer certification first. <span class="highlight">I failed it. Multiple times.</span> Instead of pushing through, I went back and learned what I didn't know. I got my <span class="highlight">Admin cert</span> and started from there. That's where I think every Salesforce professional should start. Understand the platform before you try to code on it.</p>
+                <p>From there I ventured out into the broader world of tech. Different tools, different platforms, different ecosystems. And you know what I discovered? <span class="highlight">It can all be done on Salesforce.</span> So why not do it all in one system?</p>
                 <p>I've seen companies spend <span class="highlight">thousands upon thousands of dollars</span> on document generation. Enterprise licenses, per-user fees, add-on costs that pile up year after year. My goal is to bring that cost way, way down.</p>
 
                 <div class="cert-badges">
@@ -145,7 +143,7 @@
             <p>Every nonprofit needs this product. Every business needs this product. Not all of them can afford to pay. <strong>That's okay.</strong></p>
             <div class="pull-quote">A little can go a really long way when you know how to use it.</div>
             <p>We have our own causes we support, and we try to be good stewards of our money. That's why we keep DocGen free, lean, and focused. No venture capital. No investor pressure to monetize users. Just a product that works, built by people who care.</p>
-            <p>If you're in a position to give back, we're grateful. If you're not, that's perfectly fine &mdash; use DocGen, build great things with it, and tell others about it. That's support too.</p>
+            <p>If you're in a position to give back, we're grateful. If you're not, that's perfectly fine. Use DocGen, build great things with it, and tell others about it. That's support too.</p>
         </div>
     </section>
 
@@ -162,7 +160,7 @@
                 <h3>Circles Indy</h3>
             </div>
             <div class="nonprofit-body">
-                <p>Circles Indy is a community-driven program in Indianapolis working to increase upward mobility for individuals and families in poverty. Based on the national Circles USA model, they build intentional relationships between Circle Leaders &mdash; individuals and families moving out of poverty &mdash; and Circle Allies, volunteers who come alongside them to provide support, encouragement, and expanded social networks.</p>
+                <p>Circles Indy is a community-driven program in Indianapolis working to increase upward mobility for individuals and families in poverty. Based on the national Circles USA model, they build intentional relationships between Circle Leaders (individuals and families moving out of poverty) and Circle Allies (volunteers who come alongside them to provide support, encouragement, and expanded social networks).</p>
                 <p>The model works. After 18 months in the program, participants see an average <strong style="color: #4ade80;">71% increase in their income</strong> and a measurable increase in the number of people they can call on for support.</p>
                 <div>
                     <span class="nonprofit-stat">Indianapolis, IN</span>
@@ -170,7 +168,7 @@
                     <span class="nonprofit-stat">Community-Driven</span>
                     <span class="nonprofit-stat">Small but Mighty</span>
                 </div>
-                <p style="margin-top: 1.25rem; color: #94a3b8; font-size: 0.9rem;">Circles Indy is sponsored by BRiCKs Alliance, Inc. &mdash; a nonprofit focused on building intentional, cross-community friendships that equip and inspire families to permanently move out of poverty and thrive.</p>
+                <p style="margin-top: 1.25rem; color: #94a3b8; font-size: 0.9rem;">Circles Indy is sponsored by BRiCKs Alliance, Inc., a nonprofit focused on building intentional, cross-community friendships that equip and inspire families to permanently move out of poverty and thrive.</p>
                 <a href="https://www.circlesindy.org/donate" class="nonprofit-link" target="_blank">Donate to Circles Indy</a>
             </div>
         </div>
@@ -178,7 +176,7 @@
         <!-- Split your support -->
         <div class="split-callout">
             <h3>Split Your Support</h3>
-            <p>If you're thinking about supporting our project, we ask that whatever you were thinking about giving &mdash; split it with our featured nonprofit. They are small but mighty.</p>
+            <p>If you're thinking about supporting our project, we ask that whatever you were thinking about giving, split it with our featured nonprofit. They are small but mighty.</p>
             <div class="split-visual">
                 <div class="split-box docgen">
                     <div class="label">Half to</div>
@@ -202,7 +200,7 @@
         <a href="https://buymeacoffee.com/portwooddocgen" class="btn-coffee">
             Buy a Coffee
         </a>
-        <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #475569;">And don't forget &mdash; <a href="https://www.circlesindy.org/donate" target="_blank">send the other half to Circles Indy</a>.</p>
+        <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #475569;">And don't forget, <a href="https://www.circlesindy.org/donate" target="_blank">send the other half to Circles Indy</a>.</p>
     </section>
 
     <!-- Footer -->

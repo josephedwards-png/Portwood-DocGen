@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.13.0 — Community + AppExchange Prep",
-      "versionNumber": "1.13.0.NEXT",
-      "ancestorId": "04tal000006PH2DAAW",
+      "versionName": "1.14.0 — PDF Rendering Fixes",
+      "versionNumber": "1.14.0.NEXT",
+      "ancestorId": "04tal000006PJqPAAW",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",

@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.14.0 — PDF Rendering Fixes + Community Channel + Support Page
+
+Bug fix release addressing community-reported PDF rendering issues, Slack community channel migration, and new Support the Project page.
+
+### PDF Rendering Fixes
+- **Headers and footers on all pages** — PDF headers and footers now repeat on every page. Previously they only appeared on page one. Switched from CSS absolute positioning to Flying Saucer's running elements with `@page` margin boxes.
+- **Numbered lists render correctly** — Numbered lists no longer render as bullet points. Replaced the unreliable odd/even numId heuristic with actual `numbering.xml` lookup. The renderer now parses `w:num` to `w:abstractNum` to `w:lvl` to `w:numFmt` to determine the real list type (decimal, lowerLetter, upperRoman, bullet, etc.).
+- **Font colors from theme references** — Font colors defined as Word theme references (`w:themeColor="accent1"`) now render in PDFs. Added default Office theme color palette mapping for all 16 standard theme colors.
+- **Ampersand rendering fixed (#5)** — Ampersands (`&`) no longer render as literal `&amp;` in PDF output. Fixed double-encoding where XML entities in `<w:t>` text were escaped twice (once by XML, once by `escapeHtml4()`).
+
+### UI Fixes
+- **Create Packet button state (#6)** — The "Create Packet" button no longer stays disabled after navigating away from the Create Document tab and back. Template selection now persists across mode switches.
+
+### Community
+- **Slack community channel** — Migrated from workspace invite to Slack Connect channel invite. Users join from their own Slack workspace, no separate account needed. Updated language across all docs, legal pages, and community landing page.
+- **Support the Project page** — New `/DocGenSupport` page with the DocGen origin story, pay-what-you-can philosophy, Circles Indy as featured nonprofit, split-your-donation model, and family photo.
+
+### Testing
+- **890 Apex tests passing, 0 failures** — Fixed 4 pre-existing test failures (3 Giant Query tests missing DOCX in `@TestSetup`, 1 numbered list test updated for new `numbering.xml` detection).
+- **76% org-wide code coverage** (up from 74%)
+- **Code Analyzer: 0 violations** across pmd, eslint, retire-js
+
 ## v1.13.0 — Community + AppExchange Prep
 
 Community-first release: Slack community, 100% free model, and AppExchange submission readiness.
