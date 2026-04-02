@@ -32,6 +32,8 @@
         <a href="/DocGenLanding" class="logo" style="text-decoration:none;">Portwood <span>DocGen</span></a>
         <nav class="header-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenGuide">User Guide</a>
+            <a href="/DocGenRoadmap">Roadmap</a>
             <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
         </nav>

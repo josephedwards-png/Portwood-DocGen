@@ -260,6 +260,7 @@
         <a href="/DocGenLanding" class="logo">Portwood <span>DocGen</span></a>
         <nav class="header-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenGuide">User Guide</a>
             <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
         </nav>
@@ -394,24 +395,87 @@
                 </div>
             </div>
 
-            <!-- NOW -->
+            <!-- Done: v1.7–v1.9 -->
             <div class="tl-item">
-                <div class="tl-dot current"></div>
-                <div class="tl-card active">
-                    <span class="tl-label now">Now — Community-Driven</span>
-                    <h3>100% Free, Forever</h3>
-                    <p>DocGen is live, in production, and <strong>completely free</strong> — every feature, every user, no limits. The community drives what gets built next. Request features, vote on priorities, and help shape the product.</p>
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.7–v1.9 — Scaling &amp; Compatibility</h3>
+                    <p>Fixed edge cases at scale and improved compatibility with older query configs.</p>
                     <ul>
-                        <li>All features unlocked for everyone — no paid tiers, no gating</li>
-                        <li>Community discussion board for help and collaboration</li>
-                        <li>Feature requests and voting drive the roadmap</li>
-                        <li>Bug fixes and stability improvements</li>
-                        <li>Targeting #1 on AppExchange</li>
+                        <li>Custom object query builder fix</li>
+                        <li>Giant Query 28K+ row scaling improvements</li>
+                        <li>V1 subquery object name auto-resolution (legacy config support)</li>
                     </ul>
                 </div>
             </div>
 
-            <!-- NEXT: Community-requested features -->
+            <!-- Done: v1.10–v1.12 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.10–v1.12 — Flow Action, RTL &amp; Community</h3>
+                    <p>Giant Query in Flows, right-to-left language support, and the community launch.</p>
+                    <ul>
+                        <li>Giant Query Flow Action — automate massive document generation</li>
+                        <li>RTL language support (Hebrew, Arabic)</li>
+                        <li>Slack community launch with discussion board</li>
+                        <li>Welcome emails via Resend API</li>
+                        <li>100% free model — no paid tiers, no gating</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Done: v1.13–v1.15 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.13–v1.15 — Security Hardening</h3>
+                    <p>Full security audit and remediation for AppExchange review.</p>
+                    <ul>
+                        <li>0 violations on Salesforce Code Analyzer (Security + AppExchange rules)</li>
+                        <li>Checkmarx security remediation — all findings resolved</li>
+                        <li>CRUD/FLS enforcement hardened across all queries</li>
+                        <li>Community link in Command Hub</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Done: v1.16–v1.18 -->
+            <div class="tl-item">
+                <div class="tl-dot done"></div>
+                <div class="tl-card">
+                    <span class="tl-label done">Shipped</span>
+                    <h3>v1.16–v1.18 — PDF Rendering &amp; DML Fixes</h3>
+                    <p>PDF fidelity improvements and Flow action reliability.</p>
+                    <ul>
+                        <li>PDF headers/footers on all pages</li>
+                        <li>Numbered list rendering fixes</li>
+                        <li>Font color support in PDF output</li>
+                        <li>Ampersand double-encoding fix</li>
+                        <li>DML bulkification for Flow actions</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- NOW: v1.20 -->
+            <div class="tl-item">
+                <div class="tl-dot current"></div>
+                <div class="tl-card active">
+                    <span class="tl-label now">Current — v1.20.0</span>
+                    <h3>Dynamic Page Numbers</h3>
+                    <p>Automatic page numbering in PDF headers and footers — a top community request.</p>
+                    <ul>
+                        <li>Dynamic page numbers in PDF headers/footers ({%PageNumber} / {%PageCount})</li>
+                        <li>"Page 1 of 5" style formatting supported</li>
+                        <li>Works with all template layouts and multi-page documents</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- NEXT: Signature Integrations -->
             <div class="tl-item">
                 <div class="tl-dot upcoming"></div>
                 <div class="tl-card">
@@ -426,7 +490,7 @@
                 </div>
             </div>
 
-            <!-- FUTURE: Advanced -->
+            <!-- FUTURE -->
             <div class="tl-item">
                 <div class="tl-dot upcoming"></div>
                 <div class="tl-card">

@@ -538,7 +538,10 @@ export default class DocGenColumnBuilder extends LightningElement {
         this.treeNodes = [node];
         this.activeNodeId = node.id;
         this._loadNodeFields(node);
-        this._notifyChange();
+        // Notify parent of object selection (config may still be empty until fields are picked)
+        this.dispatchEvent(new CustomEvent('configchange', {
+            detail: { objectName: this.selectedObject, queryConfig: this.generatedConfig }
+        }));
     }
 
     _createNode(objectApiName, label, isRoot, parentNodeId, lookupField, relationshipName, junctionConfig) {

@@ -16,6 +16,11 @@ import activateVersion from '@salesforce/apex/DocGenController.activateVersion';
 import createSampleTemplates from '@salesforce/apex/DocGenController.createSampleTemplates';
 import exportTemplate from '@salesforce/apex/DocGenController.exportTemplate';
 import importTemplate from '@salesforce/apex/DocGenController.importTemplate';
+import getObjectFields from '@salesforce/apex/DocGenController.getObjectFields';
+import getObjectOptions from '@salesforce/apex/DocGenController.getObjectOptions';
+import getChildRelationships from '@salesforce/apex/DocGenController.getChildRelationships';
+import getParentRelationships from '@salesforce/apex/DocGenController.getParentRelationships';
+import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 
 // Schema
 import DOCGEN_TEMPLATE_OBJECT from '@salesforce/schema/DocGen_Template__c';
@@ -105,6 +110,8 @@ const VERSION_COLUMNS = [
     newTemplateObject = 'Account';
     newTemplateDesc = '';
     newTemplateQuery = '';
+    @track newTemplateSampleRecordId = '';
+    @track sampleRecordData = null;
     isCreating = true;
     createdTemplateId;
 
@@ -131,10 +138,303 @@ const VERSION_COLUMNS = [
     @track previewVersion = {};
     isLoadingVersions = false;
 
-    // Manual Query Toggle (Edit modal)
+    // Edit modal manual query toggle (for backward compat with existing V3 configs)
     @track isManualQuery = false;
-    // Manual Query Toggle (Create wizard)
-    @track isNewManualQuery = false;
+    // Builder 2.0 state
+    @track objectOptions = [];
+    @track filteredObjectOptions = [];
+    @track showObjectSuggestions = false;
+    @track queryTreeNodes = [];
+    @track builderTab = 'fields';
+    @track builderSearchTerm = '';
+    @track _allFields = [];
+    @track _allChildren = [];
+    @track _allParents = [];
+
+    get builderFieldsTabClass() { return this.builderTab === 'fields' ? 'builder-tab-active' : ''; }
+    get builderRelatedTabClass() { return this.builderTab === 'related' ? 'builder-tab-active' : ''; }
+    get builderParentsTabClass() { return this.builderTab === 'parents' ? 'builder-tab-active' : ''; }
+    get builderPanelItems() {
+        const s = (this.builderSearchTerm || '').toLowerCase();
+        if (this.builderTab === 'fields') {
+            return (this._allFields || [])
+                .filter(f => !s || f.label.toLowerCase().includes(s) || f.value.toLowerCase().includes(s))
+                .slice(0, 150)
+                .map(f => ({ value: f.value, label: f.label, extra: f.type || '' }));
+        } else if (this.builderTab === 'related') {
+            return (this._allChildren || [])
+                .filter(c => !s || c.label.toLowerCase().includes(s) || c.value.toLowerCase().includes(s))
+                .slice(0, 80)
+                .map(c => ({ value: c.value, label: c.label, extra: c.childObjectApiName || '' }));
+        } else if (this.builderTab === 'parents') {
+            return (this._allParents || [])
+                .filter(p => !s || p.label.toLowerCase().includes(s) || p.value.toLowerCase().includes(s))
+                .slice(0, 80)
+                .map(p => ({ value: p.value, label: p.label, extra: p.targetObject || '' }));
+        }
+        return [];
+    }
+
+    handleBuilderTabClick(event) {
+        this.builderTab = event.currentTarget.dataset.tab;
+        this.builderSearchTerm = '';
+    }
+
+    handleBuilderSearch(event) {
+        this.builderSearchTerm = event.target.value;
+    }
+
+    handleBuilderItemClick(event) {
+        const val = event.currentTarget.dataset.value;
+        const q = (this.newTemplateQuery || '').trim();
+        const sep = q && !q.endsWith(',') ? ', ' : '';
+
+        let insert = '';
+        if (this.builderTab === 'fields') {
+            insert = sep + val;
+        } else if (this.builderTab === 'related') {
+            insert = (q ? ',\n' : '') + '(SELECT Id FROM ' + val + ')';
+        } else if (this.builderTab === 'parents') {
+            insert = sep + val + '.Name';
+        }
+
+        this.newTemplateQuery = q + insert;
+        this._updateQueryTree();
+    }
+
+    @track suggestions = [];
+    @track showSuggestions = false;
+
+    handleDirectQueryEdit(event) {
+        this.newTemplateQuery = event.target.value;
+        this._updateQueryTree();
+        this._updateSuggestions(event.target);
+        // Debounced sample data refresh
+        clearTimeout(this._sampleDebounce);
+        this._sampleDebounce = setTimeout(() => { this._loadSampleData(); }, 800);
+    }
+
+    _findUnmatchedParen(str) {
+        let depth = 0;
+        for (let i = str.length - 1; i >= 0; i--) {
+            if (str[i] === ')') depth++;
+            if (str[i] === '(') { if (depth === 0) return i; depth--; }
+        }
+        return -1;
+    }
+
+    _getToken(before) {
+        // Token = text after the last comma, open-paren, or newline
+        let sepIdx = -1;
+        for (let i = before.length - 1; i >= 0; i--) {
+            const ch = before[i];
+            if (ch === ',' || ch === '(' || ch === '\n') { sepIdx = i; break; }
+        }
+        return { token: before.substring(sepIdx + 1).trim(), sepChar: sepIdx >= 0 ? before[sepIdx] : '', start: sepIdx + 1 };
+    }
+
+    _updateSuggestions(textarea) {
+        const text = textarea.value;
+        const cursor = textarea.selectionStart || text.length;
+        const before = text.substring(0, cursor);
+        this._suggestCursor = cursor;
+
+        const { token, sepChar, start } = this._getToken(before);
+        this._tokenReplaceStart = start;
+
+        // Skip SOQL keywords
+        const upper = token.toUpperCase();
+        if (['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'ORDER', 'BY', 'LIMIT', 'ASC', 'DESC', 'LIKE', 'IN', 'NOT', 'NULL', '=', '!=', '>', '<', '>=', '<='].includes(upper)) {
+            this.showSuggestions = false;
+            return;
+        }
+
+        // 1) Just typed "(" — show child relationships
+        if (sepChar === '(' && token === '') {
+            this._suggestMode = 'related-scaffold';
+            this.suggestions = (this._allChildren || []).slice(0, 15)
+                .map(c => ({ value: c.value, label: c.label, extra: c.childObjectApiName || '' }));
+            this.showSuggestions = this.suggestions.length > 0;
+            return;
+        }
+
+        // 2) Are we inside an unmatched paren? (subquery context)
+        const parenIdx = this._findUnmatchedParen(before);
+        if (parenIdx !== -1) {
+            const insideParen = before.substring(parenIdx + 1).trim();
+            const upperInside = insideParen.toUpperCase();
+
+            // 2a) After FROM with no space after relationship name yet — suggest child relationships
+            const fromAtEnd = upperInside.match(/FROM\s*(\S*)$/);
+            if (fromAtEnd) {
+                this._suggestMode = 'related';
+                const s = (fromAtEnd[1] || '').toLowerCase();
+                this.suggestions = (this._allChildren || [])
+                    .filter(c => !s || c.value.toLowerCase().includes(s) || c.label.toLowerCase().includes(s))
+                    .slice(0, 15)
+                    .map(c => ({ value: c.value, label: c.label, extra: c.childObjectApiName || '' }));
+                this.showSuggestions = this.suggestions.length > 0;
+                return;
+            }
+
+            // 2b) We know the FROM object — suggest that child object's fields
+            const fromMatch = insideParen.match(/FROM\s+(\w+)/i);
+            if (fromMatch && token.length >= 1) {
+                const relName = fromMatch[1];
+                const childRel = (this._allChildren || []).find(c => c.value.toLowerCase() === relName.toLowerCase());
+                if (childRel) {
+                    this._suggestMode = 'child-field';
+                    const cacheKey = '_cache_' + childRel.childObjectApiName;
+                    const s = token.toLowerCase();
+                    if (this[cacheKey]) {
+                        this._showSimpleSuggestions(this[cacheKey], s);
+                    } else {
+                        getObjectFields({ objectName: childRel.childObjectApiName }).then(data => {
+                            this[cacheKey] = data || [];
+                            this._showSimpleSuggestions(data || [], s);
+                        }).catch(() => { this.showSuggestions = false; });
+                    }
+                    return;
+                }
+            }
+
+            // 2c) Inside paren but no FROM yet and token has text — could be typing SELECT fields or relationship name
+            if (token.length >= 1 && !upperInside.includes('FROM')) {
+                this._suggestMode = 'related';
+                const s = token.toLowerCase();
+                this.suggestions = (this._allChildren || [])
+                    .filter(c => c.value.toLowerCase().includes(s) || c.label.toLowerCase().includes(s))
+                    .slice(0, 15)
+                    .map(c => ({ value: c.value, label: c.label, extra: c.childObjectApiName || '' }));
+                this.showSuggestions = this.suggestions.length > 0;
+                return;
+            }
+        }
+
+        // 3) After a dot — parent field lookup
+        if (token.includes('.')) {
+            const dot = token.lastIndexOf('.');
+            const parentName = token.substring(0, dot);
+            const fieldSearch = token.substring(dot + 1).toLowerCase();
+            const parentRel = (this._allParents || []).find(p => p.value.toLowerCase() === parentName.toLowerCase());
+            if (parentRel) {
+                this._suggestMode = 'parent-field';
+                this._suggestParent = parentName;
+                const cacheKey = '_cache_' + parentRel.targetObject;
+                if (this[cacheKey]) {
+                    this._showParentFieldSuggestions(this[cacheKey], fieldSearch, parentName);
+                } else {
+                    getObjectFields({ objectName: parentRel.targetObject }).then(data => {
+                        this[cacheKey] = data || [];
+                        this._showParentFieldSuggestions(data || [], fieldSearch, parentName);
+                    }).catch(() => { this.showSuggestions = false; });
+                }
+                return;
+            }
+        }
+
+        // 4) Default — base object fields + parent relationship names
+        if (token.length >= 1) {
+            this._suggestMode = 'field';
+            const s = token.toLowerCase();
+            const fieldResults = (this._allFields || [])
+                .filter(f => f.value.toLowerCase().includes(s) || f.label.toLowerCase().includes(s))
+                .slice(0, 8)
+                .map(f => ({ value: f.value, label: f.label, extra: f.type || '' }));
+            const parentResults = (this._allParents || [])
+                .filter(p => p.value.toLowerCase().includes(s) || p.label.toLowerCase().includes(s))
+                .slice(0, 4)
+                .map(p => ({ value: p.value + '.', label: p.label, extra: '→ ' + (p.targetObject || '') }));
+            this.suggestions = [...fieldResults, ...parentResults];
+            this.showSuggestions = this.suggestions.length > 0;
+        } else {
+            this.showSuggestions = false;
+        }
+    }
+
+    _showSimpleSuggestions(fields, search) {
+        this.suggestions = (fields || [])
+            .filter(f => !search || f.value.toLowerCase().includes(search) || f.label.toLowerCase().includes(search))
+            .slice(0, 10)
+            .map(f => ({ value: f.value, label: f.label, extra: f.type || '' }));
+        this.showSuggestions = this.suggestions.length > 0;
+    }
+
+    _showParentFieldSuggestions(fields, search, parentName) {
+        this.suggestions = (fields || [])
+            .filter(f => !search || f.value.toLowerCase().includes(search) || f.label.toLowerCase().includes(search))
+            .slice(0, 10)
+            .map(f => ({ value: parentName + '.' + f.value, label: f.label, extra: f.type || '' }));
+        this.showSuggestions = this.suggestions.length > 0;
+    }
+
+    handleSuggestionClick(event) {
+        const val = event.currentTarget.dataset.value;
+        const text = this.newTemplateQuery || '';
+        const cursor = this._suggestCursor || text.length;
+
+        // Find the token boundaries fresh — don't rely on cached values
+        const before = text.substring(0, cursor);
+        let sepIdx = -1;
+        for (let i = before.length - 1; i >= 0; i--) {
+            const ch = before[i];
+            if (ch === ',' || ch === '(' || ch === '\n') { sepIdx = i; break; }
+        }
+        // prefix = everything up to and including the separator
+        // after = everything after cursor
+        const prefix = text.substring(0, sepIdx + 1);
+        const after = text.substring(cursor);
+        // Add a space after separator if needed
+        const needSpace = prefix.length > 0 && !prefix.endsWith(' ') && !prefix.endsWith('(') && !prefix.endsWith('\n');
+
+        let result;
+        if (this._suggestMode === 'related-scaffold') {
+            // Typed "(" — scaffold full subquery, prefix already ends with "("
+            result = prefix + 'SELECT Id FROM ' + val + ')' + after;
+        } else if (this._suggestMode === 'related') {
+            // Replacing relationship name (after FROM)
+            result = prefix + (needSpace ? ' ' : '') + val + after;
+        } else if (val.endsWith('.')) {
+            // Parent relationship — "Owner." — no comma, they pick a field next
+            result = prefix + (needSpace ? ' ' : '') + val + after;
+        } else {
+            // Regular field — replace token, add trailing comma
+            result = prefix + (needSpace ? ' ' : '') + val + ', ' + after;
+        }
+
+        this.newTemplateQuery = result;
+        // Native textarea doesn't re-render from tracked property after user input — set DOM directly
+        const ta = this.template.querySelector('textarea');
+        if (ta) { ta.value = result; }
+        this.showSuggestions = false;
+        this._updateQueryTree();
+
+        // If parent with dot, re-trigger to show that parent's fields
+        if (val.endsWith('.')) {
+            // eslint-disable-next-line @lwc/lwc/no-async-operation
+            setTimeout(() => {
+                const ta = this.template.querySelector('textarea');
+                if (ta) {
+                    const newPos = prefix.length + (needSpace ? 1 : 0) + val.length;
+                    ta.setSelectionRange(newPos, newPos);
+                    ta.focus();
+                    this._updateSuggestions(ta);
+                }
+            }, 50);
+        }
+    }
+
+    handleSuggestionMouseDown(event) {
+        // Prevent textarea blur from firing before onclick
+        event.preventDefault();
+    }
+
+    handleQueryKeyDown(event) {
+        if (event.key === 'Escape' && this.showSuggestions) {
+            this.showSuggestions = false;
+            event.stopPropagation();
+        }
+    }
 
     // Filter State
     searchKey = '';
@@ -200,6 +500,16 @@ const VERSION_COLUMNS = [
 
     // --- Wizard Logic ---
 
+    renderedCallback() {
+        // Sync native textarea DOM value with tracked property after re-render
+        if (this.currentWizardStep === '2' && this.newTemplateQuery) {
+            const ta = this.template.querySelector('textarea');
+            if (ta && ta.value !== this.newTemplateQuery) {
+                ta.value = this.newTemplateQuery;
+            }
+        }
+    }
+
     get isStep1() { return this.currentWizardStep === '1'; }
     get isStep2() { return this.currentWizardStep === '2'; }
     get isStep3() { return this.currentWizardStep === '3'; }
@@ -208,13 +518,25 @@ const VERSION_COLUMNS = [
     handleNextStep() {
         if (this.currentWizardStep === '1') {
             if (!this.newTemplateName || !this.newTemplateType) {
-                this.showToast('Error', 'Please fill required fields.', 'error');
+                this.showToast('Error', 'Please fill in the template name and type.', 'error');
                 return;
             }
+            if (!this.newTemplateObject) {
+                this.showToast('Error', 'Please select a base object.', 'error');
+                return;
+            }
+            // Load metadata for step 2 before transitioning
+            this._loadObjectMetadata(this.newTemplateObject);
             this.currentWizardStep = '2';
         } else if (this.currentWizardStep === '2') {
-             if (!this.newTemplateObject || !this.newTemplateQuery) {
-                this.showToast('Error', 'Please configure the query.', 'error');
+             // Clean up trailing commas/whitespace
+             let q = (this.newTemplateQuery || '').replace(/[\s,]+$/, '').replace(/^[\s,]+/, '');
+             this.newTemplateQuery = q;
+             const ta = this.template.querySelector('textarea');
+             if (ta) { ta.value = q; }
+
+             if (!q) {
+                this.showToast('Error', 'Please add at least one field to the query.', 'error');
                 return;
              }
              this.currentWizardStep = '3';
@@ -330,16 +652,141 @@ const VERSION_COLUMNS = [
         }
     }
 
-    handleNewManualQueryToggle(event) {
-        this.isNewManualQuery = event.target.checked;
-    }
-
     handleNewQueryStringChange(event) {
-        this.newTemplateQuery = event.target.value;
+        this.newTemplateQuery = event.detail ? event.detail.value : event.target.value;
     }
 
-    handleNewManualObjectChange(event) {
-        this.newTemplateObject = event.detail.value;
+    handleSampleRecordChange(event) {
+        this.newTemplateSampleRecordId = event.detail.recordId || '';
+        this._loadSampleData();
+    }
+
+    _loadSampleData() {
+        if (!this.newTemplateSampleRecordId || !this.newTemplateObject || !this.newTemplateQuery) {
+            this.sampleRecordData = null;
+            return;
+        }
+        previewRecordData({
+            recordId: this.newTemplateSampleRecordId,
+            baseObject: this.newTemplateObject,
+            queryConfig: this.newTemplateQuery
+        }).then(data => {
+            this.sampleRecordData = data;
+        }).catch(() => {
+            this.sampleRecordData = null;
+        });
+    }
+
+    handleObjectSearchInput(event) {
+        const term = (event.detail ? event.detail.value : event.target.value) || '';
+        this.newTemplateObject = term;
+        if (term.length >= 2) {
+            if (this.objectOptions.length === 0) {
+                getObjectOptions().then(data => {
+                    this.objectOptions = data;
+                    this._filterObjects(term);
+                });
+            } else {
+                this._filterObjects(term);
+            }
+        } else {
+            this.showObjectSuggestions = false;
+        }
+    }
+
+    _filterObjects(term) {
+        const t = term.toLowerCase();
+        this.filteredObjectOptions = this.objectOptions
+            .filter(o => o.label.toLowerCase().includes(t) || o.value.toLowerCase().includes(t))
+            .slice(0, 12);
+        this.showObjectSuggestions = this.filteredObjectOptions.length > 0;
+    }
+
+    handleObjectSuggestionClick(event) {
+        const apiName = event.currentTarget.dataset.value;
+        this.newTemplateObject = apiName;
+        this.showObjectSuggestions = false;
+        this._loadObjectMetadata(apiName);
+    }
+
+    _loadObjectMetadata(objectName) {
+        // Load fields, children, and parents in parallel for slash commands
+        getObjectFields({ objectName }).then(data => { this._allFields = data || []; }).catch(() => { this._allFields = []; });
+        getChildRelationships({ objectName }).then(data => { this._allChildren = data || []; }).catch(() => { this._allChildren = []; });
+        getParentRelationships({ objectName }).then(data => { this._allParents = data || []; }).catch(() => { this._allParents = []; });
+    }
+
+
+    // --- Live Query Tree ---
+    _updateQueryTree() {
+        const q = (this.newTemplateQuery || '').trim();
+        if (!q || !this.newTemplateObject) { this.queryTreeNodes = []; return; }
+        try {
+            const nodes = [];
+            const data = this.sampleRecordData || {};
+            // Extract subqueries first
+            const subqueries = [];
+            const sqRegex = /\(\s*SELECT\s+([\s\S]+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+([\s\S]+?))?\s*\)/gi;
+            let match;
+            while ((match = sqRegex.exec(q)) !== null) {
+                const fields = match[1].split(',').map(f => f.trim()).filter(f => f);
+                subqueries.push({ relationship: match[2], fields, where: match[3] || '' });
+            }
+            // Remove subqueries to get base fields
+            const baseStr = q.replace(sqRegex, '').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+            const baseFields = baseStr ? baseStr.split(',').map(f => f.trim()).filter(f => f) : [];
+            const directFields = baseFields.filter(f => !f.includes('.'));
+            const parentFields = baseFields.filter(f => f.includes('.'));
+
+            // Build field display with sample values
+            const fieldPills = directFields.map(f => {
+                const val = data[f];
+                return { key: f, name: f, sample: val != null ? String(val) : '' };
+            });
+            const parentPills = parentFields.map(f => {
+                // Resolve dot notation: "Owner.Name" → data.Owner.Name
+                const parts = f.split('.');
+                let val = data;
+                for (const p of parts) { val = val && typeof val === 'object' ? val[p] : undefined; }
+                return { key: f, name: f, sample: val != null ? String(val) : '' };
+            });
+
+            // Child subqueries with sample data
+            const childNodes = subqueries.map((sq, i) => {
+                const childData = data[sq.relationship];
+                const rows = Array.isArray(childData) ? childData.slice(0, 3) : [];
+                return {
+                    id: 'child_' + i,
+                    label: sq.relationship,
+                    icon: 'standard:related_list',
+                    fields: sq.fields,
+                    where: sq.where,
+                    sampleRows: rows.map((row, ri) => ({
+                        key: 'row_' + i + '_' + ri,
+                        cells: sq.fields.map(f => ({ key: f, value: row[f] != null ? String(row[f]) : '' }))
+                    })),
+                    hasRows: rows.length > 0
+                };
+            });
+
+            nodes.push({
+                id: 'root',
+                label: this.newTemplateObject,
+                icon: 'standard:account',
+                isRoot: true,
+                fields: directFields,
+                parentFields: parentFields,
+                fieldPills: fieldPills,
+                parentPills: parentPills,
+                children: childNodes,
+                hasFields: fieldPills.length > 0,
+                hasParentFields: parentPills.length > 0,
+                hasChildren: childNodes.length > 0
+            });
+            this.queryTreeNodes = nodes;
+        } catch (e) {
+            this.queryTreeNodes = [];
+        }
     }
 
     // --- Edit Handlers ---
@@ -357,8 +804,8 @@ const VERSION_COLUMNS = [
 
     handleManualQueryToggle(event) {
         this.isManualQuery = event.target.checked;
-        // Convert V3 JSON to V1 flat string when switching to manual mode
-        if (this.isManualQuery && this.isEditV3Query) {
+        // Convert V3 JSON to V1 flat string when switching to manual mode (toggle OFF)
+        if (!this.isManualQuery && this.isEditV3Query) {
             const v1 = this._formatQueryConfig(this.editTemplateQuery);
             if (v1 && v1 !== this.editTemplateQuery) {
                 this.editTemplateQuery = v1;
@@ -1055,7 +1502,14 @@ const VERSION_COLUMNS = [
         this.newTemplateObject = 'Account';
         this.createdTemplateId = null;
         this.isCreating = true;
-        this.isNewManualQuery = false;
+        this.queryTreeNodes = [];
+        this.builderTab = 'fields';
+        this.builderSearchTerm = '';
+        this.newTemplateSampleRecordId = '';
+        this.sampleRecordData = null;
+        this._allFields = [];
+        this._allChildren = [];
+        this._allParents = [];
         return refreshApex(this.wiredTemplatesResult);
     }
 

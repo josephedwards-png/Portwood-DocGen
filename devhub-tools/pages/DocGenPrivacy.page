@@ -34,6 +34,8 @@
         <a href="/DocGenLanding" class="logo" style="text-decoration:none;">Portwood <span>DocGen</span></a>
         <nav class="header-links">
             <a href="/DocGenLanding">Home</a>
+            <a href="/DocGenGuide">User Guide</a>
+            <a href="/DocGenRoadmap">Roadmap</a>
             <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
         </nav>
@@ -41,11 +43,11 @@
 
     <div class="content">
         <h1>Privacy Policy</h1>
-        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: March 31, 2026</p>
+        <p class="subtitle">Portwood Global Solutions — Portwood DocGen &bull; Last updated: April 2, 2026</p>
 
         <div class="tldr">
             <h2>The Short Version</h2>
-            <p>Portwood DocGen runs entirely inside your Salesforce org. We cannot see your records, templates, or documents. The only data we receive is what Salesforce automatically provides to all managed package publishers: your org ID, org name, and install status. No analytics, no tracking, no external servers.</p>
+            <p>Portwood DocGen runs entirely inside your Salesforce org. We cannot see your records, templates, or documents. The only data we receive is what Salesforce automatically provides to all managed package publishers (org ID, org name, install status) and what you voluntarily provide via our install form (organization, industry, country, optional email). We use install form data to show an anonymous country-level adoption map. No analytics, no tracking cookies, no external servers.</p>
         </div>
 
         <h2>1. What Data We Collect</h2>
@@ -102,8 +104,10 @@
         <h2>9. Partner Referrals</h2>
         <p>If you request implementation services, we may refer you to third-party Salesforce consulting partners. In doing so, we may share your name and contact information with the referred partner so they can reach out to you. We will only do this with your explicit consent.</p>
 
-        <h2>10. Website</h2>
-        <p>Our website at portwoodglobalsolutions.com is hosted on Salesforce Sites. Standard Salesforce session cookies are used for site functionality. We do not use Google Analytics, Facebook Pixel, or any third-party tracking tools on our website.</p>
+        <h2>10. Website &amp; Install Form</h2>
+        <p>Our website at portwoodglobalsolutions.com is hosted on Salesforce Sites. Standard Salesforce session cookies are used for site functionality. We do not use Google Analytics, Facebook Pixel, or any third-party tracking cookies on our website.</p>
+        <p><strong>Install form:</strong> When you request install links through our website, we collect the organization name, industry, and country you provide. Email is optional and used solely for upgrade notifications. This information is stored as a Lead record in our Salesforce org and is used to display an aggregated, anonymous map of DocGen adoption by country on our website. No individual organization names or details are displayed publicly — only country-level counts.</p>
+        <p><strong>UTM tracking:</strong> If you arrive at our site via a referral link containing UTM parameters (utm_source, utm_medium, utm_campaign, utm_content, utm_term), we capture these marketing attribution values and store them on your Lead record. This helps us understand which referral channels drive adoption. UTM parameters contain no personal information — they identify the referring website, campaign, and link placement, not you as an individual.</p>
 
         <h2>11. Children's Privacy</h2>
         <p>Portwood DocGen is a business application and is not directed at children under 13. We do not knowingly collect information from children.</p>

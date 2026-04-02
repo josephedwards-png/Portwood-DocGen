@@ -42,7 +42,7 @@
             background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
             color: #fff;
             text-align: center;
-            padding: 5rem 2rem 4rem;
+            padding: 5rem 2rem 3rem;
         }
         .hero h1 {
             font-size: 3rem;
@@ -272,14 +272,118 @@
         .footer-links { margin-bottom: 1rem; }
         .footer-links a { margin: 0 1rem; font-size: 0.9rem; }
 
+        /* Hero Map */
+        .hero-map {
+            max-width: 1000px;
+            margin: 3rem auto 0;
+        }
+        .hero-map-label {
+            color: #94a3b8;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        #docgen-map { height: 380px; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+
+        /* Install Form */
+        .install-form {
+            max-width: 480px;
+            margin: 0 auto;
+            text-align: left;
+        }
+        .install-form label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.35rem;
+            color: #1a1a2e;
+        }
+        .install-form input,
+        .install-form select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+            font-family: inherit;
+            background: #fff;
+            color: #1a1a2e;
+        }
+        .install-form input:focus,
+        .install-form select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        .install-form .optional-label {
+            color: #94a3b8;
+            font-weight: 400;
+            font-size: 0.8rem;
+        }
+        .install-error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 16px;
+            padding: 2.5rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+        }
+        .modal h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            color: #1a1a2e;
+        }
+        .modal p { color: #64748b; font-size: 0.95rem; margin-bottom: 1.5rem; }
+        .modal-close {
+            position: absolute;
+            top: 1rem; right: 1.25rem;
+            background: none; border: none;
+            font-size: 1.5rem; color: #94a3b8;
+            cursor: pointer; line-height: 1;
+        }
+        .modal-close:hover { color: #1a1a2e; }
+
         /* Responsive */
         @media (max-width: 640px) {
             .hero h1 { font-size: 2rem; }
             .hero p { font-size: 1rem; }
             .header { flex-direction: column; gap: 0.5rem; }
             .header-links a { margin-left: 0.75rem; }
+            .hero-map { margin-left: -2rem; margin-right: -2rem; max-width: none; }
+            #docgen-map { height: 260px; border-radius: 0; box-shadow: none; }
+            .hero-map-label { font-size: 0.8rem; }
+            .modal { padding: 1.5rem; width: 95%; }
         }
     </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
 
@@ -287,11 +391,11 @@
     <header class="header">
         <div class="logo">Portwood <span>DocGen</span></div>
         <nav class="header-links">
-            <a href="/DocGenCommunity">Community</a>
-            <a href="/DocGenSupport">Support</a>
+            <a href="/DocGenGuide">User Guide</a>
             <a href="/DocGenRoadmap">Roadmap</a>
+            <a href="/DocGenCommunity">Community</a>
             <a href="https://github.com/Portwood-Global-Solutions/Portwood-DocGen">GitHub</a>
-            <a href="{!installLinkProd}" style="color: #60a5fa;">Install</a>
+            <a href="javascript:void(0)" onclick="openInstallModal()" style="color: #60a5fa;">Install</a>
         </nav>
     </header>
 
@@ -309,8 +413,12 @@
         <h1>Document Generation<br/>for <span>Salesforce</span></h1>
         <p>Generate polished PDFs and Word documents from any Salesforce record. Pull in related records, images, barcodes, totals, and more — all from a simple Word template.</p>
         <div class="hero-actions">
-            <a href="{!installLinkProd}" class="btn btn-primary">Install Free</a>
-            <a href="{!installLinkSandbox}" class="btn btn-secondary">Install in Sandbox</a>
+            <a href="javascript:void(0)" onclick="openInstallModal()" class="btn btn-primary">Install Free</a>
+            <a href="javascript:void(0)" onclick="openInstallModal()" class="btn btn-secondary">Install in Sandbox</a>
+        </div>
+        <div class="hero-map">
+            <p class="hero-map-label" id="map-subtitle">Reducing document generation costs worldwide</p>
+            <div id="docgen-map"></div>
         </div>
     </section>
 
@@ -567,12 +675,87 @@
         <h2>Install in 30 seconds</h2>
         <p>No configuration needed. Assign the permission set and start generating.</p>
         <div class="install-links">
-            <a href="{!installLinkProd}" class="btn btn-primary">Install in Production</a>
-            <a href="{!installLinkSandbox}" class="btn btn-secondary" style="color: #1a1a2e; border-color: #cbd5e1;">Install in Sandbox</a>
+            <a href="javascript:void(0)" onclick="openInstallModal()" class="btn btn-primary">Install in Production</a>
+            <a href="javascript:void(0)" onclick="openInstallModal()" class="btn btn-secondary" style="color: #1a1a2e; border-color: #cbd5e1;">Install in Sandbox</a>
         </div>
-        <div class="install-code">sf package install --package 04tal000006PMUvAAO --wait 10 --target-org your-org</div>
+        <div class="install-code">sf package install --package 04tal000006PcppAAC --wait 10 --target-org your-org</div>
         <p style="margin-top: 1.5rem; font-size: 0.9rem;">Then: Assign <strong>DocGen Admin</strong> permission set &bull; Open the <strong>DocGen</strong> app</p>
     </section>
+
+    <!-- Install Modal -->
+    <div class="modal-overlay" id="install-modal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeInstallModal()">&times;</button>
+
+            <!-- Form state -->
+            <div id="modal-form">
+                <h2>Get Your Install Link</h2>
+                <p>Put your org on the map — tell us where DocGen is headed.</p>
+                <div class="install-form">
+                    <div id="install-error" class="install-error"></div>
+                    <label for="install-company">Organization / Company *</label>
+                    <input type="text" id="install-company" placeholder="Acme Corp" />
+                    <label for="install-industry">Industry *</label>
+                    <select id="install-industry">
+                        <option value="">Select your industry...</option>
+                        <option value="Agriculture">Agriculture</option>
+                        <option value="Banking">Banking</option>
+                        <option value="Biotechnology">Biotechnology</option>
+                        <option value="Communications">Communications</option>
+                        <option value="Construction">Construction</option>
+                        <option value="Consulting">Consulting</option>
+                        <option value="Education">Education</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Energy">Energy</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Environmental">Environmental</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Food &amp; Beverage">Food &amp; Beverage</option>
+                        <option value="Government">Government</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Hospitality">Hospitality</option>
+                        <option value="Insurance">Insurance</option>
+                        <option value="Legal">Legal</option>
+                        <option value="Machinery">Machinery</option>
+                        <option value="Manufacturing">Manufacturing</option>
+                        <option value="Media">Media</option>
+                        <option value="Nonprofit">Nonprofit</option>
+                        <option value="Real Estate">Real Estate</option>
+                        <option value="Recreation">Recreation</option>
+                        <option value="Retail">Retail</option>
+                        <option value="Shipping">Shipping</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Telecommunications">Telecommunications</option>
+                        <option value="Transportation">Transportation</option>
+                        <option value="Utilities">Utilities</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <label for="install-country">Country *</label>
+                    <select id="install-country">
+                        <option value="">Select your country...</option>
+                    </select>
+                    <label for="install-email">Email <span class="optional-label">(Optional — we'd love to stay in touch but respect your privacy)</span></label>
+                    <input type="email" id="install-email" placeholder="you@company.com" />
+                    <div style="text-align: center; margin-top: 0.5rem;">
+                        <button id="install-submit" class="btn btn-primary" onclick="submitInstallForm()" type="button">Get Install Links</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Success state -->
+            <div id="modal-success" style="display:none; text-align:center;">
+                <h2>You're on the map!</h2>
+                <p>Thanks for joining the DocGen community. Here are your install links.</p>
+                <div style="display:flex; flex-direction:column; gap:0.75rem; align-items:center;">
+                    <a href="{!installLinkProd}" class="btn btn-primary" style="width:100%; max-width:320px;">Install in Production</a>
+                    <a href="{!installLinkSandbox}" class="btn btn-secondary" style="width:100%; max-width:320px; color:#1a1a2e; border-color:#cbd5e1;">Install in Sandbox</a>
+                </div>
+                <div class="install-code" style="margin-top:1.25rem; font-size:0.8rem;">sf package install --package 04tal000006PcppAAC --wait 10 --target-org your-org</div>
+                <p style="margin-top:1rem; font-size:0.85rem; color:#64748b;">Assign <strong>DocGen Admin</strong> permission set &bull; Open the <strong>DocGen</strong> app</p>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="footer">
@@ -589,6 +772,180 @@
         <p style="margin-top: 0.5rem; font-size: 0.8rem;">Apache 2.0 License</p>
     </footer>
 
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* Country coordinates (approximate geographic centers) */
+var CC = {
+    'Afghanistan':[33.9,67.7],'Albania':[41.2,20.2],'Algeria':[28.0,1.7],'Andorra':[42.5,1.5],'Angola':[-11.2,17.9],
+    'Antigua and Barbuda':[17.1,-61.8],'Argentina':[-38.4,-63.6],'Armenia':[40.1,45.0],'Australia':[-25.3,133.8],'Austria':[47.5,14.6],
+    'Azerbaijan':[40.1,47.6],'Bahamas':[25.0,-77.4],'Bahrain':[26.0,50.6],'Bangladesh':[23.7,90.4],'Barbados':[13.2,-59.5],
+    'Belarus':[53.7,27.9],'Belgium':[50.5,4.5],'Belize':[17.2,-88.5],'Benin':[9.3,2.3],'Bhutan':[27.5,90.4],
+    'Bolivia':[-16.3,-63.6],'Bosnia and Herzegovina':[43.9,17.7],'Botswana':[-22.3,24.7],'Brazil':[-14.2,-51.9],'Brunei':[4.5,114.7],
+    'Bulgaria':[42.7,25.5],'Burkina Faso':[12.2,-1.6],'Burundi':[-3.4,29.9],'Cambodia':[12.6,105.0],'Cameroon':[7.4,12.4],
+    'Canada':[56.1,-106.3],'Cape Verde':[16.0,-24.0],'Central African Republic':[6.6,20.9],'Chad':[15.5,18.7],'Chile':[-35.7,-71.5],
+    'China':[35.9,104.2],'Colombia':[4.6,-74.3],'Comoros':[-11.9,43.9],'Congo':[-0.2,15.8],'Costa Rica':[9.7,-83.8],
+    'Croatia':[45.1,15.2],'Cuba':[21.5,-77.8],'Cyprus':[35.1,33.4],'Czech Republic':[49.8,15.5],'DR Congo':[-4.0,21.8],
+    'Denmark':[56.3,9.5],'Djibouti':[11.8,42.6],'Dominica':[15.4,-61.4],'Dominican Republic':[18.7,-70.2],'Ecuador':[-1.8,-78.2],
+    'Egypt':[26.8,30.8],'El Salvador':[13.8,-88.9],'Equatorial Guinea':[1.6,10.3],'Eritrea':[15.2,39.8],'Estonia':[58.6,25.0],
+    'Eswatini':[-26.5,31.5],'Ethiopia':[9.1,40.5],'Fiji':[-17.7,178.1],'Finland':[61.9,25.7],'France':[46.2,2.2],
+    'Gabon':[-0.8,11.6],'Gambia':[13.4,-16.6],'Georgia':[42.3,43.4],'Germany':[51.2,10.5],'Ghana':[7.9,-1.0],
+    'Greece':[39.1,21.8],'Grenada':[12.1,-61.7],'Guatemala':[15.8,-90.2],'Guinea':[9.9,-13.7],'Guinea-Bissau':[11.8,-15.2],
+    'Guyana':[5.0,-58.9],'Haiti':[19.0,-72.3],'Honduras':[15.2,-86.2],'Hungary':[47.2,19.5],'Iceland':[65.0,-18.0],
+    'India':[20.6,79.0],'Indonesia':[-0.8,113.9],'Iran':[32.4,53.7],'Iraq':[33.2,43.7],'Ireland':[53.1,-8.0],
+    'Israel':[31.0,34.9],'Italy':[41.9,12.6],'Ivory Coast':[7.5,-5.5],'Jamaica':[18.1,-77.3],'Japan':[36.2,138.3],
+    'Jordan':[30.6,36.2],'Kazakhstan':[48.0,68.0],'Kenya':[-0.0,37.9],'Kiribati':[-3.4,-168.7],'Kosovo':[42.6,20.9],
+    'Kuwait':[29.3,47.5],'Kyrgyzstan':[41.2,74.8],'Laos':[19.9,102.5],'Latvia':[56.9,24.1],'Lebanon':[33.9,35.9],
+    'Lesotho':[-29.6,28.2],'Liberia':[6.4,-9.4],'Libya':[26.3,17.2],'Liechtenstein':[47.2,9.6],'Lithuania':[55.2,24.0],
+    'Luxembourg':[49.8,6.1],'Madagascar':[-18.8,46.9],'Malawi':[-13.3,34.3],'Malaysia':[4.2,101.9],'Maldives':[3.2,73.2],
+    'Mali':[17.6,-4.0],'Malta':[35.9,14.4],'Marshall Islands':[7.1,171.2],'Mauritania':[21.0,-10.9],'Mauritius':[-20.3,57.6],
+    'Mexico':[23.6,-102.6],'Micronesia':[7.4,150.6],'Moldova':[47.4,28.4],'Monaco':[43.7,7.4],'Mongolia':[46.9,103.8],
+    'Montenegro':[42.7,19.4],'Morocco':[31.8,-7.1],'Mozambique':[-18.7,35.5],'Myanmar':[21.9,95.9],'Namibia':[-22.6,17.1],
+    'Nauru':[-0.5,166.9],'Nepal':[28.4,84.1],'Netherlands':[52.1,5.3],'New Zealand':[-40.9,174.9],'Nicaragua':[12.9,-85.2],
+    'Niger':[17.6,8.1],'Nigeria':[9.1,8.7],'North Korea':[40.3,127.5],'North Macedonia':[41.5,21.7],'Norway':[60.5,8.5],
+    'Oman':[21.5,55.9],'Pakistan':[30.4,69.3],'Palau':[7.5,134.6],'Palestine':[31.9,35.2],'Panama':[8.5,-80.8],
+    'Papua New Guinea':[-6.3,143.9],'Paraguay':[-23.4,-58.4],'Peru':[-9.2,-75.0],'Philippines':[12.9,121.8],'Poland':[51.9,19.1],
+    'Portugal':[39.4,-8.2],'Qatar':[25.4,51.2],'Romania':[45.9,25.0],'Russia':[61.5,105.3],'Rwanda':[-1.9,29.9],
+    'Saint Kitts and Nevis':[17.4,-62.8],'Saint Lucia':[13.9,-61.0],'Saint Vincent and the Grenadines':[13.3,-61.2],
+    'Samoa':[-13.8,-172.1],'San Marino':[43.9,12.5],'Sao Tome and Principe':[0.2,6.6],'Saudi Arabia':[23.9,45.1],
+    'Senegal':[14.5,-14.5],'Serbia':[44.0,21.0],'Seychelles':[-4.7,55.5],'Sierra Leone':[8.5,-11.8],'Singapore':[1.4,103.8],
+    'Slovakia':[48.7,19.7],'Slovenia':[46.2,14.8],'Solomon Islands':[-9.6,160.2],'Somalia':[5.2,46.2],'South Africa':[-30.6,22.9],
+    'South Korea':[35.9,128.0],'South Sudan':[6.9,31.3],'Spain':[40.5,-3.7],'Sri Lanka':[7.9,80.8],'Sudan':[12.9,30.2],
+    'Suriname':[3.9,-56.0],'Sweden':[60.1,18.6],'Switzerland':[46.8,8.2],'Syria':[34.8,39.0],'Taiwan':[23.7,121.0],
+    'Tajikistan':[38.9,71.3],'Tanzania':[-6.4,34.9],'Thailand':[15.9,101.0],'Timor-Leste':[-8.9,126.0],'Togo':[8.6,1.2],
+    'Tonga':[-21.2,-175.2],'Trinidad and Tobago':[10.7,-61.2],'Tunisia':[33.9,9.5],'Turkey':[38.9,35.2],'Turkmenistan':[39.0,59.6],
+    'Tuvalu':[-7.1,177.6],'Uganda':[1.4,32.3],'Ukraine':[48.4,31.2],'United Arab Emirates':[23.4,53.8],
+    'United Kingdom':[55.4,-3.4],'United States':[37.1,-95.7],'Uruguay':[-32.5,-55.8],'Uzbekistan':[41.4,64.6],
+    'Vanuatu':[-15.4,166.9],'Vatican City':[41.9,12.5],'Venezuela':[6.4,-66.6],'Vietnam':[14.1,108.3],'Yemen':[15.6,48.5],
+    'Zambia':[-13.1,27.8],'Zimbabwe':[-19.0,29.2]
+};
+
+/* Populate country dropdown from the same list */
+(function() {
+    var sel = document.getElementById('install-country');
+    var names = Object.keys(CC).sort();
+    for (var i = 0; i < names.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = names[i];
+        opt.textContent = names[i];
+        sel.appendChild(opt);
+    }
+})();
+
+/* UTM params — captured once on page load */
+var UTM = (function() {
+    var params = new URLSearchParams(window.location.search);
+    return {
+        source: params.get('utm_source') || '',
+        medium: params.get('utm_medium') || '',
+        campaign: params.get('utm_campaign') || '',
+        content: params.get('utm_content') || '',
+        term: params.get('utm_term') || ''
+    };
+})();
+
+/* Modal */
+function openInstallModal() {
+    document.getElementById('install-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+function closeInstallModal() {
+    document.getElementById('install-modal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+document.getElementById('install-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeInstallModal();
+});
+
+/* Install form submission */
+function submitInstallForm() {
+    var company = document.getElementById('install-company').value.trim();
+    var industry = document.getElementById('install-industry').value;
+    var country = document.getElementById('install-country').value;
+    var email = document.getElementById('install-email').value.trim();
+    var errEl = document.getElementById('install-error');
+
+    if (!company || !industry || !country) {
+        errEl.textContent = 'Please fill in all required fields.';
+        errEl.style.display = 'block';
+        return;
+    }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('install-submit');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    Visualforce.remoting.Manager.invokeAction(
+        '{!$RemoteAction.DocGenLandingController.submitInstallLead}',
+        company, industry, country, email,
+        UTM.source, UTM.medium, UTM.campaign, UTM.content, UTM.term,
+        function(result, event) {
+            if (event.status) {
+                document.getElementById('modal-form').style.display = 'none';
+                document.getElementById('modal-success').style.display = 'block';
+            } else {
+                errEl.textContent = event.message || 'Something went wrong. Please try again.';
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Get Install Links';
+            }
+        },
+        { escape: true }
+    );
+}
+
+/* Leaflet map */
+function initMap() {
+    var isMobile = window.innerWidth <= 640;
+    var map = L.map('docgen-map', {
+        center: [20, 0],
+        zoom: isMobile ? 1 : 2,
+        scrollWheelZoom: false,
+        attributionControl: true,
+        dragging: !L.Browser.mobile,
+        tap: false
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+        attribution: '\u0026copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> \u0026copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 18
+    }).addTo(map);
+
+    Visualforce.remoting.Manager.invokeAction(
+        '{!$RemoteAction.DocGenLandingController.getInstallMapData}',
+        function(result, event) {
+            if (!event.status || !result) return;
+
+            var countryCount = result.length;
+            if (countryCount > 0) {
+                document.getElementById('map-subtitle').textContent =
+                    'Reducing document generation costs across ' + countryCount + ' countr' + (countryCount === 1 ? 'y' : 'ies') + ' and counting';
+            }
+
+            for (var i = 0; i < result.length; i++) {
+                var coords = CC[result[i].country];
+                if (!coords) continue;
+                var r = Math.max(8, Math.min(30, Math.sqrt(result[i].count) * 6));
+                L.circleMarker(coords, {
+                    radius: r,
+                    fillColor: '#2563eb',
+                    fillOpacity: 0.7,
+                    color: '#1d4ed8',
+                    weight: 2
+                }).addTo(map).bindPopup(
+                    '<strong>' + result[i].country + '</strong><br/>' +
+                    result[i].count + ' installation' + (result[i].count > 1 ? 's' : '')
+                );
+            }
+        },
+        { escape: true }
+    );
+}
+
+initMap();
+</script>
 
 </body>
 </html>
