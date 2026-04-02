@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.21.0 — Query Builder 2.0 & User Guide
+
+Replaced the visual query builder with a simpler, faster, more reliable manual-first experience. The old visual builder had persistent bugs — broken save state, empty config on object selection, template creation failures ("Please configure the query" error). Rather than continuing to patch a complex reactive UI, we stripped it back to what works: a text box with smart suggestions.
+
+### Query Builder 2.0
+- **Manual-first approach** — Type your query directly in a monospace textarea. No drag-and-drop, no multi-panel visual builder. Admins who know their objects type faster than they click.
+- **Inline field autocomplete** — Start typing a field name and suggestions appear from the object schema. Click to insert with auto-comma formatting.
+- **Context-aware suggestions** — Type `Owner.` and it loads the User object's fields. Type `(` and it shows child relationships. Inside `(SELECT ... FROM Contacts)` it suggests Contact fields.
+- **Sample record preview** — Pick a sample record on step 1. The query structure tree on step 2 shows real values: `Name = Acme Corporation`, child record rows in mini-tables. See exactly what your query returns before uploading a template.
+- **Object selection on step 1** — Base object is picked alongside template name and type. By the time you reach step 2, metadata is pre-loaded. No loading spinners, no async rendering bugs.
+- **Inline quick reference** — Syntax examples for fields, parent lookups, related list subqueries with WHERE/ORDER BY/LIMIT right below the textarea.
+- **Trailing comma cleanup** — Auto-stripped when clicking Next.
+- **Query persistence** — Navigate forward to step 3 and back to step 2, your query is exactly as you left it.
+
+### Builder Bug Fix
+- Fixed the root cause of "Please configure the query" error — `_notifyChange()` was firing in `_initRootNode()` before fields loaded asynchronously, emitting empty config to the parent component.
+
+### User Guide
+- New public `/DocGenGuide` page with full documentation — 28 sections covering every feature from template creation to Flow automation.
+- Sticky sidebar navigation with scroll-spy active section highlighting.
+- Consistent nav bar (`Home | User Guide | Roadmap | Community | GitHub`) across all 7 site pages.
+
+### Testing
+- **629 Apex tests passing, 0 failures**
+- **24/24 E2E tests passing**
+- **0 Code Analyzer security violations**
+
 ## v1.20.0 — Dynamic Page Numbers & Bug Fixes
 
 Feature release: dynamic page numbering in PDF headers/footers, closing all community-reported rendering issues.

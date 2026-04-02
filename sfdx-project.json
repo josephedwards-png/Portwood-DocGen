@@ -1,13 +1,13 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.20.0 — Dynamic Page Numbers & Bug Fixes",
-      "versionNumber": "1.20.0.NEXT",
-      "ancestorId": "04tal000006PW4TAAW",
+      "versionName": "1.21.0 — Query Builder 2.0 & User Guide",
+      "versionNumber": "1.21.0.NEXT",
+      "ancestorId": "04tal000006PcppAAC",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
-      "versionDescription": "Dynamic page numbering in PDF headers/footers via CSS counter(page)/counter(pages). Resolves Word PAGE and NUMPAGES field codes (both complex fldChar and fldSimple formats). 629 Apex tests passing, 76% coverage, 24/24 E2E tests passing."
+      "versionDescription": "Query Builder 2.0: replaced visual builder with manual-first textarea, inline field autocomplete, sample record data preview, inline syntax reference. Fixed query builder bug that blocked template creation. 629 Apex tests passing, 24/24 E2E tests passing."
     }
   ],
   "name": "Portwood DocGen",
