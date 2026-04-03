@@ -260,18 +260,80 @@ Drop `docGenRunner` onto any Lightning Record Page via App Builder. Full UI with
 
 ---
 
-## Limitations
+## Limitations & Known Behaviors
+
+### PDF Fonts
+
+Starting with **Spring '26**, `Blob.toPdf()` uses the Visualforce PDF rendering service with expanded font and language support:
+
+| Font | CSS | Notes |
+|------|-----|-------|
+| **Helvetica** | `sans-serif` (default) | Default body text (changed from serif in Spring '26) |
+| **Times** | `serif` | Formal documents |
+| **Courier** | `monospace` | Code, fixed-width |
+| **Arial Unicode MS** | Multibyte | CJK (Chinese, Japanese, Korean), Thai, Arabic, and more |
+
+**What this means:**
+- The Spring '26 renderer supports **full multibyte character rendering** — CJK, Thai, Arabic, Hebrew, and other international scripts.
+- Custom fonts from your Word template (Calibri, Cambria, branded typefaces) fall back to Helvetica in PDF. Generate as **DOCX** to preserve custom fonts.
+- `@font-face` CSS is **not supported** — this is a Salesforce platform limitation.
+- If your PDFs look different after the Spring '26 update, explicitly set `font-family: serif` in your template styling to match the old default.
+
+### PDF Rendering
+
+| Feature | PDF Support | Notes |
+|---------|-------------|-------|
+| Bold, italic, underline | Yes | Rendered via HTML tags |
+| Font size, color | Yes | Preserved from Word template |
+| Tables with borders, shading | Yes | Cell-level styling supported |
+| Table column widths | Yes | Reads `w:tcW` from template |
+| Alternating row colors | Yes | Via cell-level `w:shd` shading |
+| Page numbers (PAGE, NUMPAGES) | Yes | CSS counters in running headers/footers |
+| Headers/footers on every page | Yes | Via Flying Saucer running elements |
+| Title page (no header/footer) | Yes | Detects `w:titlePg` in section properties |
+| Section breaks (next page) | Yes | Converted to CSS page breaks |
+| Images (template embedded) | Yes | Pre-extracted to ContentVersions |
+| Images (from record fields) | Yes | Via `{%FieldName}` image tags |
+| Hyperlinks | Partial | Rendered as styled text (no clickable links in PDF) |
+| Custom fonts | No | Falls back to Helvetica — use DOCX for custom fonts |
+| JavaScript | No | Ignored by the PDF renderer |
+| CSS Grid / Flexbox | No | Flying Saucer supports CSS 2.1 only |
+| `@font-face` | No | Not supported in any form |
+| Nested tables | Limited | May render with unexpected spacing |
+| Text boxes / shapes | No | Word drawing objects not converted |
+| SmartArt / Charts | No | Not rendered — use images instead |
+
+### RTL Languages (Arabic, Hebrew)
+
+- RTL text renders via `text-align: right` and `Arial Unicode MS` font
+- Flying Saucer does **not** implement the Unicode Bidi Algorithm — `direction: rtl` CSS causes double-reversal of characters
+- Hebrew/Arabic characters in `Arial Unicode MS` may render as dots if the specific glyphs aren't available on the Salesforce server
+- Mixed LTR/RTL content (English + Hebrew in one paragraph) has limited support
+- **Best practice:** For full RTL fidelity, generate as DOCX and open in Word
+
+### File Size & Governor Limits
 
 | Limitation | Details | Workaround |
 |-----------|---------|------------|
-| **PDF fonts** | Helvetica, Times, Courier, Arial Unicode MS only | Generate as DOCX for custom fonts |
-| **PDF file size** | ~3 MB per individual PDF for merge/save | Download has no limit |
-| **Barcodes/QR** | PDF output only | Not available in DOCX/XLSX/PPTX |
-| **Images** | Word templates only | Place static images directly in Excel/PPTX |
-| **Excel/PPTX output** | Native format only, no PDF conversion | Use Word template for PDF |
-| **Heap (sync)** | 6 MB per transaction | Use DOCX output for large docs (client-side assembly) |
+| **PDF file size** | ~3 MB per individual PDF for merge/save to record | Download has no limit |
+| **Heap (sync)** | 6 MB per transaction | Use DOCX output for large documents (client-side assembly bypasses heap) |
 | **Heap (async)** | 12 MB per batch execute | Batch size 1 gives fresh heap per record |
+| **DOCX save to record** | 4 MB Aura payload limit | Download works for any size; save-to-record blocked above 4 MB |
+| **Images in PDF** | Unlimited count (zero-heap pipeline) | Each image loaded from ContentVersion URL, not memory |
+| **Bulk batch** | 10,000+ records per job | Queueable chain processes batches sequentially |
+
+### Other Limitations
+
+| Limitation | Details | Workaround |
+|-----------|---------|------------|
+| **Barcodes/QR codes** | PDF output only | Not available in DOCX/XLSX/PPTX |
+| **Images in templates** | Word templates only | Place static images directly in Excel/PPTX |
+| **Excel/PPTX → PDF** | Not supported | Use Word template for PDF output |
 | **No e-signatures** | Intentionally excluded | Use DocuSign, Adobe Sign, etc. after generation |
+| **Rich text images in DOCX** | Not supported | Salesforce `rtaImage` URLs inaccessible client-side; use `{%Field}` image tags |
+| **Word Styles inheritance** | Partial | Direct formatting preserved; style-level inheritance (e.g., theme colors via style hierarchy) may not resolve |
+| **Even/odd page headers** | Not supported | Same header renders on all pages (except title page) |
+| **Multiple sections with different headers** | Not supported | One header/footer set applies to the entire document |
 
 ---
 
