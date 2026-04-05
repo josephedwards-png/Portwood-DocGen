@@ -8,6 +8,7 @@ import getAvailableReports from '@salesforce/apex/DocGenController.getAvailableR
 import importReportConfig from '@salesforce/apex/DocGenController.importReportConfig';
 import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
 import validateDataProvider from '@salesforce/apex/DocGenController.validateDataProvider';
+import { parseSOQLFields } from 'c/docGenUtils';
 
 let _nodeId = 0;
 function nextNodeId() { return 'n' + (_nodeId++); }
@@ -1011,24 +1012,13 @@ export default class DocGenColumnBuilder extends LightningElement {
     _parseV1Config(value) {
         if (!this.selectedObject) return;
         // V1: "Name, Industry, (SELECT FirstName, LastName FROM Contacts)"
-        const fields = [];
-        const children = [];
-        let remaining = value;
-
-        // Extract subqueries first
-        const subqRegex = /\(\s*SELECT\s+(.+?)\s+FROM\s+(\w+)\s*\)/gi;
-        let match;
-        while ((match = subqRegex.exec(value)) !== null) {
-            const childFields = match[1].split(',').map(f => f.trim()).filter(f => f);
-            children.push({ rel: match[2], fields: childFields });
-        }
-        remaining = remaining.replace(subqRegex, '').replace(/,\s*,/g, ',').replace(/^\s*,|,\s*$/g, '');
-
-        // Parse base fields
-        remaining.split(',').forEach(f => {
-            const field = f.trim();
-            if (field) fields.push(field);
-        });
+        // Also accepts full SOQL: "SELECT Name FROM Account"
+        const parsed = parseSOQLFields(value);
+        const fields = [...parsed.baseFields, ...parsed.parentFields];
+        const children = parsed.subqueries.map(sq => ({
+            rel: sq.relationshipName,
+            fields: [...sq.fields, ...sq.children.map(c => '(SELECT ' + c.fields.join(', ') + ' FROM ' + c.relationshipName + ')')]
+        }));
 
         // Build tree
         const rootNode = this._createNode(this.selectedObject, this.selectedObject, true, null, null, null);

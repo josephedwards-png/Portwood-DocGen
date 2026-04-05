@@ -29,7 +29,7 @@ sf package install --package 04tal000006PfEDAA0 --wait 10 --target-org <your-org
 ## Quick Start
 
 1. **Create a template** — pick Word, Excel, or PowerPoint. Choose your Salesforce object.
-2. **Select your fields** — use the query builder to pick fields, parent lookups, and child records.
+2. **Select your fields** — use the visual query builder, or paste a full SOQL statement for complex nested relationships.
 3. **Add tags and upload** — type `{Name}` where you want data. Upload the file.
 4. **Generate** — from any record page, in bulk, or from a Flow.
 
@@ -149,6 +149,27 @@ Five ways to combine PDFs:
 ### Giant Query Engine
 
 Records with **2,000 to 50,000+ child records** are detected automatically. Same template, same button — the engine handles pagination and async processing behind the scenes.
+
+### Query Builder
+
+The query builder accepts full SOQL statements with unlimited nesting depth. Paste a query like:
+
+```sql
+SELECT Name, Industry,
+    (SELECT FirstName, LastName, Account.Name FROM Contacts),
+    (SELECT Name, Amount,
+        (SELECT Quantity, Product2.Name FROM OpportunityLineItems)
+    FROM Opportunities WHERE StageName = 'Closed Won')
+FROM Account
+```
+
+The builder parses the query, displays the field tree with parent lookups highlighted, and generates copy-paste merge tags for your template. Outer `SELECT` / `FROM` clauses are stripped automatically — DocGen always runs against a specific record.
+
+**Tips:**
+- Test your query in Developer Console or tools like [Salesforce Inspector](https://chromewebstore.google.com/detail/salesforce-inspector-reloaded/hpijlohoihegkfehhibggnkbjhoemldh) before pasting.
+- Use AI to help build complex queries — Agentforce, ChatGPT, Gemini, and Claude can all generate valid SOQL with nested relationships.
+- Subqueries support WHERE, ORDER BY, and LIMIT clauses.
+- Parent lookups (e.g., `Account.Name`, `Product2.Family`) work at every nesting level.
 
 ### Automation
 

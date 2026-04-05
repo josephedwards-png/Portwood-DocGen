@@ -3,7 +3,7 @@ import { createRecord } from 'lightning/uiRecordApi';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
-import { downloadBase64 as downloadBase64Util } from 'c/docGenUtils';
+import { downloadBase64 as downloadBase64Util, parseSOQLFields } from 'c/docGenUtils';
 
 // Apex
 import getAllTemplates from '@salesforce/apex/DocGenController.getAllTemplates';
@@ -151,6 +151,7 @@ const VERSION_COLUMNS = [
     @track filteredObjectOptions = [];
     @track showObjectSuggestions = false;
     @track queryTreeNodes = [];
+    @track queryWarnings = null;
     @track builderTab = 'fields';
     @track builderSearchTerm = '';
     @track _allFields = [];
@@ -722,19 +723,11 @@ const VERSION_COLUMNS = [
         try {
             const nodes = [];
             const data = this.sampleRecordData || {};
-            // Extract subqueries first
-            const subqueries = [];
-            const sqRegex = /\(\s*SELECT\s+([\s\S]+?)\s+FROM\s+(\w+)(?:\s+WHERE\s+([\s\S]+?))?\s*\)/gi;
-            let match;
-            while ((match = sqRegex.exec(q)) !== null) {
-                const fields = match[1].split(',').map(f => f.trim()).filter(f => f);
-                subqueries.push({ relationship: match[2], fields, where: match[3] || '' });
-            }
-            // Remove subqueries to get base fields
-            const baseStr = q.replace(sqRegex, '').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
-            const baseFields = baseStr ? baseStr.split(',').map(f => f.trim()).filter(f => f) : [];
-            const directFields = baseFields.filter(f => !f.includes('.'));
-            const parentFields = baseFields.filter(f => f.includes('.'));
+            // Parse using nesting-aware SOQL parser
+            const parsed = parseSOQLFields(q);
+            this.queryWarnings = parsed.warnings.length > 0 ? parsed.warnings : null;
+            const directFields = parsed.baseFields;
+            const parentFields = parsed.parentFields;
 
             // Build field display with sample values
             const fieldPills = directFields.map(f => {
@@ -749,23 +742,31 @@ const VERSION_COLUMNS = [
                 return { key: f, name: f, sample: val != null ? String(val) : '' };
             });
 
-            // Child subqueries with sample data
-            const childNodes = subqueries.map((sq, i) => {
-                const childData = data[sq.relationship];
-                const rows = Array.isArray(childData) ? childData.slice(0, 3) : [];
-                return {
-                    id: 'child_' + i,
-                    label: sq.relationship,
-                    icon: 'standard:related_list',
-                    fields: sq.fields,
-                    where: sq.where,
-                    sampleRows: rows.map((row, ri) => ({
-                        key: 'row_' + i + '_' + ri,
-                        cells: sq.fields.map(f => ({ key: f, value: row[f] != null ? String(row[f]) : '' }))
-                    })),
-                    hasRows: rows.length > 0
-                };
-            });
+            // Flatten child subqueries recursively into a single list with depth
+            // so the template can render any nesting level with one for:each
+            const flatChildren = [];
+            const flattenChildren = (subqueries, depth) => {
+                for (let i = 0; i < subqueries.length; i++) {
+                    const sq = subqueries[i];
+                    const directF = sq.fields.filter(f => !f.includes('.'));
+                    const parentF = sq.fields.filter(f => f.includes('.'));
+                    flatChildren.push({
+                        id: 'child_' + flatChildren.length,
+                        label: sq.relationshipName,
+                        fields: directF,
+                        parentFields: parentF,
+                        hasParentFields: parentF.length > 0,
+                        fieldCount: sq.fields.length,
+                        where: sq.whereClause || '',
+                        depth,
+                        indentStyle: 'margin-left: ' + (depth * 20) + 'px; margin-bottom: 6px; padding: 8px 10px; background: #fff; border: 1px solid #e5e5e5; border-radius: 6px;'
+                    });
+                    if (sq.children && sq.children.length > 0) {
+                        flattenChildren(sq.children, depth + 1);
+                    }
+                }
+            };
+            flattenChildren(parsed.subqueries, 0);
 
             nodes.push({
                 id: 'root',
@@ -776,10 +777,10 @@ const VERSION_COLUMNS = [
                 parentFields: parentFields,
                 fieldPills: fieldPills,
                 parentPills: parentPills,
-                children: childNodes,
+                flatChildren: flatChildren,
                 hasFields: fieldPills.length > 0,
                 hasParentFields: parentPills.length > 0,
-                hasChildren: childNodes.length > 0
+                hasFlatChildren: flatChildren.length > 0
             });
             this.queryTreeNodes = nodes;
         } catch (err) { // eslint-disable-line no-unused-vars
@@ -881,43 +882,27 @@ const VERSION_COLUMNS = [
                 }
             }
 
-            // V1: split top-level tokens respecting parentheses depth
+            // V1 / full SOQL: parse using shared nesting-aware parser
+            const parsed = parseSOQLFields(qc);
             const sections = [];
-            const baseFields = [];
-            const topTokens = this._splitTopLevel(qc);
 
-            const parseSubquery = (sqStr) => {
-                // Match: (SELECT fields FROM RelName WHERE ... ORDER BY ... LIMIT ...)
-                const m = sqStr.match(/^\(\s*SELECT\s+([\s\S]+?)\s+FROM\s+(\w+)([\s\S]*)\)$/i);
-                if (!m) return;
-                const relName = m[1 + 1]; // group 2 = relationship name
-                const rawFields = m[1];   // group 1 = field list (may contain nested subqueries)
-                const fieldTokens = this._splitTopLevel(rawFields);
-                const childFields = [];
-                for (const ft of fieldTokens) {
-                    if (ft.startsWith('(')) {
-                        // Nested subquery — recurse
-                        parseSubquery(ft);
-                    } else {
-                        childFields.push(ft);
+            const buildTagSections = (subqueries) => {
+                for (const sq of subqueries) {
+                    sections.push({
+                        name: sq.relationshipName,
+                        isLoop: true,
+                        loopStart: '{#' + sq.relationshipName + '}',
+                        loopEnd: '{/' + sq.relationshipName + '}',
+                        tags: sq.fields.filter(f => f).map(f => ({ code: '{' + f + '}' }))
+                    });
+                    if (sq.children && sq.children.length > 0) {
+                        buildTagSections(sq.children);
                     }
                 }
-                sections.push({
-                    name: relName,
-                    isLoop: true,
-                    loopStart: '{#' + relName + '}',
-                    loopEnd: '{/' + relName + '}',
-                    tags: childFields.filter(f => f).map(f => ({ code: '{' + f + '}' }))
-                });
             };
 
-            for (const token of topTokens) {
-                if (token.startsWith('(')) {
-                    parseSubquery(token);
-                } else if (token) {
-                    baseFields.push(token);
-                }
-            }
+            const baseFields = [...parsed.baseFields, ...parsed.parentFields];
+            buildTagSections(parsed.subqueries);
 
             if (baseFields.length > 0) {
                 sections.unshift({

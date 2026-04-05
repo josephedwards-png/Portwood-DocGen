@@ -1,13 +1,13 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.23.0 — Security, Title Pages & Simplified Sharing",
-      "versionNumber": "1.23.0.NEXT",
-      "ancestorId": "04tal000006PemnAAC",
+      "versionName": "1.24.0 — Query Builder Bug Fixes",
+      "versionNumber": "1.24.0.NEXT",
+      "ancestorId": "04tal000006PfEDAA0",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
-      "versionDescription": "Cover pages now render clean — no unwanted headers or footers on your title page. Section breaks in your Word template create proper page breaks in the PDF. Spaces between merge tags no longer disappear. Page numbers keep your font size, color, and bold formatting. Simpler permissions — works with standard Salesforce sharing out of the box."
+      "versionDescription": "Fixes nested subquery parsing in the query builder. Queries with nested relationships (e.g. Account > Opportunities > Line Items) now parse correctly at any depth. Copy-paste tags generate properly for all nesting levels. Users can paste full SOQL statements directly. Parent lookup fields in subqueries display with distinct styling. Warns when outer WHERE clauses are detected."
     }
   ],
   "name": "Portwood DocGen",
@@ -39,6 +39,7 @@
     "Portwood DocGen Managed@1.20.0-1": "04tal000006PcppAAC",
     "Portwood DocGen Managed@1.21.0-1": "04tal000006PdtxAAC",
     "Portwood DocGen Managed@1.22.0-1": "04tal000006PemnAAC",
-    "Portwood DocGen Managed@1.23.0-1": "04tal000006PfEDAA0"
+    "Portwood DocGen Managed@1.23.0-1": "04tal000006PfEDAA0",
+    "Portwood DocGen Managed@1.24.0-1": "04tal000006PgztAAC"
   }
 }
