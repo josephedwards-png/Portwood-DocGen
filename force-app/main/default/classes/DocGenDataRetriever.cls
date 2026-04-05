@@ -69,6 +69,30 @@ public with sharing class DocGenDataRetriever {
             throw DocGenService.ahe('Invalid parameters for data retrieval.');
         }
 
+        // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
+        fieldsConfig = fieldsConfig.trim();
+        if (fieldsConfig.toUpperCase().startsWith('SELECT ') && !fieldsConfig.startsWith('{')) {
+            fieldsConfig = fieldsConfig.substring(7).trim();
+            // Find the last FROM at outermost paren level, strip it and everything after
+            Integer lastFromAt = -1;
+            Integer pLevel = 0;
+            String upper = fieldsConfig.toUpperCase();
+            for (Integer idx = 0; idx < fieldsConfig.length(); idx++) {
+                String ch = fieldsConfig.substring(idx, idx + 1);
+                if (ch == '(') pLevel++;
+                if (ch == ')') pLevel--;
+                if (pLevel == 0 && upper.substring(idx).startsWith('FROM ')) {
+                    lastFromAt = idx;
+                }
+            }
+            if (lastFromAt > 0) {
+                fieldsConfig = fieldsConfig.substring(0, lastFromAt).trim();
+                if (fieldsConfig.endsWith(',')) {
+                    fieldsConfig = fieldsConfig.substring(0, fieldsConfig.length() - 1).trim();
+                }
+            }
+        }
+
         // JSON config: route by version
         if (fieldsConfig.trim().startsWith('{')) {
             Map<String, Object> jsonConfig = (Map<String, Object>) JSON.deserializeUntyped(fieldsConfig.trim());

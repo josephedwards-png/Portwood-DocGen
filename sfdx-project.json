@@ -1,13 +1,13 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.24.0 — Query Builder Bug Fixes",
-      "versionNumber": "1.24.0.NEXT",
-      "ancestorId": "04tal000006PfEDAA0",
+      "versionName": "1.24.1 — Query Sanitization & FLS Hardening",
+      "versionNumber": "1.24.1.NEXT",
+      "ancestorId": "04tal000006PgztAAC",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
-      "versionDescription": "Fixes nested subquery parsing in the query builder. Queries with nested relationships (e.g. Account > Opportunities > Line Items) now parse correctly at any depth. Copy-paste tags generate properly for all nesting levels. Users can paste full SOQL statements directly. Parent lookup fields in subqueries display with distinct styling. Warns when outer WHERE clauses are detected."
+      "versionDescription": "Auto-strips SELECT/FROM from pasted SOQL queries on save. FLS hardening: all DML uses Security.stripInaccessible(), all SOQL uses USER_MODE. Code analyzer now reports 0 violations."
     }
   ],
   "name": "Portwood DocGen",

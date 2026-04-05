@@ -6,7 +6,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled(cacheable=true)
     public static List<DocGen_Template__c> getBulkTemplates() {
-        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH SYSTEM_MODE ORDER BY Name LIMIT 2000];
+        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH USER_MODE ORDER BY Name LIMIT 2000];
     }
 
     /**
@@ -84,7 +84,7 @@ public with sharing class DocGenBulkController {
         try {
             DocGen_Template__c temp = [
                 SELECT Query_Config__c, Test_Record_Id__c, Output_Format__c
-                FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+                FROM DocGen_Template__c WHERE Id = :templateId WITH USER_MODE LIMIT 1
             ];
 
             // --- 1. SOQL Queries per batch execution ---
@@ -332,7 +332,9 @@ public with sharing class DocGenBulkController {
                 Status__c = 'Queued',
                 Merge_Only__c = isMergeOnly
             );
-            insert job; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision jobDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Job__c>{ job });
+            insert jobDec.getRecords();
+            job.Id = jobDec.getRecords()[0].Id;
 
             // 2. Run Batch — user-configurable batch size (default 1, max 200)
             Integer size = (batchSize != null && batchSize >= 1 && batchSize <= 200) ? batchSize : 1;
@@ -352,7 +354,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled
     public static DocGen_Job__c getJobStatus(Id jobId) {
-        return [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE];
+        return [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE];
     }
 
     /**
@@ -365,7 +367,7 @@ public with sharing class DocGenBulkController {
             SELECT Id, Name, Label__c, Status__c, Success_Count__c, Error_Count__c, Total_Records__c,
                    CreatedDate, Template__r.Name, Template__r.Output_Format__c
             FROM DocGen_Job__c
-            WITH SYSTEM_MODE
+            WITH USER_MODE
             ORDER BY CreatedDate DESC
             LIMIT 20
         ];
@@ -382,7 +384,7 @@ public with sharing class DocGenBulkController {
         DocGen_Job__c job = [
             SELECT Template__c, Template__r.Base_Object_API__c, Template__r.Name,
                    Query_Condition__c, CreatedDate
-            FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE
+            FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE
         ];
 
         String baseObject = job.Template__r.Base_Object_API__c;
@@ -440,7 +442,7 @@ public with sharing class DocGenBulkController {
             SELECT Id, Name, Description__c, Query_Condition__c
             FROM DocGen_Saved_Query__c
             WHERE DocGen_Template__c = :templateId
-            WITH SYSTEM_MODE
+            WITH USER_MODE
             ORDER BY CreatedDate DESC
         ];
     }
@@ -461,7 +463,8 @@ public with sharing class DocGenBulkController {
                 Description__c = description,
                 Query_Condition__c = condition
             );
-            insert sq; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision sqDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Saved_Query__c>{ sq });
+            insert sqDec.getRecords();
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error saving query.');
         }

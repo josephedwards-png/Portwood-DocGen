@@ -3,7 +3,7 @@ import { createRecord } from 'lightning/uiRecordApi';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import { NavigationMixin } from 'lightning/navigation';
 import { refreshApex } from '@salesforce/apex';
-import { downloadBase64 as downloadBase64Util, parseSOQLFields } from 'c/docGenUtils';
+import { downloadBase64 as downloadBase64Util, parseSOQLFields, stripOuterSelectFrom } from 'c/docGenUtils';
 
 // Apex
 import getAllTemplates from '@salesforce/apex/DocGenController.getAllTemplates';
@@ -841,6 +841,17 @@ const VERSION_COLUMNS = [
         this.editTemplateQuery = event.detail.queryConfig;
     }
 
+    /**
+     * Strips outer SELECT and FROM clauses from a query config string.
+     * Delegates to the shared stripOuterSelectFrom utility in docGenUtils.
+     */
+    _sanitizeQueryConfig(queryConfig) {
+        if (!queryConfig) return queryConfig;
+        const cleaned = queryConfig.trim();
+        if (cleaned.startsWith('{')) return cleaned;
+        return stripOuterSelectFrom(cleaned);
+    }
+
     handleEditTestRecordChange(event) {
         this.editTemplateTestRecordId = event.detail.recordId;
         this._loadSampleData();
@@ -1013,7 +1024,7 @@ const VERSION_COLUMNS = [
         fields[TYPE_FIELD.fieldApiName] = this.newTemplateType;
         fields[OUTPUT_FORMAT_FIELD.fieldApiName] = this.newTemplateOutputFormat;
         fields[BASE_OBJECT_FIELD.fieldApiName] = this.newTemplateObject;
-        fields[QUERY_CONFIG_FIELD.fieldApiName] = this.newTemplateQuery;
+        fields[QUERY_CONFIG_FIELD.fieldApiName] = this._sanitizeQueryConfig(this.newTemplateQuery);
         fields[DESC_FIELD.fieldApiName] = this.newTemplateDesc;
 
         try {
@@ -1391,11 +1402,12 @@ const VERSION_COLUMNS = [
             'Output_Format__c': this.editTemplateOutputFormat,
             'Base_Object_API__c': this.editTemplateObject,
             'Description__c': this.editTemplateDesc,
-            'Query_Config__c': this.editTemplateQuery,
+            'Query_Config__c': this._sanitizeQueryConfig(this.editTemplateQuery),
             'Test_Record_Id__c': this.editTemplateTestRecordId,
             'Document_Title_Format__c': this.editTemplateTitleFormat,
             'Is_Default__c': this.editTemplateIsDefault
         };
+        this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
             await saveTemplate({ fields: fields, createVersion: false });
@@ -1420,11 +1432,12 @@ const VERSION_COLUMNS = [
             'Output_Format__c': this.editTemplateOutputFormat,
             'Base_Object_API__c': this.editTemplateObject,
             'Description__c': this.editTemplateDesc,
-            'Query_Config__c': this.editTemplateQuery,
+            'Query_Config__c': this._sanitizeQueryConfig(this.editTemplateQuery),
             'Test_Record_Id__c': this.editTemplateTestRecordId,
             'Document_Title_Format__c': this.editTemplateTitleFormat,
             'Is_Default__c': this.editTemplateIsDefault
         };
+        this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
             await saveTemplate({ fields: fields, createVersion: true });
