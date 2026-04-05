@@ -7,7 +7,7 @@
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
-      "versionDescription": "Auto-strips SELECT/FROM from pasted SOQL queries on save. FLS hardening: all DML uses Security.stripInaccessible(), all SOQL uses USER_MODE. Code analyzer now reports 0 violations."
+      "versionDescription": "Pasting a full SOQL query into the query builder now works seamlessly — SELECT and FROM clauses are automatically stripped on save. Enhanced field-level security enforcement across all database operations."
     }
   ],
   "name": "Portwood DocGen",
