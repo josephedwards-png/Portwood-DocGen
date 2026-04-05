@@ -6,7 +6,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled(cacheable=true)
     public static List<DocGen_Template__c> getBulkTemplates() {
-        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH USER_MODE ORDER BY Name LIMIT 2000];
+        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH SYSTEM_MODE ORDER BY Name LIMIT 2000];
     }
 
     /**
@@ -83,7 +83,7 @@ public with sharing class DocGenBulkController {
 
         try {
             List<DocGen_Template__c> tempList = [SELECT Query_Config__c, Test_Record_Id__c, Output_Format__c
-                FROM DocGen_Template__c WHERE Id = :templateId WITH USER_MODE LIMIT 1];
+                FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
             DocGen_Template__c temp = tempList[0];
 
             // --- 1. SOQL Queries per batch execution ---
@@ -355,7 +355,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled
     public static DocGen_Job__c getJobStatus(Id jobId) {
-        List<DocGen_Job__c> jsRecords = [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE];
+        List<DocGen_Job__c> jsRecords = [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE];
         return jsRecords[0];
     }
 
@@ -368,7 +368,7 @@ public with sharing class DocGenBulkController {
         return [SELECT Id, Name, Label__c, Status__c, Success_Count__c, Error_Count__c, Total_Records__c,
                    CreatedDate, Template__r.Name, Template__r.Output_Format__c
             FROM DocGen_Job__c
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             ORDER BY CreatedDate DESC
             LIMIT 20];
     }
@@ -383,7 +383,7 @@ public with sharing class DocGenBulkController {
     public static List<Map<String, String>> getJobGeneratedPdfs(Id jobId) {
         List<DocGen_Job__c> gpRecords = [SELECT Template__c, Template__r.Base_Object_API__c, Template__r.Name,
                    Query_Condition__c, CreatedDate
-            FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE];
+            FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE];
         DocGen_Job__c job = gpRecords[0];
 
         String baseObject = job.Template__r.Base_Object_API__c;
@@ -440,7 +440,7 @@ public with sharing class DocGenBulkController {
         return [SELECT Id, Name, Description__c, Query_Condition__c
             FROM DocGen_Saved_Query__c
             WHERE DocGen_Template__c = :templateId
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             ORDER BY CreatedDate DESC];
     }
 

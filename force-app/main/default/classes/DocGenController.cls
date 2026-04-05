@@ -16,7 +16,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             LIMIT 1];
 
         if (templates.isEmpty()) {
@@ -70,7 +70,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
-                WITH USER_MODE
+                WITH SYSTEM_MODE
                 LIMIT 1];
 
             if (templates.isEmpty()) {
@@ -292,7 +292,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
-                WITH USER_MODE
+                WITH SYSTEM_MODE
                 LIMIT 1];
             if (templates.isEmpty()) {
                 throw new DocGenException('Unable to access template. Verify it exists and you have permission.');
@@ -367,7 +367,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // Use pre-decomposed XML to get document.xml — avoids ZIP decompression heap cost
             List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
                 WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH USER_MODE LIMIT 1];
+                WITH SYSTEM_MODE LIMIT 1];
             String documentXml = null;
             if (!activeVersions.isEmpty()) {
                 String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
@@ -450,7 +450,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         List<DocGen_Job__c> jobs = [SELECT Status__c, Success_Count__c, Total_Records__c, Label__c
             FROM DocGen_Job__c
             WHERE Id = :jobId
-            WITH USER_MODE LIMIT 1];
+            WITH SYSTEM_MODE LIMIT 1];
         if (jobs.isEmpty()) {
             return new Map<String, Object>{ 'status' => 'Not Found' };
         }
@@ -567,7 +567,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // Get document XML from pre-decomposed parts (no ZIP decompression)
             List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
                 WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH USER_MODE LIMIT 1];
+                WITH SYSTEM_MODE LIMIT 1];
             String documentXml = null;
             if (!activeVersions.isEmpty()) {
                 String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
@@ -638,7 +638,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (recordId == null || templateId == null) {
             return result;
         }
-        List<DocGen_Template__c> templates = [SELECT Query_Config__c, Base_Object_API__c FROM DocGen_Template__c WHERE Id = :templateId WITH USER_MODE LIMIT 1];
+        List<DocGen_Template__c> templates = [SELECT Query_Config__c, Base_Object_API__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
         if (templates.isEmpty() || String.isBlank(templates[0].Query_Config__c)) {
             return result;
         }
@@ -791,7 +791,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         return [SELECT Id, Name, Description__c, Type__c, Output_Format__c, Is_Default__c, Query_Config__c
             FROM DocGen_Template__c
             WHERE Base_Object_API__c = :objectApiName
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             ORDER BY Is_Default__c DESC, Name ASC];
     }
 
@@ -805,7 +805,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                    Test_Record_Id__c, Output_Format__c, Document_Title_Format__c, Is_Default__c,
                    (SELECT ContentDocumentId FROM ContentDocumentLinks ORDER BY ContentDocument.CreatedDate DESC LIMIT 1)
             FROM DocGen_Template__c
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             ORDER BY Category__c ASC, Name ASC
             LIMIT 2000];
     }
@@ -844,7 +844,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                         WHERE Base_Object_API__c = :baseObj
                         AND Is_Default__c = true
                         AND Id != :templateId
-                        WITH USER_MODE];
+                        WITH SYSTEM_MODE];
                     for (DocGen_Template__c other : otherDefaults) {
                         other.Is_Default__c = false;
                     }
@@ -862,7 +862,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 // Deactivate current active versions
                 List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
                     WHERE Template__c = :templateId AND Is_Active__c = true
-                    WITH USER_MODE];
+                    WITH SYSTEM_MODE];
                 for (DocGen_Template_Version__c av : activeVersions) {
                     av.Is_Active__c = false;
                 }
@@ -942,7 +942,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                    Category__c, Description__c, Type__c, Base_Object_API__c, Is_Active__c
             FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId
-            WITH USER_MODE
+            WITH SYSTEM_MODE
             ORDER BY CreatedDate DESC];
     }
 
@@ -956,14 +956,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             List<DocGen_Template_Version__c> actVerList = [SELECT Template__c, Query_Config__c, Content_Version_Id__c, Category__c, Description__c, Type__c, Base_Object_API__c
                 FROM DocGen_Template_Version__c
                 WHERE Id = :versionId
-                WITH USER_MODE
+                WITH SYSTEM_MODE
                 LIMIT 1];
             DocGen_Template_Version__c version = actVerList[0];
 
             // 1. Deactivate others
             List<DocGen_Template_Version__c> others = [SELECT Id FROM DocGen_Template_Version__c
                 WHERE Template__c = :version.Template__c AND Is_Active__c = true
-                WITH USER_MODE];
+                WITH SYSTEM_MODE];
             for (DocGen_Template_Version__c v : others) {
                 v.Is_Active__c = false;
             }
@@ -3156,7 +3156,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                        (SELECT Name, Query_Condition__c, Description__c FROM Saved_Queries__r)
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
-                WITH USER_MODE LIMIT 1];
+                WITH SYSTEM_MODE LIMIT 1];
             if (templates.isEmpty()) {
                 throw new DocGenException('Template not found or not accessible.');
             }
