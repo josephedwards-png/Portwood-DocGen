@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.24.1 — Query Sanitization & FLS Hardening",
-      "versionNumber": "1.24.1.NEXT",
+      "versionName": "1.25.0 — Easter Release",
+      "versionNumber": "1.25.0.NEXT",
       "ancestorId": "04tal000006PgztAAC",
       "path": "force-app",
       "default": true,
