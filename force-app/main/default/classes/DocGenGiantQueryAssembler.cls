@@ -82,9 +82,22 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // Build the HTML wrapper (template + CSS + parent merge tags)
         String htmlTemplate = buildHtmlTemplate();
 
+        // Extract the table header row from the template (if present).
+        // The header sits between <table> and {ROWS} — e.g., <tr><th>Name</th>...</tr>.
+        // For multi-chunk PDFs, this header is prepended to each continuation chunk
+        // so every PDF part starts with column headings.
+        String headerRow = extractHeaderRow(htmlTemplate);
+
         // Split rows into chunks — each chunk gets its own Blob.toPdf() call
         List<String> rowChunks = splitRowsIntoChunks(allRows, ROWS_PER_PDF_CHUNK);
         allRows = null;
+
+        // Prepend header row to continuation chunks (chunk 0 already gets it from the template)
+        if (String.isNotBlank(headerRow) && rowChunks.size() > 1) {
+            for (Integer i = 1; i < rowChunks.size(); i++) {
+                rowChunks[i] = headerRow + rowChunks[i];
+            }
+        }
 
         if (rowChunks.size() == 1) {
             // Small enough for single PDF
@@ -191,7 +204,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         if (html != null) {
             if (html.contains('</style>')) {
                 html = html.replace('</style>',
-                    'td { border: 0.5pt solid #ccc; padding: 3px 5px; } tr { page-break-inside: avoid; } ' +
+                    'td, th { border: 0.5pt solid #ccc; padding: 3px 5px; } th { background-color: #f0f0f0; font-weight: bold; } tr { page-break-inside: avoid; } ' +
                     columnCss + '</style>');
             }
 
@@ -214,14 +227,17 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                     html.substring(bodyEnd);
             }
         } else {
+            // Build a header row from the query config field names
+            String headerRow = buildHeaderRowFromConfig();
             html = '<html><head><style>' +
                 '@page { size: letter; margin: 0.75in; }' +
                 'body { font-family: Helvetica, sans-serif; font-size: 9pt; margin: 0; }' +
                 'table { width: 100%; border-collapse: collapse; }' +
-                'td { border: 0.5pt solid #ccc; padding: 3px 5px; }' +
+                'td, th { border: 0.5pt solid #ccc; padding: 3px 5px; }' +
+                'th { background-color: #f0f0f0; font-weight: bold; }' +
                 'tr { page-break-inside: avoid; }' +
                 columnCss +
-                '</style></head><body><table>{ROWS}</table></body></html>';
+                '</style></head><body><table>' + headerRow + '{ROWS}</table></body></html>';
         }
         return html;
     }
@@ -231,6 +247,116 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      */
     private static String injectRowsIntoTemplate(String template, String rows) {
         return template.replace('{ROWS}', rows);
+    }
+
+    /**
+     * Builds a table header row from the query config's field names.
+     * Reads the child node matching giantRelationshipName and generates
+     * <tr><th>...</th></tr> from its fields + parentFields.
+     */
+    private String buildHeaderRowFromConfig() {
+        try {
+            List<DocGen_Template__c> tpls = [
+                SELECT Query_Config__c FROM DocGen_Template__c
+                WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            ];
+            if (tpls.isEmpty() || String.isBlank(tpls[0].Query_Config__c)) { return ''; }
+
+            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(tpls[0].Query_Config__c.trim());
+            List<Object> nodes = (List<Object>) config.get('nodes');
+            if (nodes == null) { return ''; }
+
+            for (Object nodeObj : nodes) {
+                Map<String, Object> node = (Map<String, Object>) nodeObj;
+                if (giantRelationshipName.equals((String) node.get('relationshipName'))) {
+                    String row = '<tr>';
+                    // Parent fields first (e.g., Product2.Name → "Product Name")
+                    List<Object> pFields = (List<Object>) node.get('parentFields');
+                    if (pFields != null) {
+                        for (Object f : pFields) {
+                            row += '<th>' + formatFieldLabel(String.valueOf(f)) + '</th>';
+                        }
+                    }
+                    // Then child fields (e.g., UnitPrice → "Unit Price")
+                    List<Object> fields = (List<Object>) node.get('fields');
+                    if (fields != null) {
+                        for (Object f : fields) {
+                            row += '<th>' + formatFieldLabel(String.valueOf(f)) + '</th>';
+                        }
+                    }
+                    row += '</tr>';
+                    return row;
+                }
+            }
+        } catch (Exception e) {
+            String noop = e.getMessage(); // NOPMD — non-fatal, table works without header
+        }
+        return '';
+    }
+
+    /**
+     * Converts an API field name to a human-readable label.
+     * Product2.Name → "Product Name", UnitPrice → "Unit Price",
+     * My_Custom_Field__c → "My Custom Field".
+     */
+    private static String formatFieldLabel(String apiName) {
+        if (String.isBlank(apiName)) { return ''; }
+        // Take the last part after dot (Product2.Name → Name, Product2.ProductCode → ProductCode)
+        if (apiName.contains('.')) {
+            String parent = apiName.substringBefore('.');
+            String field = apiName.substringAfter('.');
+            // Clean parent name (Product2 → Product)
+            parent = parent.removeEnd('2').replaceAll('__c$', '').replaceAll('__r$', '').replace('_', ' ');
+            return parent + ' ' + formatFieldLabel(field);
+        }
+        // Remove __c suffix, split camelCase, replace underscores
+        String label = apiName.removeEnd('__c').removeEnd('__r');
+        // Insert space before each uppercase letter (camelCase → camel Case)
+        String result = '';
+        for (Integer i = 0; i < label.length(); i++) {
+            String ch = label.substring(i, i + 1);
+            if (i > 0 && ch == ch.toUpperCase() && ch != ch.toLowerCase() && ch != '_') {
+                result += ' ';
+            }
+            result += ch;
+        }
+        return result.replace('_', ' ').trim();
+    }
+
+    /**
+     * Extracts the table header row(s) from the HTML template.
+     * Looks for <tr> rows containing <th> between <table> and {ROWS}.
+     * Returns the header HTML (e.g., '<tr><th>Name</th><th>Price</th></tr>'),
+     * or null if no header row is found.
+     */
+    private static String extractHeaderRow(String htmlTemplate) {
+        Integer rowsIdx = htmlTemplate.indexOf('{ROWS}');
+        if (rowsIdx == -1) { return null; }
+
+        // Find the <table> tag before {ROWS}
+        String beforeRows = htmlTemplate.substring(0, rowsIdx);
+        Integer tableIdx = beforeRows.lastIndexOf('<table');
+        if (tableIdx == -1) { return null; }
+
+        String betweenTableAndRows = beforeRows.substring(tableIdx);
+
+        // Look for <tr> rows containing <th> — these are header rows
+        String headerRows = '';
+        Integer searchFrom = 0;
+        while (searchFrom < betweenTableAndRows.length()) {
+            Integer trStart = betweenTableAndRows.indexOf('<tr', searchFrom);
+            if (trStart == -1) { break; }
+            Integer trEnd = betweenTableAndRows.indexOf('</tr>', trStart);
+            if (trEnd == -1) { break; }
+            String trContent = betweenTableAndRows.substring(trStart, trEnd + 5);
+            searchFrom = trEnd + 5;
+
+            if (trContent.contains('<th')) {
+                headerRows += trContent;
+            }
+        }
+
+        return String.isNotBlank(headerRows) ? headerRows : null;
     }
 
     /**
