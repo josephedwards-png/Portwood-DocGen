@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.26.0 — Giant Query Sort, Visual Builder & Image Fix
+
+### Giant Query Sort Order
+- **Pre-query sort** — ORDER BY configured on a child relationship now sorts globally across all batch fragments, not just within each batch of 50. Works for both PDF (server-side batch) and DOCX (client-side assembly).
+- **V1 flat config support** — flat SOQL query strings (from the visual builder or manual entry) now trigger the Giant Query async path when child records exceed 2,000. Previously only V3 JSON configs were supported.
+
+### PDF Table Continuity
+- Single `Blob.toPdf()` call with internal table breaks every 2,000 rows — no visible gap between sections.
+- **Column widths preserved** from the template's column definitions across all table break points.
+
+### Visual Query Builder
+- **New tree-based builder** — select fields via compact pills, browse parent lookups and child relationships through searchable dropdown pickers. Same UI pattern at every depth level.
+- Labels shown prominently with API names in grey below. Global search bar filters across all levels.
+- WHERE, ORDER BY, and LIMIT inputs on each child relationship.
+- Available on both the Create wizard and Edit modal via "Try our visual builder" toggle.
+
+### Template Images
+- Template-embedded images (logos, headers) now appear in Giant Query PDFs. Fixed a timing issue where image ContentVersions were not committed before the pre-baked HTML was generated.
+
+### Mobile
+- Runner detects mobile devices and shows only "Save to Record" — download is not available on mobile.
+
+### Quality
+- 630 Apex tests, 0 failures, 75.2% code coverage
+- 0 security violations in Salesforce Code Analyzer
+
+---
+
 ## v1.23.0 — Cover Pages, Security & Simplified Sharing
 
 Cover pages now render clean — no unwanted headers or footers on your title page. Section breaks in your Word template create proper page breaks in the PDF. Simpler permissions model replaces custom sharing UI with standard Salesforce sharing.

@@ -4,12 +4,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.25.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.26.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-683%2F683_passing-brightgreen)](#code-quality)
-[![E2E](https://img.shields.io/badge/E2E-24%2F24_passing-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-630%2F630_passing-brightgreen)](#code-quality)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
 
 ---
@@ -17,10 +16,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006PhBBAA0 --wait 10 --target-org <your-org>
+sf package install --package 04tal000006UNyDAAW --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PhBBAA0) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PhBBAA0)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UNyDAAW) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UNyDAAW)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
