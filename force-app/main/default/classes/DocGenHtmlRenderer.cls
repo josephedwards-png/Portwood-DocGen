@@ -159,14 +159,13 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         // Check if document default style is RTL (Normal style with <w:bidi/> in styles.xml)
-        // Spring '26 Blob.toPdf() uses the Visualforce PDF engine (Flying Saucer).
-        // Flying Saucer does NOT properly implement Unicode Bidi Algorithm —
-        // direction:rtl causes double-reversal. Use text-align:right for layout
-        // and Arial Unicode MS for glyph rendering (the only multibyte-capable font).
+        // Spring '26 Blob.toPdf() uses the Visualforce PDF Rendering Service which
+        // supports proper CSS direction:rtl and unicode-bidi for Arabic/Hebrew text.
+        // Arial Unicode MS is the only available font with extended character support.
         Boolean isDocRtl = isDefaultStyleRtl();
         String bodyFont = isDocRtl ? '\'Arial Unicode MS\', Arial, sans-serif' : 'Arial, sans-serif';
 
-        String rtlBodyCss = isDocRtl ? ' text-align: right;' : '';
+        String rtlBodyCss = isDocRtl ? ' direction: rtl; unicode-bidi: embed;' : '';
         String dynamicCss = dynamicPageCss + runningCss +
             'body { font-family: ' + bodyFont + '; font-size: 11pt; line-height: 1.15; color: #000;' + rtlBodyCss + ' }' +
             'h1 { font-size: 20pt; font-weight: bold; margin: 0 0 6pt 0; }' +
@@ -600,9 +599,10 @@ public with sharing class DocGenHtmlRenderer {
         List<String> styles = new List<String>();
 
         // RTL / Bidi: <w:bidi/> marks right-to-left paragraph (Hebrew, Arabic)
-        // Flying Saucer: use text-align:right (not direction:rtl which causes double-reversal)
+        // Visualforce PDF Rendering Service supports proper CSS bidi properties.
         if (pPr.contains('<w:bidi/>') || pPr.contains('<w:bidi ')) {
-            styles.add('text-align:right');
+            styles.add('direction:rtl');
+            styles.add('unicode-bidi:embed');
         }
 
         // Alignment: <w:jc w:val="center"/>
@@ -953,7 +953,8 @@ public with sharing class DocGenHtmlRenderer {
                                     }
                                 }
                             }
-                            if (isRtlRun) { text = reverseRtlText(text); }
+                            // With proper CSS direction:rtl, the rendering engine handles
+                            // character ordering via the Unicode Bidi Algorithm — no manual reversal needed.
                             runContent += text.escapeHtml4();
                         }
                         cursor = tEnd + 6;
@@ -1505,9 +1506,9 @@ public with sharing class DocGenHtmlRenderer {
     }
 
     /**
-     * Reverses RTL text for Flying Saucer. Full string reversal gives correct
-     * character order + word order when rendered LTR with text-align:right.
-     * English merge values are left untouched.
+     * Reverses RTL text manually. Previously used for the Flying Saucer workaround.
+     * Retained for backward compatibility but no longer called — the Visualforce PDF
+     * Rendering Service handles bidi via CSS direction:rtl.
      */
     private static String reverseRtlText(String input) {
         if (String.isBlank(input)) { return input; }

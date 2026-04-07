@@ -1918,8 +1918,8 @@ private class DocGenHtmlRendererTest {
             '<w:r><w:rPr><w:rtl/></w:rPr><w:t>\u05E9\u05DC\u05D5\u05DD</w:t></w:r></w:p>' +
             '</w:body></w:document>';
         String html = DocGenHtmlRenderer.convertToHtml(xml);
-        System.assert(html.contains('\u05DD\u05D5\u05DC\u05E9'), 'Hebrew should be reversed');
-        System.assert(html.contains('text-align:right'), 'RTL paragraph should be right-aligned');
+        System.assert(html.contains('\u05E9\u05DC\u05D5\u05DD'), 'Hebrew should preserve original order (bidi handles display)');
+        System.assert(html.contains('direction:rtl'), 'RTL paragraph should have direction:rtl');
     }
 
     @IsTest
@@ -1957,9 +1957,9 @@ private class DocGenHtmlRendererTest {
             '<w:r><w:rPr><w:rtl/></w:rPr><w:t>\u05E9\u05E0\u05D9</w:t></w:r></w:p>' +
             '</w:body></w:document>';
         String html = DocGenHtmlRenderer.convertToHtml(xml);
-        Integer pos1 = html.indexOf('\u05DF\u05D5\u05E9\u05D0\u05E8');
-        Integer pos2 = html.indexOf('\u05D9\u05E0\u05E9');
-        System.assert(pos2 < pos1, 'RTL runs should be reversed in order');
+        // With CSS direction:rtl, runs preserve logical order — the renderer handles visual reordering
+        System.assert(html.contains('\u05E8\u05D0\u05E9\u05D5\u05DF'), 'First Hebrew run should preserve original order');
+        System.assert(html.contains('\u05E9\u05E0\u05D9'), 'Second Hebrew run should preserve original order');
     }
 
     @IsTest
@@ -1970,7 +1970,7 @@ private class DocGenHtmlRendererTest {
             '<w:body><w:p><w:r><w:rPr><w:rtl/></w:rPr><w:t>\u05E9\u05DC\u05D5\u05DD</w:t></w:r></w:p>' +
             '</w:body></w:document>';
         String html = DocGenHtmlRenderer.convertToHtml(xml);
-        System.assert(html.contains('text-align: right'), 'Body should inherit RTL from Normal style');
+        System.assert(html.contains('direction: rtl'), 'Body should inherit RTL from Normal style');
         System.assert(html.contains('Arial Unicode MS'), 'RTL doc should use Arial Unicode MS');
         DocGenHtmlRenderer.stylesXml = null;
     }
@@ -2002,7 +2002,7 @@ private class DocGenHtmlRendererTest {
         String xml = TestDataFactory.buildRtlDocXml();
         String html = DocGenHtmlRenderer.convertToHtml(xml);
         System.assert(html.contains('Arial Unicode MS'), 'RTL doc should use Arial Unicode MS');
-        System.assert(html.contains('text-align: right'), 'RTL doc should be right-aligned');
+        System.assert(html.contains('direction: rtl'), 'RTL doc should have direction:rtl');
         System.assert(html.contains('<table'), 'Should contain table');
         DocGenHtmlRenderer.stylesXml = null;
     }

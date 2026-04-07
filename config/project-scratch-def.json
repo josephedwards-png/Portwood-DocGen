@@ -1,0 +1,13 @@
+{
+  "orgName": "AssetOptics Testing",
+  "edition": "Developer",
+  "features": ["EnableSetPasswordInApi"],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    },
+    "mobileComponentsSettings": {
+      "enableS1OfflineCachingEnabled": true
+    }
+  }
+}
