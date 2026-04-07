@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.26.0 — SOQL Injection Hardening",
+      "versionName": "1.26.0 — Giant Query Sort, Visual Builder & Image Fix",
       "versionNumber": "1.26.0.NEXT",
       "ancestorId": "04tal000006PhBBAA0",
       "path": "force-app",
@@ -42,6 +42,7 @@
     "Portwood DocGen Managed@1.23.0-1": "04tal000006PfEDAA0",
     "Portwood DocGen Managed@1.24.0-1": "04tal000006PgztAAC",
     "Portwood DocGen Managed@1.25.0-1": "04tal000006PhBBAA0",
-    "Portwood DocGen Managed@1.26.0-1": "04tal000006PhG1AAK"
+    "Portwood DocGen Managed@1.26.0-1": "04tal000006PhG1AAK",
+    "Portwood DocGen Managed@1.26.0-2": "04tal000006UNyDAAW"
   }
 }
