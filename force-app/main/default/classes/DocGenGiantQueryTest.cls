@@ -364,6 +364,76 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testGetSortedChildIdsWithWhere() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            Test.startTest();
+            List<Id> sortedIds = DocGenController.getSortedChildIds(
+                'Contact', 'AccountId', acc.Id, 'LastName ASC', 'LastName LIKE \'Contact0%\''
+            );
+            Test.stopTest();
+            System.assert(sortedIds.size() > 0, 'Should return contacts matching WHERE');
+            System.assert(sortedIds.size() < 10, 'WHERE should filter some contacts out');
+        }
+    }
+
+    @IsTest
+    static void testGiantQueryBatchWithWhere() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c WHERE Name = 'Giant Query Test' LIMIT 1];
+            DocGen_Job__c job = new DocGen_Job__c(
+                Status__c = 'Draft', Template__c = tpl.Id, Label__c = 'WHERE Test',
+                Parent_Record_Id__c = String.valueOf(acc.Id)
+            );
+            insert job;
+            Map<String, Object> childNodeConfig = new Map<String, Object>{
+                'object' => 'Contact', 'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName', 'LastName' },
+                'parentFields' => new List<String>(),
+                'orderBy' => 'LastName ASC',
+                'where' => 'LastName LIKE \'Contact0%\''
+            };
+            String innerXml = '<w:tr><w:tc><w:p>{FirstName}</w:p></w:tc></w:tr>';
+            Test.startTest();
+            DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
+                job.Id, tpl.Id, acc.Id, childNodeConfig, innerXml, 'PDF'
+            );
+            Database.executeBatch(batch, 1);
+            Test.stopTest();
+            DocGen_Job__c updatedJob = [SELECT Total_Records__c FROM DocGen_Job__c WHERE Id = :job.Id];
+            System.assert(updatedJob.Total_Records__c < 10, 'WHERE should filter — got ' + updatedJob.Total_Records__c);
+        }
+    }
+
+    @IsTest
+    static void testGiantQueryBatchWhereInjectionBlocked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+            DocGen_Job__c job = new DocGen_Job__c(Status__c = 'Draft', Template__c = tpl.Id,
+                Parent_Record_Id__c = String.valueOf(acc.Id));
+            insert job;
+            Map<String, Object> badConfig = new Map<String, Object>{
+                'object' => 'Contact', 'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName' },
+                'parentFields' => new List<String>(),
+                'where' => 'Name = \'x\'; DELETE Contact'
+            };
+            Boolean caught = false;
+            try {
+                new DocGenGiantQueryBatch(job.Id, tpl.Id, acc.Id, badConfig, '<w:p>{Name}</w:p>', 'PDF');
+            } catch (DocGenException e) { caught = true; }
+            System.assert(caught, 'Should reject WHERE with injection');
+        }
+    }
+
+    @IsTest
     static void testGetSortedChildIdsInjectionBlocked() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
