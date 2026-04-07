@@ -374,27 +374,14 @@ All 51 findings are `sfge:ApexFlsViolation` on package-internal custom objects u
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
-## Beta Version (Sandbox Only)
+## Version History
 
-We maintain a beta channel for users who want early access to security hardening and new features before they're promoted to production. Beta packages can only be installed in **sandboxes and scratch orgs**.
+| Version | Channel | Package ID |
+|---------|---------|------------|
+| v1.26.0 | **Latest (Released)** | `04tal000006UNyDAAW` |
+| v1.25.0 | Previous | `04tal000006PhBBAA0` |
 
-```bash
-sf package install --package 04tal000006PhG1AAK --wait 10 --target-org <your-sandbox>
-```
-
-[Install Beta in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006PhG1AAK)
-
-**Current beta (v1.26.0)** includes:
-- Everything in v1.25.0 (stable)
-- Schema-based allowlisting for all dynamic SOQL queries (SOQL injection hardening)
-- `validateObjectName()` and `validateFieldList()` enforce that all dynamic values in queries are validated against `Schema.getGlobalDescribe()` before execution
-
-| Version | Channel | Install Target | Package ID |
-|---------|---------|----------------|------------|
-| v1.25.0 | **Stable (Released)** | Production + Sandbox | `04tal000006PhBBAA0` |
-| v1.26.0 | **Beta** | Sandbox only | `04tal000006PhG1AAK` |
-
-Once the beta passes Checkmarx re-scan and additional hardening (CSRF, DML bulkification), it will be promoted to a stable release.
+See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ## License
 
