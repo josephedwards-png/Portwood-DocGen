@@ -1583,7 +1583,7 @@ public with sharing class DocGenDataRetriever {
      */
     private static void scoutFromFlatConfig(Id recordId, String config, Map<String, Integer> counts) {
         // Find all subquery patterns: (SELECT ... FROM RelationshipName)
-        Pattern subqueryPattern = Pattern.compile('(?i)\\(\\s*SELECT\\s+.+?\\s+FROM\\s+(\\w+)\\s*\\)');
+        Pattern subqueryPattern = Pattern.compile('(?i)\\(\\s*SELECT\\s+.+?\\s+FROM\\s+(\\w+)[^)]*\\)');
         Matcher m = subqueryPattern.matcher(config);
 
         // Get the parent object's child relationships to resolve rel name → child object + field
