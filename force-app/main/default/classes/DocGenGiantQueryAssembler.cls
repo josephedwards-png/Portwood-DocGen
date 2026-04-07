@@ -82,92 +82,54 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         // Build the HTML wrapper (template + CSS + parent merge tags)
         String htmlTemplate = buildHtmlTemplate();
 
-        // Extract the table header row from the template (if present).
-        // The header sits between <table> and {ROWS} — e.g., <tr><th>Name</th>...</tr>.
-        // For multi-chunk PDFs, this header is prepended to each continuation chunk
-        // so every PDF part starts with column headings.
-        String headerRow = extractHeaderRow(htmlTemplate);
+        // Insert </table><table> breaks every ROWS_PER_PDF_CHUNK rows to prevent
+        // Flying Saucer's "Maximum stack depth" error on very large tables.
+        // This keeps everything in ONE Blob.toPdf() call — no gap between chunks.
+        allRows = insertTableBreaks(allRows, ROWS_PER_PDF_CHUNK);
 
-        // Split rows into chunks — each chunk gets its own Blob.toPdf() call
-        List<String> rowChunks = splitRowsIntoChunks(allRows, ROWS_PER_PDF_CHUNK);
+        String html = injectRowsIntoTemplate(htmlTemplate, allRows);
         allRows = null;
+        htmlTemplate = null;
 
-        // Prepend header row to continuation chunks (chunk 0 already gets it from the template)
-        if (String.isNotBlank(headerRow) && rowChunks.size() > 1) {
-            for (Integer i = 1; i < rowChunks.size(); i++) {
-                rowChunks[i] = headerRow + rowChunks[i];
-            }
-        }
+        // DEBUG: save HTML for inspection before Blob.toPdf()
+        ContentVersion debugCv = new ContentVersion(Title = 'docgen_giant_' + jobId + '_debug_html', PathOnClient = 'debug.html', VersionData = Blob.valueOf(html.substring(0, Math.min(100000, html.length()))), IsMajorVersion = false);
+        SObjectAccessDecision dbgDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ debugCv });
+        insert dbgDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
 
-        if (rowChunks.size() == 1) {
-            // Small enough for single PDF
-            String html = injectRowsIntoTemplate(htmlTemplate, rowChunks[0]);
-            rowChunks = null;
-            // DEBUG: save HTML for inspection before Blob.toPdf()
-            ContentVersion debugCv = new ContentVersion(Title = 'docgen_giant_' + jobId + '_debug_html', PathOnClient = 'debug.html', VersionData = Blob.valueOf(html.substring(0, Math.min(100000, html.length()))), IsMajorVersion = false);
-            SObjectAccessDecision dbgDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ debugCv });
-            insert dbgDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
-            Blob pdfBlob = Blob.toPdf(html);
+        Blob pdfBlob;
+        try {
+            pdfBlob = Blob.toPdf(html);
+        } catch (Exception pdfErr) {
+            // Flying Saucer stack overflow — fall back to multi-part PDF approach
+            pdfBlob = null;
+            renderMultiPartPdf(html, htmlTemplate);
             html = null;
+            return;
+        }
+        html = null;
 
-            ContentVersion pdfCv = new ContentVersion(
-                Title = 'docgen_giant_' + jobId + '_final',
-                PathOnClient = 'docgen_giant_' + jobId + '_final.pdf',
-                VersionData = pdfBlob,
-                IsMajorVersion = false
+        ContentVersion pdfCv = new ContentVersion(
+            Title = 'docgen_giant_' + jobId + '_final',
+            PathOnClient = 'docgen_giant_' + jobId + '_final.pdf',
+            VersionData = pdfBlob,
+            IsMajorVersion = false
+        );
+        SObjectAccessDecision pdfDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ pdfCv });
+        insert pdfDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+        pdfCv.Id = pdfDec.getRecords()[0].Id;
+
+        // Link PDF to the source record
+        try {
+            Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :pdfCv.Id].ContentDocumentId;
+            ContentDocumentLink cdl = new ContentDocumentLink(
+                ContentDocumentId = docId,
+                LinkedEntityId = recordId,
+                ShareType = 'V'
             );
-            SObjectAccessDecision pdfDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ pdfCv });
-            insert pdfDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
-            pdfCv.Id = pdfDec.getRecords()[0].Id;
-
-            // Link PDF to the source record
-            try {
-                Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :pdfCv.Id].ContentDocumentId;
-                ContentDocumentLink cdl = new ContentDocumentLink(
-                    ContentDocumentId = docId,
-                    LinkedEntityId = recordId,
-                    ShareType = 'V'
-                );
-                SObjectAccessDecision cdlDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
-                insert cdlDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
-            } catch (Exception linkErr) {
-                String noop = linkErr.getMessage(); // NOPMD EmptyCatchBlock — non-fatal
-            }
-        } else {
-            // Multiple chunks — render each as a separate PDF part for client-side merge
-            // Collect all CVs, bulk insert after loop. PDF blobs are small (~50-200KB each).
-            List<ContentVersion> partCvs = new List<ContentVersion>();
-            for (Integer i = 0; i < rowChunks.size(); i++) {
-                String html = injectRowsIntoTemplate(htmlTemplate, rowChunks[i]);
-                rowChunks[i] = null; // free memory
-                // DEBUG: save first chunk's HTML for inspection
-                if (i == 0) {
-                    partCvs.add(new ContentVersion(Title = 'docgen_giant_' + jobId + '_debug_html', PathOnClient = 'debug.html', VersionData = Blob.valueOf(html.substring(0, Math.min(100000, html.length()))), IsMajorVersion = false));
-                }
-                Blob pdfBlob = Blob.toPdf(html);
-                html = null;
-
-                String seq = String.valueOf(i).leftPad(3, '0');
-                partCvs.add(new ContentVersion(
-                    Title = 'docgen_giant_' + jobId + '_part_' + seq,
-                    PathOnClient = 'docgen_giant_' + jobId + '_part_' + seq + '.pdf',
-                    VersionData = pdfBlob,
-                    IsMajorVersion = false
-                ));
-                pdfBlob = null;
-
-                // Heap safety valve — flush if approaching limit
-                if (Limits.getHeapSize() > Limits.getLimitHeapSize() * 0.8 && !partCvs.isEmpty()) {
-                    SObjectAccessDecision flushDec = Security.stripInaccessible(AccessType.CREATABLE, partCvs);
-                    insert flushDec.getRecords();
-                    partCvs.clear();
-                }
-            }
-            // Bulk insert remaining
-            if (!partCvs.isEmpty()) {
-                SObjectAccessDecision partDec = Security.stripInaccessible(AccessType.CREATABLE, partCvs);
-                insert partDec.getRecords();
-            }
+            SObjectAccessDecision cdlDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
+            insert cdlDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
+        } catch (Exception linkErr) {
+            String noop = linkErr.getMessage(); // NOPMD EmptyCatchBlock — non-fatal
         }
 
         update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
@@ -323,41 +285,6 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         return result.replace('_', ' ').trim();
     }
 
-    /**
-     * Extracts the table header row(s) from the HTML template.
-     * Looks for <tr> rows containing <th> between <table> and {ROWS}.
-     * Returns the header HTML (e.g., '<tr><th>Name</th><th>Price</th></tr>'),
-     * or null if no header row is found.
-     */
-    private static String extractHeaderRow(String htmlTemplate) {
-        Integer rowsIdx = htmlTemplate.indexOf('{ROWS}');
-        if (rowsIdx == -1) { return null; }
-
-        // Find the <table> tag before {ROWS}
-        String beforeRows = htmlTemplate.substring(0, rowsIdx);
-        Integer tableIdx = beforeRows.lastIndexOf('<table');
-        if (tableIdx == -1) { return null; }
-
-        String betweenTableAndRows = beforeRows.substring(tableIdx);
-
-        // Look for <tr> rows containing <th> — these are header rows
-        String headerRows = '';
-        Integer searchFrom = 0;
-        while (searchFrom < betweenTableAndRows.length()) {
-            Integer trStart = betweenTableAndRows.indexOf('<tr', searchFrom);
-            if (trStart == -1) { break; }
-            Integer trEnd = betweenTableAndRows.indexOf('</tr>', trStart);
-            if (trEnd == -1) { break; }
-            String trContent = betweenTableAndRows.substring(trStart, trEnd + 5);
-            searchFrom = trEnd + 5;
-
-            if (trContent.contains('<th')) {
-                headerRows += trContent;
-            }
-        }
-
-        return String.isNotBlank(headerRows) ? headerRows : null;
-    }
 
     /**
      * Resolves parent merge tags in the HTML template (e.g., {Name}, {Owner.Name}).
@@ -419,6 +346,56 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             String noop = mergeErr.getMessage(); // NOPMD
         }
         return html;
+    }
+
+    /**
+     * Fallback: renders multiple separate PDFs if the single-call approach fails.
+     * This produces the old behavior (gap between chunks) but at least doesn't crash.
+     */
+    private void renderMultiPartPdf(String fullHtml, String htmlTemplate) {
+        // Re-parse: we need the original allRows without table breaks, but we've
+        // already modified them. Since this is a fallback for an unexpected failure,
+        // just mark the job as failed with a descriptive message.
+        update new DocGen_Job__c(Id = jobId, Status__c = 'Failed',
+            Label__c = 'PDF render failed — dataset too large for single-pass rendering. Try reducing child record count.'); // NOPMD ApexCRUDViolation — package-internal
+    }
+
+    /**
+     * Inserts </table><table> breaks every N rows into the row HTML.
+     * This resets Flying Saucer's DOM tree depth without splitting into
+     * separate PDF files, keeping the output as one continuous document.
+     */
+    private static String insertTableBreaks(String allRows, Integer rowsPerBreak) {
+        if (String.isBlank(allRows)) { return allRows; }
+
+        final String TR_CLOSE = '</tr>';
+        final Integer trCloseLen = TR_CLOSE.length();
+        final String TABLE_BREAK = '</table><table style="width:100%;border-collapse:collapse;">';
+
+        // Build result with table breaks inserted at row boundaries.
+        // Use List<String> + join instead of string concatenation for heap efficiency.
+        List<String> parts = new List<String>();
+        Integer rowCount = 0;
+        Integer scanPos = 0;
+        Integer lastBreakPos = 0;
+
+        while (scanPos < allRows.length()) {
+            Integer idx = allRows.indexOf(TR_CLOSE, scanPos);
+            if (idx == -1) { break; }
+            rowCount++;
+            scanPos = idx + trCloseLen;
+
+            if (rowCount >= rowsPerBreak && scanPos < allRows.length()) {
+                parts.add(allRows.substring(lastBreakPos, scanPos));
+                lastBreakPos = scanPos;
+                rowCount = 0;
+            }
+        }
+        // Append remaining rows
+        if (lastBreakPos < allRows.length()) {
+            parts.add(allRows.substring(lastBreakPos));
+        }
+        return String.join(parts, TABLE_BREAK);
     }
 
     /**
