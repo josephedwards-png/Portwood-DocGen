@@ -300,26 +300,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             DocGen_Template__c template = templates[0];
             String queryConfig = template.Query_Config__c;
 
-            // Only V3 configs support Giant Query
-            Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
-            if (configVersion < 3) {
-                // Fall through to normal generation
-                Id docId = DocGenService.generateDocument(templateId, recordId);
-                List<ContentVersion> cvsFallback = [
-                    SELECT Id, Title FROM ContentVersion
-                    WHERE ContentDocumentId = :docId AND IsLatest = true
-                    WITH USER_MODE LIMIT 1
-                ];
-                return new Map<String, Object>{
-                    'isGiantQuery' => false,
-                    'docId' => docId,
-                    'contentVersionId' => cvsFallback.isEmpty() ? null : cvsFallback[0].Id,
-                    'title' => cvsFallback.isEmpty() ? null : cvsFallback[0].Title,
-                    'childCounts' => new Map<String, Integer>()
-                };
-            }
-
-            // Scout child counts
+            // Scout child counts (works for V1 flat strings AND V3 JSON)
             Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(recordId, queryConfig);
 
             // Check if any count exceeds threshold
@@ -327,21 +308,32 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String giantRelationship = null;
             Map<String, Object> giantNodeConfig = null;
 
-            Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
-            List<Object> nodesJson = (List<Object>) config.get('nodes');
+            Integer configVersion = DocGenDataRetriever.getConfigVersion(queryConfig);
 
             for (String relName : counts.keySet()) {
                 if (counts.get(relName) > threshold) {
                     giantRelationship = relName;
-                    // Find the matching node config
-                    for (Object nodeObj : nodesJson) {
-                        Map<String, Object> n = (Map<String, Object>) nodeObj;
-                        if (relName.equals((String) n.get('relationshipName'))) {
-                            giantNodeConfig = n;
-                            break;
+                    break;
+                }
+            }
+
+            if (giantRelationship != null) {
+                if (configVersion >= 3) {
+                    // V3: find the matching node in the JSON config
+                    Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
+                    List<Object> nodesJson = (List<Object>) config.get('nodes');
+                    if (nodesJson != null) {
+                        for (Object nodeObj : nodesJson) {
+                            Map<String, Object> n = (Map<String, Object>) nodeObj;
+                            if (giantRelationship.equals((String) n.get('relationshipName'))) {
+                                giantNodeConfig = n;
+                                break;
+                            }
                         }
                     }
-                    break; // Process first giant relationship found
+                } else {
+                    // V1/V2 flat string: build node config from schema + parsed subquery
+                    giantNodeConfig = buildNodeConfigFromFlat(recordId, queryConfig, giantRelationship);
                 }
             }
 
@@ -670,7 +662,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             String baseObject = templates[0].Base_Object_API__c;
             Schema.DescribeSObjectResult parentDescribe = Schema.getGlobalDescribe().get(baseObject)?.getDescribe();
             if (parentDescribe != null) {
-                Pattern subqPattern = Pattern.compile('(?i)\\(\\s*SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)\\s*\\)');
+                Pattern subqPattern = Pattern.compile('(?i)\\(\\s*SELECT\\s+(.+?)\\s+FROM\\s+(\\w+)([^)]*)\\)');
                 Matcher m = subqPattern.matcher(trimmed);
                 Map<String, Schema.ChildRelationship> relMap = new Map<String, Schema.ChildRelationship>();
                 for (Schema.ChildRelationship cr : parentDescribe.getChildRelationships()) {
@@ -681,6 +673,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 while (m.find()) {
                     String fieldList = m.group(1);
                     String relName = m.group(2);
+                    String clausesPart = m.group(3) != null ? m.group(3).trim() : '';
                     Schema.ChildRelationship cr = relMap.get(relName.toLowerCase());
                     if (cr != null) {
                         List<String> fields = new List<String>();
@@ -695,12 +688,22 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                                 }
                             }
                         }
-                        childNodes.put(relName, new Map<String, Object>{
+                        Map<String, Object> nodeConfig = new Map<String, Object>{
                             'object' => String.valueOf(cr.getChildSObject()),
                             'lookupField' => String.valueOf(cr.getField()),
                             'fields' => fields,
-                            'parentFields' => parentFields
-                        });
+                            'parentFields' => parentFields,
+                            'relationshipName' => relName
+                        };
+                        // Extract ORDER BY from clauses
+                        if (String.isNotBlank(clausesPart)) {
+                            Pattern orderPattern = Pattern.compile('(?i)ORDER\\s+BY\\s+(.+?)(?:\\s+LIMIT|$)');
+                            Matcher orderMatcher = orderPattern.matcher(clausesPart);
+                            if (orderMatcher.find()) {
+                                nodeConfig.put('orderBy', orderMatcher.group(1).trim());
+                            }
+                        }
+                        childNodes.put(relName, nodeConfig);
                     }
                 }
             }
@@ -755,6 +758,80 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             'lastId' => lastId,
             'hasMore' => records.size() == pageSize
         };
+    }
+
+    /**
+     * Returns all child record IDs in sort order for client-side Giant Query DOCX assembly.
+     * One lightweight Id-only query (up to 50K rows). The client chunks these IDs
+     * and calls getChildRecordsByIds() per chunk to get full field data.
+     * @param childObject The child SObject API name
+     * @param lookupField The lookup field on the child pointing to the parent
+     * @param parentId The parent record ID
+     * @param orderByClause The ORDER BY clause (e.g., "Product2.Name ASC")
+     * @return List of record IDs in sort order
+     */
+    @AuraEnabled
+    public static List<Id> getSortedChildIds(String childObject, String lookupField, Id parentId, String orderByClause) {
+        // Validate object name
+        if (Schema.getGlobalDescribe().get(childObject) == null) {
+            throw DocGenService.ahe(new DocGenException('Invalid object: ' + childObject), 'Invalid child object.');
+        }
+        // Sanitize ORDER BY clause
+        if (String.isBlank(orderByClause)) {
+            throw new DocGenException('ORDER BY clause is required for sorted query.');
+        }
+        if (orderByClause.contains(';') || orderByClause.contains('--') || orderByClause.contains('/*')) {
+            throw new DocGenException('Invalid ORDER BY clause.');
+        }
+        String normalized = orderByClause.replaceAll('\\s+', ' ').toUpperCase().trim();
+        for (String kw : new List<String>{ 'INSERT ', 'UPDATE ', 'DELETE ', 'MERGE ', 'DROP ', 'SELECT ' }) {
+            if (normalized.contains(kw)) {
+                throw new DocGenException('Invalid ORDER BY clause: disallowed keyword.');
+            }
+        }
+
+        String query = 'SELECT Id FROM ' + String.escapeSingleQuotes(childObject) +
+            ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :parentId' +
+            ' ORDER BY ' + orderByClause;
+
+        List<Id> sortedIds = new List<Id>();
+        for (SObject rec : Database.query(query, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection — object validated by Schema; orderBy sanitized; USER_MODE enforced
+            sortedIds.add(rec.Id);
+        }
+        return sortedIds;
+    }
+
+    /**
+     * Returns child records for a specific list of IDs. Used with getSortedChildIds()
+     * for sorted client-side Giant Query DOCX assembly.
+     * @param childObject The child SObject API name
+     * @param fields Comma-separated field list
+     * @param recordIds List of record IDs to fetch
+     * @return List of record maps with populated fields
+     */
+    @AuraEnabled
+    public static List<Map<String, Object>> getChildRecordsByIds(String childObject, String fields, List<Id> recordIds) {
+        if (recordIds == null || recordIds.isEmpty()) { return new List<Map<String, Object>>(); }
+        if (Schema.getGlobalDescribe().get(childObject) == null) {
+            throw DocGenService.ahe(new DocGenException('Invalid object: ' + childObject), 'Invalid child object.');
+        }
+
+        String query = 'SELECT ' + String.escapeSingleQuotes(fields) +
+            ' FROM ' + String.escapeSingleQuotes(childObject) +
+            ' WHERE Id IN :recordIds';
+
+        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
+
+        // Re-order to match input ID sequence
+        Map<Id, SObject> byId = new Map<Id, SObject>();
+        for (SObject rec : records) { byId.put(rec.Id, rec); }
+
+        List<Map<String, Object>> result = new List<Map<String, Object>>();
+        for (Id recId : recordIds) {
+            SObject rec = byId.get(recId);
+            if (rec != null) { result.add(rec.getPopulatedFieldsAsMap()); }
+        }
+        return result;
     }
 
     /**
@@ -1257,6 +1334,72 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     }
 
     // Sample data creation method removed per cleanup request.
+
+    /**
+     * Builds a Giant Query child node config from a V1 flat query string.
+     * Parses the subquery for the given relationship name and resolves
+     * the child object + lookup field from the parent record's schema.
+     */
+    private static Map<String, Object> buildNodeConfigFromFlat(Id recordId, String queryConfig, String relationshipName) {
+        // Resolve child object and lookup field from schema
+        String parentObjectType = String.valueOf(recordId.getSobjectType());
+        Schema.DescribeSObjectResult parentDescribe = Schema.getGlobalDescribe().get(parentObjectType)?.getDescribe();
+        if (parentDescribe == null) { return null; }
+
+        String childObjectName = null;
+        String lookupField = null;
+        for (Schema.ChildRelationship cr : parentDescribe.getChildRelationships()) {
+            if (cr.getRelationshipName() != null && cr.getRelationshipName().equalsIgnoreCase(relationshipName)) {
+                childObjectName = String.valueOf(cr.getChildSObject());
+                lookupField = String.valueOf(cr.getField());
+                break;
+            }
+        }
+        if (childObjectName == null) { return null; }
+
+        // Parse the subquery to extract fields, parent fields, and clauses
+        List<String> childFields = new List<String>();
+        List<String> parentFields = new List<String>();
+        String orderBy = null;
+
+        // Find the subquery in the config string
+        Pattern subqPattern = Pattern.compile('(?i)\\(\\s*SELECT\\s+(.+?)\\s+FROM\\s+' + Pattern.quote(relationshipName) + '([^)]*)\\)');
+        Matcher m = subqPattern.matcher(queryConfig);
+        if (m.find()) {
+            String fieldsPart = m.group(1);
+            String clausesPart = m.group(2) != null ? m.group(2).trim() : '';
+
+            // Parse fields
+            for (String f : fieldsPart.split(',')) {
+                String trimmed = f.trim();
+                if (String.isBlank(trimmed)) { continue; }
+                if (trimmed.contains('.')) {
+                    parentFields.add(trimmed);
+                } else {
+                    childFields.add(trimmed);
+                }
+            }
+
+            // Extract ORDER BY
+            Pattern orderPattern = Pattern.compile('(?i)ORDER\\s+BY\\s+(.+?)(?:\\s+LIMIT|$)');
+            Matcher orderMatcher = orderPattern.matcher(clausesPart);
+            if (orderMatcher.find()) {
+                orderBy = orderMatcher.group(1).trim();
+            }
+        }
+
+        Map<String, Object> nodeConfig = new Map<String, Object>{
+            'relationshipName' => relationshipName,
+            'object' => childObjectName,
+            'lookupField' => lookupField,
+            'fields' => childFields,
+            'parentFields' => parentFields
+        };
+        if (String.isNotBlank(orderBy)) {
+            nodeConfig.put('orderBy', orderBy);
+        }
+        return nodeConfig;
+    }
 
     // --- Deprecated Sharing Methods (stubs kept for managed package compatibility) ---
 

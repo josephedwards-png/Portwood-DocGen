@@ -137,6 +137,10 @@ const VERSION_COLUMNS = [
     @track previewVersion = {};
     isLoadingVersions = false;
 
+    // Visual builder toggle (wizard + edit modal)
+    @track useVisualBuilder = false;
+    @track editUseVisualBuilder = false;
+
     // Edit modal manual query toggle (for backward compat with existing V3 configs)
     @track isManualQuery = false;
     // Context flag: true when editing in modal, false when in wizard
@@ -583,6 +587,28 @@ const VERSION_COLUMNS = [
     handleConfigChange(event) {
         this.newTemplateObject = event.detail.objectName;
         this.newTemplateQuery = event.detail.queryConfig;
+        this._updateQueryTree();
+    }
+
+    toggleVisualBuilder() {
+        this.useVisualBuilder = !this.useVisualBuilder;
+    }
+
+    toggleEditVisualBuilder() {
+        this.editUseVisualBuilder = !this.editUseVisualBuilder;
+    }
+
+    handleEditConfigChange(event) {
+        this.editTemplateObject = event.detail.objectName;
+        this.editTemplateQuery = event.detail.queryConfig;
+    }
+
+    get visualBuilderToggleIcon() {
+        return this.useVisualBuilder ? 'utility:edit' : 'utility:builder';
+    }
+
+    get editVisualBuilderToggleIcon() {
+        return this.editUseVisualBuilder ? 'utility:edit' : 'utility:builder';
     }
 
     get readableQueryConfig() {

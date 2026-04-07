@@ -348,6 +348,82 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testGetSortedChildIds() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+
+            Test.startTest();
+            List<Id> sortedIds = DocGenController.getSortedChildIds(
+                'Contact', 'AccountId', acc.Id, 'LastName ASC'
+            );
+            Test.stopTest();
+
+            System.assertEquals(10, sortedIds.size(), 'Should return 10 sorted contact IDs');
+        }
+    }
+
+    @IsTest
+    static void testGetSortedChildIdsInjectionBlocked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            Boolean caught = false;
+            try {
+                DocGenController.getSortedChildIds('Contact', 'AccountId', acc.Id, 'Name; DELETE Contact');
+            } catch (Exception e) {
+                caught = true;
+            }
+            System.assert(caught, 'Should reject ORDER BY with injection');
+        }
+    }
+
+    @IsTest
+    static void testGetChildRecordsByIds() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            List<Contact> contacts = [SELECT Id FROM Contact ORDER BY LastName ASC LIMIT 5];
+            List<Id> ids = new List<Id>();
+            for (Contact c : contacts) { ids.add(c.Id); }
+
+            Test.startTest();
+            List<Map<String, Object>> result = DocGenController.getChildRecordsByIds(
+                'Contact', 'Id, FirstName, LastName', ids
+            );
+            Test.stopTest();
+
+            System.assertEquals(5, result.size(), 'Should return 5 records');
+        }
+    }
+
+    @IsTest
+    static void testGetChildRecordsByIdsEmptyList() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            List<Map<String, Object>> result = DocGenController.getChildRecordsByIds(
+                'Contact', 'Id, FirstName', new List<Id>()
+            );
+            System.assert(result.isEmpty(), 'Empty input should return empty list');
+        }
+    }
+
+    @IsTest
+    static void testV1FlatConfigGiantQueryScout() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            String v1Config = 'Name, (SELECT FirstName, LastName FROM Contacts ORDER BY LastName ASC)';
+
+            Test.startTest();
+            Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(acc.Id, v1Config);
+            Test.stopTest();
+
+            System.assert(counts.containsKey('Contacts'), 'Should find Contacts relationship');
+            System.assertEquals(10, counts.get('Contacts'), 'Should count 10 contacts');
+        }
+    }
+
+    @IsTest
     static void testStitchJobFinalizer() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
@@ -376,6 +452,121 @@ private class DocGenGiantQueryTest {
         ver.Content_Version_Id__c = cv.Id;
         update ver;
         return cv;
+    }
+
+    @IsTest
+    static void testGiantQueryBatchWithOrderBy() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id, Output_Format__c FROM DocGen_Template__c WHERE Name = 'Giant Query Test' LIMIT 1];
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Status__c = 'Draft',
+                Template__c = tpl.Id,
+                Label__c = 'Test Giant Query Sorted',
+                Parent_Record_Id__c = String.valueOf(acc.Id)
+            );
+            insert job;
+
+            // Build child node config WITH orderBy — triggers pre-sorted Id path
+            Map<String, Object> childNodeConfig = new Map<String, Object>{
+                'object' => 'Contact',
+                'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName', 'LastName' },
+                'parentFields' => new List<String>(),
+                'orderBy' => 'LastName ASC'
+            };
+
+            String innerXml = '<w:tr><w:tc><w:p>{FirstName}</w:p></w:tc><w:tc><w:p>{LastName}</w:p></w:tc></w:tr>';
+
+            Test.startTest();
+            DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
+                job.Id, tpl.Id, acc.Id, childNodeConfig, innerXml, 'PDF'
+            );
+            Database.executeBatch(batch, 1);
+            Test.stopTest();
+
+            // Verify job was updated with correct total
+            DocGen_Job__c updatedJob = [SELECT Status__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :job.Id];
+            System.assertNotEquals('Draft', updatedJob.Status__c, 'Job status should have changed from Draft');
+            System.assertEquals(10, updatedJob.Total_Records__c, 'Should have counted 10 contacts');
+        }
+    }
+
+    @IsTest
+    static void testGiantQueryBatchOrderByInjectionBlocked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Status__c = 'Draft',
+                Template__c = tpl.Id,
+                Label__c = 'Injection Test',
+                Parent_Record_Id__c = String.valueOf(acc.Id)
+            );
+            insert job;
+
+            // Attempt injection via ORDER BY clause
+            Map<String, Object> badConfig = new Map<String, Object>{
+                'object' => 'Contact',
+                'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName' },
+                'parentFields' => new List<String>(),
+                'orderBy' => 'Name; DELETE Contact'
+            };
+
+            Boolean caught = false;
+            try {
+                new DocGenGiantQueryBatch(
+                    job.Id, tpl.Id, acc.Id, badConfig, '<w:p>{Name}</w:p>', 'PDF'
+                );
+            } catch (DocGenException e) {
+                caught = true;
+                System.assert(e.getMessage().contains('Invalid ORDER BY'), 'Should report invalid ORDER BY: ' + e.getMessage());
+            }
+            System.assert(caught, 'Should reject ORDER BY with injection attempt');
+        }
+    }
+
+    @IsTest
+    static void testGiantQueryBatchOrderByDmlKeywordBlocked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c LIMIT 1];
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Status__c = 'Draft',
+                Template__c = tpl.Id,
+                Label__c = 'DML Keyword Test',
+                Parent_Record_Id__c = String.valueOf(acc.Id)
+            );
+            insert job;
+
+            Map<String, Object> badConfig = new Map<String, Object>{
+                'object' => 'Contact',
+                'lookupField' => 'AccountId',
+                'relationshipName' => 'Contacts',
+                'fields' => new List<String>{ 'FirstName' },
+                'parentFields' => new List<String>(),
+                'orderBy' => 'Name DELETE FROM Contact'
+            };
+
+            Boolean caught = false;
+            try {
+                new DocGenGiantQueryBatch(
+                    job.Id, tpl.Id, acc.Id, badConfig, '<w:p>{Name}</w:p>', 'PDF'
+                );
+            } catch (DocGenException e) {
+                caught = true;
+            }
+            System.assert(caught, 'Should reject ORDER BY containing DML keywords');
+        }
     }
 
     // =========================================================================

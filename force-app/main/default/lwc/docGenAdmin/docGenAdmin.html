@@ -66,8 +66,25 @@
                                         <lightning-icon icon-name="standard:account" size="x-small"></lightning-icon>
                                         <span style="font-weight: 700;">{newTemplateObject}</span>
                                     </div>
-                                    <span style="font-size: 0.78rem; color: #706e6b;">Paste a SOQL query or type field API names. Suggestions appear as you type.</span>
+                                    <a href="javascript:void(0)" onclick={toggleVisualBuilder}
+                                        style="font-size: 0.82rem; color: #7c3aed; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                                        <lightning-icon icon-name={visualBuilderToggleIcon} size="xx-small" style="--sds-c-icon-color-foreground-default: #7c3aed;"></lightning-icon>
+                                        <template if:false={useVisualBuilder}>Try our visual builder</template>
+                                        <template if:true={useVisualBuilder}>Switch to manual query</template>
+                                    </a>
                                 </div>
+
+                                <!-- Visual Builder -->
+                                <template if:true={useVisualBuilder}>
+                                    <c-doc-gen-tree-builder
+                                        selected-object={newTemplateObject}
+                                        query-config={newTemplateQuery}
+                                        onconfigchange={handleConfigChange}>
+                                    </c-doc-gen-tree-builder>
+                                </template>
+
+                                <!-- Manual Query Textarea -->
+                                <template if:false={useVisualBuilder}>
                                 <div style="position: relative;">
                                     <textarea
                                         class="slds-textarea wizard-query-textarea"
@@ -93,6 +110,7 @@
                                         </div>
                                     </template>
                                 </div>
+                                </template>
                                 <template if:true={queryWarnings}>
                                     <template for:each={queryWarnings} for:item="warn">
                                         <div key={warn} style="margin-top: 8px; padding: 8px 12px; background: #fff8e1; border: 1px solid #f9a825; border-radius: 6px; font-size: 0.8rem; color: #5d4037; display: flex; align-items: center; gap: 6px;">
@@ -334,20 +352,31 @@
 
                         <!-- Tab 2: Query Configuration -->
                         <lightning-tab label="Query Configuration" value="query" onactive={handleQueryTabActive}>
-                             <div class="slds-var-p-around_small">
-                                 <p class="slds-text-body_small slds-text-color_weak slds-var-m-bottom_medium">
-                                     Configure the data query for this template.
-                                 </p>
-                             </div>
-
-                             <div class="slds-var-p-horizontal_small">
+                             <div class="slds-var-p-horizontal_small" style="padding-top: 8px;">
                                      <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
                                          <div style="display: flex; align-items: center; gap: 8px;">
                                              <lightning-icon icon-name="standard:account" size="x-small"></lightning-icon>
                                              <span style="font-weight: 700;">{editTemplateObject}</span>
                                          </div>
-                                         <span style="font-size: 0.78rem; color: #706e6b;">Paste a SOQL query or type field API names. Suggestions appear as you type.</span>
+                                         <a href="javascript:void(0)" onclick={toggleEditVisualBuilder}
+                                             style="font-size: 0.82rem; color: #7c3aed; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                                             <lightning-icon icon-name={editVisualBuilderToggleIcon} size="xx-small" style="--sds-c-icon-color-foreground-default: #7c3aed;"></lightning-icon>
+                                             <template if:false={editUseVisualBuilder}>Try our visual builder</template>
+                                             <template if:true={editUseVisualBuilder}>Switch to manual query</template>
+                                         </a>
                                      </div>
+
+                                     <!-- Visual Builder -->
+                                     <template if:true={editUseVisualBuilder}>
+                                         <c-doc-gen-tree-builder
+                                             selected-object={editTemplateObject}
+                                             query-config={editTemplateQuery}
+                                             onconfigchange={handleEditConfigChange}>
+                                         </c-doc-gen-tree-builder>
+                                     </template>
+
+                                     <!-- Manual Query Textarea -->
+                                     <template if:false={editUseVisualBuilder}>
                                      <div style="position: relative;">
                                          <textarea
                                              class="slds-textarea edit-query-textarea"
@@ -373,8 +402,10 @@
                                              </div>
                                          </template>
                                      </div>
+                                     </template>
 
-                                     <!-- Query warnings -->
+                                     <!-- Manual-only: Query warnings, tree preview, quick reference -->
+                                     <template if:false={editUseVisualBuilder}>
                                      <template if:true={queryWarnings}>
                                          <template for:each={queryWarnings} for:item="warn">
                                              <div key={warn} style="margin-top: 8px; padding: 8px 12px; background: #fff8e1; border: 1px solid #f9a825; border-radius: 6px; font-size: 0.8rem; color: #5d4037; display: flex; align-items: center; gap: 6px;">
@@ -384,7 +415,6 @@
                                          </template>
                                      </template>
 
-                                     <!-- Live Query Tree -->
                                      <template if:true={queryTreeNodes.length}>
                                          <div style="margin-top: 12px; border: 1px solid #e5e5e5; border-radius: 8px; padding: 10px 14px; background: #fafaf9;">
                                              <template for:each={queryTreeNodes} for:item="node">
@@ -398,9 +428,6 @@
                                                              <template for:each={node.fieldPills} for:item="fp">
                                                                  <span key={fp.key} style="background: #eef4ff; border: 1px solid #c7d7f5; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-family: monospace; display: inline-flex; align-items: baseline; gap: 4px;">
                                                                      <span style="color: #1a56db;">{fp.name}</span>
-                                                                     <template if:true={fp.sample}>
-                                                                         <span style="color: #555; font-family: -apple-system, sans-serif; font-weight: 400;">= {fp.sample}</span>
-                                                                     </template>
                                                                  </span>
                                                              </template>
                                                          </div>
@@ -408,16 +435,12 @@
                                                      <template if:true={node.hasParentFields}>
                                                          <div style="margin-left: 22px; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px;">
                                                              <template for:each={node.parentPills} for:item="pp">
-                                                                 <span key={pp.key} style="background: #f3e8ff; border: 1px solid #d8c4f0; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-family: monospace; display: inline-flex; align-items: baseline; gap: 4px;">
+                                                                 <span key={pp.key} style="background: #f3e8ff; border: 1px solid #d8c4f0; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-family: monospace;">
                                                                      <span style="color: #7c3aed;">{pp.name}</span>
-                                                                     <template if:true={pp.sample}>
-                                                                         <span style="color: #555; font-family: -apple-system, sans-serif; font-weight: 400;">= {pp.sample}</span>
-                                                                     </template>
                                                                  </span>
                                                              </template>
                                                          </div>
                                                      </template>
-                                                     <!-- Child relationships (flattened for any depth) -->
                                                      <template if:true={node.hasFlatChildren}>
                                                          <div style="margin-left: 22px;">
                                                              <template for:each={node.flatChildren} for:item="child">
@@ -446,7 +469,6 @@
                                          </div>
                                      </template>
 
-                                     <!-- Quick Reference -->
                                      <div style="margin-top: 14px; background: #f8fafc; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; font-size: 0.8rem; color: #444; line-height: 1.7;">
                                          <div style="font-weight: 700; color: #181818; margin-bottom: 6px;">Quick Reference</div>
                                          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px;">
@@ -456,9 +478,9 @@
                                              <div><strong>With filter:</strong> <code style="background:#eee;padding:1px 4px;border-radius:3px;">(SELECT Name FROM Opps WHERE StageName = 'Closed Won')</code></div>
                                              <div><strong>With sort:</strong> <code style="background:#eee;padding:1px 4px;border-radius:3px;">(SELECT Name FROM Contacts ORDER BY LastName)</code></div>
                                              <div><strong>With limit:</strong> <code style="background:#eee;padding:1px 4px;border-radius:3px;">(SELECT Name FROM Cases LIMIT 10)</code></div>
-                                             <div style="grid-column: span 2;"><strong>Full SOQL:</strong> <code style="background:#eee;padding:1px 4px;border-radius:3px;">SELECT Name, (SELECT FirstName FROM Contacts) FROM Account</code></div>
                                          </div>
                                      </div>
+                                     </template>
                              </div>
                         </lightning-tab>
 

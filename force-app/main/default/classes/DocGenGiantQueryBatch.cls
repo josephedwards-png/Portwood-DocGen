@@ -3,6 +3,10 @@
  * each page as a standalone fragment. Each execute() queries one page of
  * children, renders the loop body XML, and saves as a ContentVersion.
  *
+ * When an ORDER BY clause is configured, a pre-query in start() fetches all
+ * child Ids in the desired sort order. execute() then pages through pre-sorted
+ * Id chunks so fragments are globally ordered — not just sorted within each batch.
+ *
  * For PDF output: fragments are saved as raw XML text. In finish(), all
  * fragments are loaded, wrapped in one HTML document, and rendered to a
  * single PDF via Blob.toPdf(). One PDF, no client-side merge needed.
@@ -26,6 +30,8 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
     private Integer fragmentSequence;
     private String outputFormat;
     private String giantRelationshipName;
+    private String orderByClause;
+    private List<List<Id>> sortedIdChunks;
 
     public DocGenGiantQueryBatch(Id jobId, Id templateId, Id recordId, Map<String, Object> childNodeConfig, String innerXml, String outputFormat) {
         this.jobId = jobId;
@@ -41,6 +47,11 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         this.childObjectName = (String) childNodeConfig.get('object');
         this.lookupField = (String) childNodeConfig.get('lookupField');
 
+        // Schema validation: verify object exists and is accessible
+        if (String.isBlank(this.childObjectName) || Schema.getGlobalDescribe().get(this.childObjectName) == null) {
+            throw new DocGenException('Invalid or inaccessible object: ' + this.childObjectName);
+        }
+
         this.childFields = new List<String>();
         List<Object> flds = (List<Object>) childNodeConfig.get('fields');
         if (flds != null) {
@@ -51,31 +62,76 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         if (pFlds != null) {
             for (Object f : pFlds) { this.parentFields.add(String.valueOf(f)); }
         }
+
+        // Read and sanitize ORDER BY clause from config
+        String rawOrderBy = (String) childNodeConfig.get('orderBy');
+        if (String.isNotBlank(rawOrderBy)) {
+            this.orderByClause = sanitizeOrderByClause(rawOrderBy);
+        }
     }
 
     public Iterable<String> start(Database.BatchableContext bc) {
-        String countQuery = 'SELECT COUNT() FROM ' + String.escapeSingleQuotes(childObjectName) +
-            ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId';
-        Integer totalChildren = Database.countQuery(countQuery, AccessLevel.USER_MODE);
-
-        Integer totalPages = (Integer) Math.ceil((Decimal) totalChildren / batchSize);
-        update new DocGen_Job__c(Id = jobId, Status__c = 'Harvesting', Total_Records__c = totalChildren); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
-
         List<String> pages = new List<String>();
-        for (Integer i = 0; i < totalPages; i++) {
-            pages.add('page:' + i);
+
+        if (String.isNotBlank(orderByClause)) {
+            // Pre-query: fetch all child Ids in the desired sort order.
+            // This lets execute() page through globally-sorted chunks instead of
+            // cursor-based Id order. Costs one lightweight Id-only query (<50K rows).
+            String sortQuery = 'SELECT Id FROM ' + String.escapeSingleQuotes(childObjectName) +
+                ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId' +
+                ' ORDER BY ' + orderByClause;
+
+            List<SObject> sortedRecords = Database.query(sortQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object/field validated by Schema.getGlobalDescribe; orderBy sanitized by sanitizeOrderByClause(); runs with USER_MODE
+
+            Integer totalChildren = sortedRecords.size();
+            update new DocGen_Job__c(Id = jobId, Status__c = 'Harvesting', Total_Records__c = totalChildren); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+
+            // Chunk the sorted Ids for execute() to page through
+            this.sortedIdChunks = new List<List<Id>>();
+            List<Id> currentChunk = new List<Id>();
+            for (SObject rec : sortedRecords) {
+                currentChunk.add(rec.Id);
+                if (currentChunk.size() >= batchSize) {
+                    this.sortedIdChunks.add(currentChunk);
+                    currentChunk = new List<Id>();
+                }
+            }
+            if (!currentChunk.isEmpty()) {
+                this.sortedIdChunks.add(currentChunk);
+            }
+            sortedRecords = null; // free heap
+
+            for (Integer i = 0; i < this.sortedIdChunks.size(); i++) {
+                pages.add('sorted:' + i);
+            }
+        } else {
+            // Original cursor-based path (no sort requested)
+            String countQuery = 'SELECT COUNT() FROM ' + String.escapeSingleQuotes(childObjectName) +
+                ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId';
+            Integer totalChildren = Database.countQuery(countQuery, AccessLevel.USER_MODE);
+
+            Integer totalPages = (Integer) Math.ceil((Decimal) totalChildren / batchSize);
+            update new DocGen_Job__c(Id = jobId, Status__c = 'Harvesting', Total_Records__c = totalChildren); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+
+            for (Integer i = 0; i < totalPages; i++) {
+                pages.add('page:' + i);
+            }
+            this.lastCursorId = null;
         }
+
         if (pages.isEmpty()) {
             pages.add('page:0');
         }
-
-        this.lastCursorId = null;
         return pages;
     }
 
     /**
      * Processes one page: queries children, renders loop body XML, saves as text CV.
      * Both PDF and DOCX save raw XML — PDF assembly happens in finish().
+     *
+     * Two query strategies:
+     *   sorted:N — fetches pre-sorted Id chunk by index, preserving global sort order
+     *   page:N   — cursor-based Id pagination (original behavior, no orderBy)
      */
     public void execute(Database.BatchableContext bc, List<String> scope) {
         // Collect fragment CVs, bulk insert after loop. Fragments are small HTML text (~5-50KB each).
@@ -87,18 +143,44 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
             }
             for (String f : parentFields) { selectFields.add(f); }
 
-            String query = 'SELECT ' + String.join(selectFields, ', ') +
-                ' FROM ' + String.escapeSingleQuotes(childObjectName) +
-                ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId';
-            if (lastCursorId != null) {
-                query += ' AND Id > :lastCursorId';
+            List<SObject> records;
+
+            if (pageDescriptor.startsWith('sorted:')) {
+                // Sorted path: fetch by pre-sorted Id chunk
+                Integer chunkIndex = Integer.valueOf(pageDescriptor.substringAfter('sorted:'));
+                List<Id> idChunk = sortedIdChunks.get(chunkIndex);
+
+                String query = 'SELECT ' + String.join(selectFields, ', ') +
+                    ' FROM ' + String.escapeSingleQuotes(childObjectName) +
+                    ' WHERE Id IN :idChunk';
+
+                List<SObject> unordered = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object/fields validated by Schema; Id chunk from pre-query; runs with USER_MODE
+
+                // Re-order to match the pre-sorted Id sequence
+                Map<Id, SObject> byId = new Map<Id, SObject>();
+                for (SObject rec : unordered) { byId.put(rec.Id, rec); }
+                records = new List<SObject>();
+                for (Id sortedId : idChunk) {
+                    SObject rec = byId.get(sortedId);
+                    if (rec != null) { records.add(rec); }
+                }
+            } else {
+                // Original cursor-based path
+                String query = 'SELECT ' + String.join(selectFields, ', ') +
+                    ' FROM ' + String.escapeSingleQuotes(childObjectName) +
+                    ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId';
+                if (lastCursorId != null) {
+                    query += ' AND Id > :lastCursorId';
+                }
+                query += ' ORDER BY Id LIMIT :batchSize';
+
+                records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — validated by Schema.getGlobalDescribe; USER_MODE enforced
+                if (!records.isEmpty()) {
+                    lastCursorId = records[records.size() - 1].Id;
+                }
             }
-            query += ' ORDER BY Id LIMIT :batchSize';
 
-            List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — validated by Schema.getGlobalDescribe; USER_MODE enforced
-            if (records.isEmpty()) { continue; }
-
-            lastCursorId = records[records.size() - 1].Id;
+            if (records == null || records.isEmpty()) { continue; }
 
             List<String> allFields = new List<String>();
             allFields.addAll(childFields);
@@ -282,5 +364,30 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         } catch (Exception e) {
             update new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = e.getMessage().left(255)); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
         }
+    }
+
+    /**
+     * Sanitizes an ORDER BY clause for use in dynamic SOQL.
+     * Rejects injection vectors (statement terminators, comments, DML keywords,
+     * subqueries). Mirrors DocGenDataRetriever.sanitizeClause() logic.
+     */
+    private static String sanitizeOrderByClause(String clause) {
+        if (String.isBlank(clause)) { return null; }
+        // Reject statement terminators and comments
+        if (clause.contains(';') || clause.contains('--') || clause.contains('/*')) {
+            throw new DocGenException('Invalid ORDER BY clause in query config.');
+        }
+        String normalized = clause.replaceAll('\\s+', ' ').toUpperCase().trim();
+        // Reject DML and structural keywords that don't belong in ORDER BY
+        List<String> disallowed = new List<String>{
+            'INSERT ', 'UPDATE ', 'DELETE ', 'MERGE ', 'UNDELETE ',
+            'DROP ', 'ALTER ', 'CREATE ', 'GRANT ', 'REVOKE ', 'SELECT '
+        };
+        for (String keyword : disallowed) {
+            if (normalized.contains(keyword)) {
+                throw new DocGenException('Invalid ORDER BY clause: disallowed keyword detected.');
+            }
+        }
+        return clause;
     }
 }
