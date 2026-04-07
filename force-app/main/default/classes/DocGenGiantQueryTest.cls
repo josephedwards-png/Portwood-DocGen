@@ -348,6 +348,82 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testGetSortedChildIds() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+
+            Test.startTest();
+            List<Id> sortedIds = DocGenController.getSortedChildIds(
+                'Contact', 'AccountId', acc.Id, 'LastName ASC'
+            );
+            Test.stopTest();
+
+            System.assertEquals(10, sortedIds.size(), 'Should return 10 sorted contact IDs');
+        }
+    }
+
+    @IsTest
+    static void testGetSortedChildIdsInjectionBlocked() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account LIMIT 1];
+            Boolean caught = false;
+            try {
+                DocGenController.getSortedChildIds('Contact', 'AccountId', acc.Id, 'Name; DELETE Contact');
+            } catch (Exception e) {
+                caught = true;
+            }
+            System.assert(caught, 'Should reject ORDER BY with injection');
+        }
+    }
+
+    @IsTest
+    static void testGetChildRecordsByIds() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            List<Contact> contacts = [SELECT Id FROM Contact ORDER BY LastName ASC LIMIT 5];
+            List<Id> ids = new List<Id>();
+            for (Contact c : contacts) { ids.add(c.Id); }
+
+            Test.startTest();
+            List<Map<String, Object>> result = DocGenController.getChildRecordsByIds(
+                'Contact', 'Id, FirstName, LastName', ids
+            );
+            Test.stopTest();
+
+            System.assertEquals(5, result.size(), 'Should return 5 records');
+        }
+    }
+
+    @IsTest
+    static void testGetChildRecordsByIdsEmptyList() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            List<Map<String, Object>> result = DocGenController.getChildRecordsByIds(
+                'Contact', 'Id, FirstName', new List<Id>()
+            );
+            System.assert(result.isEmpty(), 'Empty input should return empty list');
+        }
+    }
+
+    @IsTest
+    static void testV1FlatConfigGiantQueryScout() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            String v1Config = 'Name, (SELECT FirstName, LastName FROM Contacts ORDER BY LastName ASC)';
+
+            Test.startTest();
+            Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(acc.Id, v1Config);
+            Test.stopTest();
+
+            System.assert(counts.containsKey('Contacts'), 'Should find Contacts relationship');
+            System.assertEquals(10, counts.get('Contacts'), 'Should count 10 contacts');
+        }
+    }
+
+    @IsTest
     static void testStitchJobFinalizer() {
         User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
         System.runAs(u) {
