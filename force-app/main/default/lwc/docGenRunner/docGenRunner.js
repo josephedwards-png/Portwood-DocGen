@@ -17,6 +17,8 @@ import cleanupGiantQueryFragments from '@salesforce/apex/DocGenController.cleanu
 import getChildRecordPage from '@salesforce/apex/DocGenController.getChildRecordPage';
 import scoutChildCounts from '@salesforce/apex/DocGenController.scoutChildCounts';
 import launchGiantQueryPdfBatch from '@salesforce/apex/DocGenController.launchGiantQueryPdfBatch';
+import getSortedChildIds from '@salesforce/apex/DocGenController.getSortedChildIds';
+import getChildRecordsByIds from '@salesforce/apex/DocGenController.getChildRecordsByIds';
 import { NavigationMixin } from 'lightning/navigation';
 import { downloadBase64 as downloadBase64Util } from 'c/docGenUtils';
 import { buildDocx } from './docGenZipWriter';
@@ -74,7 +76,18 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         ];
     }
 
+    get _isMobile() {
+        return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    }
+
     get modernOutputOptions() {
+        // Mobile can only save to record — no browser download capability
+        if (this._isMobile) {
+            if (this.outputMode !== 'save') { this.outputMode = 'save'; }
+            return [
+                { label: 'Save to Record', value: 'save', icon: '☁️', class: 'pill-btn active' }
+            ];
+        }
         const isPdfOutput = this.templateOutputFormat === 'PDF';
         if (!isPdfOutput || this.isGiantQueryMode) {
             return [
@@ -751,73 +764,63 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             }
 
             // 4. Page through child records and render XML client-side
+            const orderBy = serverChildNode.orderBy || '';
             let allRenderedXml = '';
-            let lastCursorId = null;
-            let hasMore = true;
             let fetched = 0;
             const pageSize = 500;
 
-            while (hasMore) {
-                this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalRecords.toLocaleString()})...`;
-
-                // eslint-disable-next-line no-await-in-loop
-                const page = await getChildRecordPage({
+            if (orderBy) {
+                // Sorted path: pre-query all IDs in sort order, then fetch by chunk
+                this.loadingMessage = 'Sorting records...';
+                const sortedIds = await getSortedChildIds({
                     childObject,
                     lookupField,
                     parentId: this.recordId,
-                    lastCursorId,
-                    fields: allFields,
-                    pageSize
+                    orderByClause: orderBy
                 });
 
-                const records = page.records || [];
-                lastCursorId = page.lastId;
-                hasMore = page.hasMore;
-                fetched += records.length;
+                for (let i = 0; i < sortedIds.length; i += pageSize) {
+                    const chunk = sortedIds.slice(i, i + pageSize);
+                    this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalRecords.toLocaleString()})...`;
 
-                // Render XML for each record using tag replacement
-                for (const rec of records) {
-                    let rowXml = innerXml;
-                    for (const field of [...childFields, ...parentFields]) {
-                        let value = '';
-                        if (field.includes('.')) {
-                            const fieldParts = field.split('.');
-                            let current = rec;
-                            for (let i = 0; i < fieldParts.length && current; i++) {
-                                current = current[fieldParts[i]];
-                            }
-                            value = current != null ? String(current) : '';
-                        } else {
-                            value = rec[field] != null ? String(rec[field]) : '';
-                        }
-                        // Escape XML special characters
-                        const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        // Replace standard tag {Field}, barcode tag {*Field}, QR tag {%QR:Field}, image tag {%Field}
-                        rowXml = rowXml.split('{' + field + '}').join(escaped);
-                        rowXml = rowXml.split('{*' + field + '}').join(escaped);
-                        rowXml = rowXml.split('{%QR:' + field + '}').join(escaped);
-                        rowXml = rowXml.split('{%BARCODE:' + field + '}').join(escaped);
-                        rowXml = rowXml.split('{%' + field + '}').join(escaped);
-                    }
-                    // Also handle formatting tags like {Field:currency}, {Field:MM/dd/yyyy}
-                    rowXml = rowXml.replace(/\{(\w[\w.]*?)(?::([^}]+))?\}/g, (match, fieldName, format) => {
-                        let val = rec[fieldName];
-                        if (fieldName.includes('.')) {
-                            const parts = fieldName.split('.');
-                            let cur = rec;
-                            for (let i = 0; i < parts.length && cur; i++) { cur = cur[parts[i]]; }
-                            val = cur;
-                        }
-                        if (val == null) return '';
-                        if (format === 'currency' && typeof val === 'number') {
-                            return val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                        }
-                        if (format === 'number' && typeof val === 'number') {
-                            return val.toLocaleString();
-                        }
-                        return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    // eslint-disable-next-line no-await-in-loop
+                    const records = await getChildRecordsByIds({
+                        childObject,
+                        fields: allFields,
+                        recordIds: chunk
                     });
-                    allRenderedXml += rowXml;
+
+                    fetched += records.length;
+                    this._renderGiantDocxRows(records, innerXml, childFields, parentFields, (xml) => { allRenderedXml += xml; });
+
+                    this.progressPercent = Math.round((fetched / totalRecords) * 80);
+                }
+            } else {
+                // Unsorted cursor path (original behavior)
+                let lastCursorId = null;
+                let hasMore = true;
+
+                while (hasMore) {
+                    this.loadingMessage = `Loading records (${fetched.toLocaleString()} / ${totalRecords.toLocaleString()})...`;
+
+                    // eslint-disable-next-line no-await-in-loop
+                    const page = await getChildRecordPage({
+                        childObject,
+                        lookupField,
+                        parentId: this.recordId,
+                        lastCursorId,
+                        fields: allFields,
+                        pageSize
+                    });
+
+                    const records = page.records || [];
+                    lastCursorId = page.lastId;
+                    hasMore = page.hasMore;
+                    fetched += records.length;
+
+                    this._renderGiantDocxRows(records, innerXml, childFields, parentFields, (xml) => { allRenderedXml += xml; });
+
+                    this.progressPercent = Math.round((fetched / totalRecords) * 80);
                 }
             }
 
@@ -874,6 +877,53 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
      * @param {Object} childCounts - Map of relationship name to record count
      * @param {Object} childNodeConfig - Child node config from scout
      */
+    /**
+     * Renders DOCX XML rows for a batch of records. Used by both sorted and
+     * cursor-based Giant Query DOCX assembly paths.
+     */
+    _renderGiantDocxRows(records, innerXml, childFields, parentFields, appendFn) {
+        for (const rec of records) {
+            let rowXml = innerXml;
+            for (const field of [...childFields, ...parentFields]) {
+                let value = '';
+                if (field.includes('.')) {
+                    const fieldParts = field.split('.');
+                    let current = rec;
+                    for (let i = 0; i < fieldParts.length && current; i++) {
+                        current = current[fieldParts[i]];
+                    }
+                    value = current != null ? String(current) : '';
+                } else {
+                    value = rec[field] != null ? String(rec[field]) : '';
+                }
+                const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                rowXml = rowXml.split('{' + field + '}').join(escaped);
+                rowXml = rowXml.split('{*' + field + '}').join(escaped);
+                rowXml = rowXml.split('{%QR:' + field + '}').join(escaped);
+                rowXml = rowXml.split('{%BARCODE:' + field + '}').join(escaped);
+                rowXml = rowXml.split('{%' + field + '}').join(escaped);
+            }
+            rowXml = rowXml.replace(/\{(\w[\w.]*?)(?::([^}]+))?\}/g, (match, fieldName, format) => {
+                let val = rec[fieldName];
+                if (fieldName.includes('.')) {
+                    const parts = fieldName.split('.');
+                    let cur = rec;
+                    for (let i = 0; i < parts.length && cur; i++) { cur = cur[parts[i]]; }
+                    val = cur;
+                }
+                if (val == null) return '';
+                if (format === 'currency' && typeof val === 'number') {
+                    return val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                }
+                if (format === 'number' && typeof val === 'number') {
+                    return val.toLocaleString();
+                }
+                return String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            });
+            appendFn(rowXml);
+        }
+    }
+
     async _assembleGiantQueryPdf(giantRelationship, childCounts, childNodeConfig) {
         this.isLoading = true;
         this.error = null;
