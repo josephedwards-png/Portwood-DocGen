@@ -36,7 +36,8 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
     }
 
     public Iterable<String> start(Database.BatchableContext bc) {
-        update new DocGen_Job__c(Id = jobId, Status__c = 'Stitching'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        SObjectAccessDecision stitchDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Stitching') });
+        update stitchDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
         DocGen_Template__c tmpl = [SELECT Name FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
         this.templateName = tmpl.Name;
@@ -45,7 +46,8 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
         Integer fragmentCount = [SELECT COUNT() FROM ContentVersion WHERE Title LIKE :(prefix + '%') WITH USER_MODE];
 
         if (fragmentCount == 0) {
-            update new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = 'No fragments found'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision noFragDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = 'No fragments found') });
+            update noFragDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
             return new List<String>();
         }
 
@@ -148,7 +150,8 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
             ];
 
             if (parts.isEmpty()) {
-                update new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = 'No PDF parts found'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                SObjectAccessDecision noPartsDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Failed', Label__c = 'No PDF parts found') });
+                update noPartsDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
                 return;
             }
 
@@ -166,7 +169,8 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
                 finalCv.Id = dec.getRecords()[0].Id;
                 linkToRecord(finalCv.Id);
                 deletePartPdfs(parts);
-                update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                SObjectAccessDecision singleDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Completed') });
+                update singleDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
                 return;
             }
 
@@ -205,14 +209,16 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
             // Clean up intermediate part PDFs
             deletePartPdfs(parts);
 
-            update new DocGen_Job__c(Id = jobId, Status__c = 'Completed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision completeDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Completed') });
+            update completeDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
         } catch (Exception e) {
             try {
                 DocGen_Job__c failJob = new DocGen_Job__c(Id = jobId, Status__c = 'Failed');
                 // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 failJob.Label__c = ('Stitch finish error: ' + e.getMessage()).left(255);
-                update failJob; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                SObjectAccessDecision failJobDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ failJob });
+                update failJobDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
             } catch (Exception updateErr) {
                 String noop = updateErr.getMessage(); // NOPMD UnusedLocalVariable
             }
@@ -260,7 +266,8 @@ public with sharing class DocGenGiantQueryStitchJob implements Database.Batchabl
         public void execute(FinalizerContext ctx) {
             if (ctx.getResult() == ParentJobResult.UNHANDLED_EXCEPTION) {
                 try {
-                    update new DocGen_Job__c(Id = jobId, Status__c = 'Failed'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                    SObjectAccessDecision fDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Failed') });
+                    update fDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
                 } catch (Exception e) {
                     String noop = e.getMessage(); // NOPMD UnusedLocalVariable
                 }

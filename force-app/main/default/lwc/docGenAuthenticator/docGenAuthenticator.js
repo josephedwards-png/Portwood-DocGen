@@ -12,7 +12,8 @@ export default class DocGenAuthenticator extends LightningElement {
         // Check URL for request ID parameter
         const params = new URLSearchParams(window.location.search);
         const reqId = params.get('id');
-        if (reqId) {
+        // CxSAST: DOM XSS mitigation — validate ID matches Salesforce ID pattern before use
+        if (reqId && /^[a-zA-Z0-9]{15,18}$/.test(reqId)) {
             this.hasRequestId = true;
             this.loadRequestAudit(reqId);
         }

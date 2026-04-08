@@ -33,7 +33,8 @@ public with sharing class DocGenSetupController {
         // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Experience_Site_Url__c = experienceSiteUrl;
         // Package-internal object — CRUD controlled by DocGen permission sets
-        upsert settings; // NOPMD ApexCRUDViolation - package-internal custom setting; CRUD checked on lines 15-18 above
+        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ settings });
+        upsert decision.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom setting; CRUD checked on lines 15-18 above
     }
 
     /**
@@ -79,6 +80,7 @@ public with sharing class DocGenSetupController {
         settings.Company_Name__c = companyName;
         // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_OWA_Id__c = owaId;
-        upsert settings; // NOPMD ApexCRUDViolation - package-internal custom setting
+        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<SObject>{ settings });
+        upsert decision.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom setting
     }
 }

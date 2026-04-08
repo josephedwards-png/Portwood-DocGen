@@ -209,7 +209,8 @@ public without sharing class DocGenSignatureController {
         signer.PIN_Expires_At__c = System.now().addMinutes(PIN_EXPIRATION_MINUTES);
         signer.PIN_Attempts__c = 0; // Reset attempts on new PIN
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision pinDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signer__c>{ signer });
+        Database.update(pinDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         // Send PIN via email
         sendPinEmail(signer.Signer_Email__c, pinStr);
@@ -288,7 +289,8 @@ public without sharing class DocGenSignatureController {
             // Increment failed attempts
             signer.PIN_Attempts__c = (signer.PIN_Attempts__c == null ? 0 : signer.PIN_Attempts__c) + 1;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+            SObjectAccessDecision attemptDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signer__c>{ signer });
+            Database.update(attemptDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
             Integer remaining = MAX_PIN_ATTEMPTS - Integer.valueOf(signer.PIN_Attempts__c);
             if (remaining <= 0) {
@@ -315,7 +317,8 @@ public without sharing class DocGenSignatureController {
             signer.Status__c = 'Viewed';
         }
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision verifyDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signer__c>{ signer });
+        Database.update(verifyDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         result.put('success', true);
         result.put('message', 'Email verified successfully.');
@@ -384,7 +387,8 @@ public without sharing class DocGenSignatureController {
         if (signer.Status__c == 'Pending') {
             signer.Status__c = 'Viewed';
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+            SObjectAccessDecision viewDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signer__c>{ signer });
+            Database.update(viewDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
         }
 
         res.isValid = true;
@@ -447,7 +451,8 @@ public without sharing class DocGenSignatureController {
         if (req.Status__c == 'Sent') {
             req.Status__c = 'Viewed';
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            Database.update(req, false, AccessLevel.SYSTEM_MODE);
+            SObjectAccessDecision legacyViewDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signature_Request__c>{ req });
+            Database.update(legacyViewDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
         }
 
         res.isValid = true;
@@ -487,10 +492,11 @@ public without sharing class DocGenSignatureController {
         cd.PreferencesAllowViewInBrowser = true;
         cd.PreferencesLinkLatestVersion = true;
         cd.PreferencesExpires = false;
+        // CxSAST: Apex_CRUD_ContentDistribution — stripInaccessible enforces CRUD/FLS before insert
+        SObjectAccessDecision decision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDistribution>{ cd });
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<ContentDistribution>{ cd }, false, AccessLevel.SYSTEM_MODE);
-        // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
-        cd = new ContentDistribution(Id = cd.Id);
+        Database.insert(decision.getRecords(), false, AccessLevel.SYSTEM_MODE);
+        cd = (ContentDistribution) decision.getRecords()[0];
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         cd = [SELECT DistributionPublicUrl FROM ContentDistribution WHERE Id = :cd.Id WITH SYSTEM_MODE LIMIT 1];
         return cd.DistributionPublicUrl;
@@ -675,7 +681,8 @@ public without sharing class DocGenSignatureController {
         signer.Status__c = 'Signed';
         signer.Consent_Captured__c = true;
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision saveSigDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signer__c>{ signer });
+        Database.update(saveSigDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         // Create audit trail immediately with all available data
         DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
@@ -691,7 +698,8 @@ public without sharing class DocGenSignatureController {
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
         // Document hash is set later when PDF is generated
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision auditDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Signature_Audit__c>{ audit });
+        Database.insert(auditDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         // Check if all signers are now complete
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
@@ -714,7 +722,8 @@ public without sharing class DocGenSignatureController {
         DocGen_Signature_Request__c parentReq = new DocGen_Signature_Request__c(Id = signer.Signature_Request__c);
         parentReq.Status__c = 'In Progress';
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision parentDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signature_Request__c>{ parentReq });
+        Database.update(parentDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         return result;
     }
@@ -817,7 +826,8 @@ public without sharing class DocGenSignatureController {
         requests[0].Signature_Data__c = typedName;
         requests[0].Status__c = 'Viewed';
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.update(requests[0], false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision legacySaveDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signature_Request__c>{ requests[0] });
+        Database.update(legacySaveDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
     }
 
     private static Map<String, String> stampLegacySignerAndSavePdf(String token) {
@@ -856,7 +866,8 @@ public without sharing class DocGenSignatureController {
             req.Status__c = 'Signed';
             req.Signature_Data__c = null;
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            Database.update(req, false, AccessLevel.SYSTEM_MODE);
+            SObjectAccessDecision stampReqDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Signature_Request__c>{ req });
+            Database.update(stampReqDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
             // Create audit trail
             String pdfHash = EncodingUtil.convertToHex(Crypto.generateDigest('SHA-256', pdfBlob));
@@ -869,7 +880,8 @@ public without sharing class DocGenSignatureController {
             audit.IP_Address__c = 'Server-Side';
             audit.User_Agent__c = 'VF renderAs=pdf - Server-Side PDF Generation';
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-            Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+            SObjectAccessDecision auditDec2 = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Signature_Audit__c>{ audit });
+            Database.insert(auditDec2.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
             return new Map<String, String>{
                 'status' => 'complete',
@@ -893,7 +905,9 @@ public without sharing class DocGenSignatureController {
         cv.VersionData = EncodingUtil.base64Decode(base64Data);
         cv.IsMajorVersion = true;
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<ContentVersion>{ cv }, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision cvSaveDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
+        Database.insert(cvSaveDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
+        cv.Id = cvSaveDec.getRecords()[0].Id;
 
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         Id contentDocId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id WITH SYSTEM_MODE].ContentDocumentId;
@@ -904,7 +918,8 @@ public without sharing class DocGenSignatureController {
         cdl.ShareType = 'V';
         cdl.Visibility = 'AllUsers';
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
-        Database.insert(new List<ContentDocumentLink>{ cdl }, false, AccessLevel.SYSTEM_MODE);
+        SObjectAccessDecision cdlSaveDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
+        Database.insert(cdlSaveDec.getRecords(), false, AccessLevel.SYSTEM_MODE);
 
         return contentDocId;
     }

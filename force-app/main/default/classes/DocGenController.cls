@@ -414,7 +414,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 })
             );
             /* code-analyzer-suppress ApexFlsViolation */
-            insert job; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision jobDec1 = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Job__c>{ job });
+            insert jobDec1.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            job.Id = jobDec1.getRecords()[0].Id;
 
             // Launch batch — shell PDF generation happens in start() with fresh heap
             DocGenGiantQueryBatch batch = new DocGenGiantQueryBatch(
@@ -564,6 +566,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             Map<String, Object> childNodeConfig = (Map<String, Object>) JSON.deserializeUntyped(childNodeConfigJson);
 
+            // Sanitize giantRelationship — reject dangerous characters
+            if (String.isNotBlank(giantRelationship)) {
+                if (giantRelationship.contains(';') || giantRelationship.contains('--') || giantRelationship.contains('/*')) {
+                    throw new DocGenException('Invalid relationship name.');
+                }
+                giantRelationship = String.escapeSingleQuotes(giantRelationship);
+            }
+
             // Get document XML from pre-decomposed parts (no ZIP decompression)
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
@@ -600,7 +610,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 Parent_Record_Id__c = String.valueOf(recordId)
             );
             /* code-analyzer-suppress ApexFlsViolation */
-            insert job; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision jobDec2 = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Job__c>{ job });
+            insert jobDec2.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            job.Id = jobDec2.getRecords()[0].Id;
 
             // Ensure relationshipName is in the config (V1 scout doesn't include it)
             childNodeConfig.put('relationshipName', giantRelationship);
@@ -832,8 +844,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
         String query = 'SELECT Id FROM ' + String.escapeSingleQuotes(childObject) +
             ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :parentId';
-        if (String.isNotBlank(whereClause)) { query += ' AND ' + whereClause; }
-        query += ' ORDER BY ' + orderByClause;
+        if (String.isNotBlank(whereClause)) { query += ' AND ' + String.escapeSingleQuotes(whereClause); }
+        query += ' ORDER BY ' + String.escapeSingleQuotes(orderByClause);
 
         List<Id> sortedIds = new List<Id>();
         // CxSAST: SOQL injection mitigated by Schema validation + keyword sanitization + escapeSingleQuotes on object/field names + USER_MODE
@@ -895,7 +907,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         }
         // CxSAST: SOQL injection mitigated — baseObject validated by Schema; queryConfig parsed by DataRetriever which validates all objects/fields via Schema + escapeSingleQuotes + USER_MODE
         try {
-            return DocGenDataRetriever.getRecordData(recordId, baseObject, queryConfig);
+            return DocGenDataRetriever.getRecordData(recordId, String.escapeSingleQuotes(baseObject), queryConfig);
         } catch (Exception e) {
             throw new DocGenException('Error fetching preview data: ' + e.getMessage());
         }
@@ -986,12 +998,14 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     }
                     if (!otherDefaults.isEmpty()) {
                         /* code-analyzer-suppress ApexFlsViolation */
-                    update otherDefaults; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                    SObjectAccessDecision otherDec = Security.stripInaccessible(AccessType.UPDATABLE, otherDefaults);
+                    update otherDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
                     }
                 }
             }
             /* code-analyzer-suppress ApexFlsViolation */
-            update template; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision tmplDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Template__c>{ template });
+            update tmplDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
 
             // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
@@ -1008,7 +1022,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 }
                 if (!activeVersions.isEmpty()) {
                     /* code-analyzer-suppress ApexFlsViolation */
-                    update activeVersions; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                    SObjectAccessDecision avDec = Security.stripInaccessible(AccessType.UPDATABLE, activeVersions);
+                    update avDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
                 }
 
                 // Get latest ContentVersionId
@@ -1048,7 +1063,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 version.Base_Object_API__c = (String) fields.get('Base_Object_API__c');
 
                 /* code-analyzer-suppress ApexFlsViolation */
-                insert version; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                SObjectAccessDecision verDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Template_Version__c>{ version });
+                insert verDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                version.Id = verDec.getRecords()[0].Id;
 
                 // Extract images from DOCX/PPTX and save as ContentVersions linked to the version.
                 // Blob.toPdf() cannot render data URI images — needs committed CV URLs.
@@ -1126,7 +1143,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             }
             if (!others.isEmpty()) {
                 /* code-analyzer-suppress ApexFlsViolation */
-                update others; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                SObjectAccessDecision othDec = Security.stripInaccessible(AccessType.UPDATABLE, others);
+                update othDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
             // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
             }
 
@@ -1138,7 +1156,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             version.Is_Active__c = true;
             // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
             /* code-analyzer-suppress ApexFlsViolation */
-            update version; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision actVerDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Template_Version__c>{ version });
+            update actVerDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
             // 3. Update Template Record Headline
             DocGen_Template__c template = new DocGen_Template__c(Id = version.Template__c);
@@ -1149,7 +1168,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             template.Base_Object_API__c = version.Base_Object_API__c;
 
             /* code-analyzer-suppress ApexFlsViolation */
-            update template; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision actTmplDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Template__c>{ template });
+            update actTmplDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         } catch (Exception e) {
             throw new DocGenException('Error activating version: ' + e.getMessage());
@@ -3333,7 +3353,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ));
         }
         /* code-analyzer-suppress ApexFlsViolation */
-        insert templates; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        SObjectAccessDecision tmplsDec = Security.stripInaccessible(AccessType.CREATABLE, templates);
+        insert tmplsDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        for (Integer i = 0; i < templates.size(); i++) { templates[i].Id = tmplsDec.getRecords()[i].Id; }
 
         // Create ContentVersions (DOCX files) linked to templates
         List<ContentVersion> cvs = new List<ContentVersion>();
@@ -3371,7 +3393,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ));
         }
         /* code-analyzer-suppress ApexFlsViolation */
-        insert versions; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        SObjectAccessDecision versDec = Security.stripInaccessible(AccessType.CREATABLE, versions);
+        insert versDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        for (Integer i = 0; i < versions.size(); i++) { versions[i].Id = versDec.getRecords()[i].Id; }
 
         // Extract and save template images for PDF rendering
         for (Integer i = 0; i < versions.size(); i++) {
@@ -3512,7 +3536,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmpl.Document_Title_Format__c = (String) tmplData.get('Document_Title_Format__c');
             tmpl.Is_Default__c = tmplData.get('Is_Default__c') == true;
             /* code-analyzer-suppress ApexFlsViolation */
-            insert tmpl; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision impTmplDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Template__c>{ tmpl });
+            insert impTmplDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            tmpl.Id = impTmplDec.getRecords()[0].Id;
 
             // 2. Upload template file if present
             Map<String, Object> fileData = (Map<String, Object>) bundle.get('templateFile');
@@ -3550,7 +3576,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ver.Type__c = (String) tmplData.get('Type__c');
             ver.Base_Object_API__c = (String) tmplData.get('Base_Object_API__c');
             /* code-analyzer-suppress ApexFlsViolation */
-            insert ver; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            SObjectAccessDecision impVerDec = Security.stripInaccessible(AccessType.CREATABLE, new List<DocGen_Template_Version__c>{ ver });
+            insert impVerDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            ver.Id = impVerDec.getRecords()[0].Id;
 
             // 4. Extract images and pre-decompose (non-fatal)
             try {
@@ -3579,7 +3607,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     sqs.add(newSq);
                 }
                 /* code-analyzer-suppress ApexFlsViolation */
-                insert sqs; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+                SObjectAccessDecision sqsDec = Security.stripInaccessible(AccessType.CREATABLE, sqs);
+                insert sqsDec.getRecords(); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
             }
 
             return tmpl.Id;

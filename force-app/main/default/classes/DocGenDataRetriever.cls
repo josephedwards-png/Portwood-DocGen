@@ -224,7 +224,7 @@ public with sharing class DocGenDataRetriever {
                     continue;
                 }
 
-                String subquery = '(SELECT ' + String.join(fieldNames, ', ') + ' FROM ' + rel;
+                String subquery = '(SELECT ' + String.join(fieldNames, ', ') + ' FROM ' + String.escapeSingleQuotes(rel);
                 try {
                     String w = sanitizeClause((String) child.get('where'), 'WHERE');
                     String o = sanitizeClause((String) child.get('orderBy'), 'ORDER BY');
@@ -310,7 +310,7 @@ public with sharing class DocGenDataRetriever {
                 List<String> jqFields = new List<String>();
                 jqFields.add(js.targetIdField); // Always need the lookup ID for stitching
                 jqFields.addAll(js.junctionFields);
-                selectParts.add('(SELECT ' + String.join(jqFields, ', ') + ' FROM ' + js.junctionRel + ')');
+                selectParts.add('(SELECT ' + String.join(jqFields, ', ') + ' FROM ' + String.escapeSingleQuotes(js.junctionRel) + ')');
             }
         }
 
@@ -1039,7 +1039,7 @@ public with sharing class DocGenDataRetriever {
                     String flatSubquery = buildFlatSubquery(spec);
                     flatParts.add(flatSubquery);
                 } else {
-                    flatParts.add(trimmed); // Can't parse, pass through as-is
+                    flatParts.add(String.escapeSingleQuotes(trimmed)); // Can't parse, escape and pass through
                 }
             } else {
                 // Regular field — validate
@@ -1232,10 +1232,10 @@ public with sharing class DocGenDataRetriever {
      * Builds a flat subquery for Level 0 (strips nested grandchild subqueries).
      */
     private static String buildFlatSubquery(SubquerySpec spec) {
-        String sq = '(SELECT ' + spec.fieldsOnly + ' FROM ' + spec.relationshipName;
-        if (String.isNotBlank(spec.whereClause)) { sq += ' WHERE ' + spec.whereClause; }
-        if (String.isNotBlank(spec.orderByClause)) { sq += ' ORDER BY ' + spec.orderByClause; }
-        if (String.isNotBlank(spec.limitClause)) { sq += ' LIMIT ' + spec.limitClause; }
+        String sq = '(SELECT ' + spec.fieldsOnly + ' FROM ' + String.escapeSingleQuotes(spec.relationshipName);
+        if (String.isNotBlank(spec.whereClause)) { sq += ' WHERE ' + String.escapeSingleQuotes(spec.whereClause); }
+        if (String.isNotBlank(spec.orderByClause)) { sq += ' ORDER BY ' + String.escapeSingleQuotes(spec.orderByClause); }
+        if (String.isNotBlank(spec.limitClause)) { sq += ' LIMIT ' + String.escapeSingleQuotes(spec.limitClause); }
         sq += ')';
         return sq;
     }
@@ -1362,11 +1362,11 @@ public with sharing class DocGenDataRetriever {
     private static String validateField(String fieldName, Map<String, SObjectField> fieldMap) {
         if (String.isBlank(fieldName)) { return null; }
 
-        if (fieldMap.containsKey(fieldName)) { return fieldName; }
+        if (fieldMap.containsKey(fieldName)) { return String.escapeSingleQuotes(fieldName); }
 
         // Try appending __c
         if (!fieldName.endsWithIgnoreCase('__c') && fieldMap.containsKey(fieldName + '__c')) {
-            return fieldName + '__c';
+            return String.escapeSingleQuotes(fieldName + '__c');
         }
 
         // Relationship field: Account.Name, Owner.Email, etc.
@@ -1376,7 +1376,7 @@ public with sharing class DocGenDataRetriever {
                 String relName = relParts[0];
                 for (Schema.SObjectField sof : fieldMap.values()) {
                     if (sof.getDescribe().getRelationshipName() == relName) {
-                        return fieldName;
+                        return String.escapeSingleQuotes(fieldName);
                     }
                 }
             }
@@ -1509,7 +1509,7 @@ public with sharing class DocGenDataRetriever {
                 throw new DocGenException('Invalid ' + clauseType + ' clause: disallowed keyword detected.');
             }
         }
-        return clause;
+        return String.escapeSingleQuotes(clause);
     }
 
     /**

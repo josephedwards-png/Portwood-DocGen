@@ -59,7 +59,8 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
      */
     public Database.QueryLocator start(Database.BatchableContext bc) {
         // Update Status to Processing
-        update new DocGen_Job__c(Id = jobId, Status__c = 'Processing'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        SObjectAccessDecision procDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Processing') });
+        update procDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
         // Validate object name against Schema to prevent injection
         if (Schema.getGlobalDescribe().get(baseObject) == null) {
@@ -67,19 +68,20 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         }
 
         String sanitizedCondition = sanitizeCondition(condition);
-        String query = 'SELECT Id FROM ' + baseObject;
+        String query = 'SELECT Id FROM ' + String.escapeSingleQuotes(baseObject);
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
         }
         query += ' WITH USER_MODE';
 
         // Count total records for progress tracking
-        String countQuery = 'SELECT Count() FROM ' + baseObject;
+        String countQuery = 'SELECT Count() FROM ' + String.escapeSingleQuotes(baseObject);
         if (String.isNotBlank(sanitizedCondition)) {
             countQuery += ' WHERE ' + sanitizedCondition;
         }
         Integer total = Database.countQuery(countQuery, AccessLevel.USER_MODE);
-        update new DocGen_Job__c(Id = jobId, Status__c = 'Processing', Total_Records__c = total); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        SObjectAccessDecision totalDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = 'Processing', Total_Records__c = total) });
+        update totalDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
         // Bulk data pre-cache for V3 configs
         buildDataCache(query, sanitizedCondition);
@@ -147,7 +149,8 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             dataCacheCvId = cv.Id;
             cachedDataJson = jsonStr;
 
-            update new DocGen_Job__c(Id = jobId, Data_Cache_CV__c = cv.Id); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision cacheDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Data_Cache_CV__c = cv.Id) });
+            update cacheDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
         } catch (Exception e) {
             // Graceful fallback: continue without cache
@@ -176,7 +179,7 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
                 throw new DocGenException('Invalid filter condition.');
             }
         }
-        return condition;
+        return String.escapeSingleQuotes(condition);
     }
 
     /**
@@ -265,11 +268,12 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
         }
 
         // Update Job record incrementally for real-time progress tracking
-        update new DocGen_Job__c( // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+        SObjectAccessDecision progressDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(
             Id = jobId,
             Success_Count__c = successCount,
             Error_Count__c = failCount
-        );
+        ) });
+        update progressDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
     }
 
     /**
@@ -291,26 +295,29 @@ public with sharing class DocGenBatch implements Database.Batchable<SObject>, Da
             try {
                 status = 'Merging';
 
-                update new DocGen_Job__c( // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                SObjectAccessDecision mergeDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(
                     Id = jobId,
                     Status__c = status,
                     Success_Count__c = successCount,
                     Error_Count__c = failCount
-                );
+                ) });
+                update mergeDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
 
                 // Chain the merge Queueable — it reads all snippets by title prefix
                 System.enqueueJob(new DocGenMergeJob(jobId));
             } catch (Exception e) {
                 status = 'Completed with Errors';
-                update new DocGen_Job__c(Id = jobId, Status__c = status, Success_Count__c = successCount, Error_Count__c = failCount); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+                SObjectAccessDecision errDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(Id = jobId, Status__c = status, Success_Count__c = successCount, Error_Count__c = failCount) });
+                update errDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
             }
         } else {
-            update new DocGen_Job__c( // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
+            SObjectAccessDecision finDec = Security.stripInaccessible(AccessType.UPDATABLE, new List<DocGen_Job__c>{ new DocGen_Job__c(
                 Id = jobId,
                 Status__c = status,
                 Success_Count__c = successCount,
                 Error_Count__c = failCount
-            );
+            ) });
+            update finDec.getRecords(); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets
         }
 
         // Send notification for non-merge jobs (merge jobs notify from DocGenMergeJob)
