@@ -107,6 +107,17 @@
                                 </div>
 
                                 <div class="sidebar-section">
+                                    <h3>E-Signatures</h3>
+                                    <nav class="learning-nav">
+                                        <a href="#sig-overview" class="nav-item">Overview</a>
+                                        <a href="#sig-templates" class="nav-item">Template Setup</a>
+                                        <a href="#sig-flow" class="nav-item">Signing Flow</a>
+                                        <a href="#sig-verify" class="nav-item">Verification</a>
+                                        <a href="#sig-admin" class="nav-item">Admin Setup</a>
+                                    </nav>
+                                </div>
+
+                                <div class="sidebar-section">
                                     <h3>Power Users</h3>
                                     <nav class="learning-nav">
                                         <a href="#flow" class="nav-item">Flow Automation</a>
@@ -124,6 +135,7 @@
                                         <button class="pill-tag" data-tag="\{Amount:currency}" onclick={handleCopyTag}>&#123;Amount:currency&#125;</button>
                                         <button class="pill-tag" data-tag="loop-contacts" onclick={handleCopyTag}>&#123;#List&#125;...&#123;/List&#125;</button>
                                         <button class="pill-tag" data-tag="\{*Barcode}" onclick={handleCopyTag}>&#123;*Barcode&#125;</button>
+                                        <button class="pill-tag" data-tag="\{@Signature_Buyer}" onclick={handleCopyTag}>&#123;@Signature_Buyer&#125;</button>
                                     </div>
                                 </div>
                             </aside>
@@ -255,8 +267,162 @@
                                     </ul>
                                 </section>
 
+                                <!-- ============================================ -->
+                                <!-- E-SIGNATURES -->
+                                <!-- ============================================ -->
+
+                                <!-- Sig Overview -->
+                                <section id="sig-overview" class="content-section">
+                                    <h3 class="section-heading">Electronic Signatures</h3>
+                                    <p>DocGen includes a built-in Simple Electronic Signature (SES) system. Signers receive an email, verify their identity with a PIN, review the document, type their name, and agree to sign. Every step is recorded in a tamper-evident audit trail.</p>
+
+                                    <div class="card-tip info">
+                                        <strong>Legal Standard</strong>
+                                        <p>Typed-name signatures are legally valid under the US ESIGN Act and UETA. They carry the same legal weight as drawn signatures for SES use cases. DocGen captures consent, email verification, IP address, and user agent for every signature.</p>
+                                    </div>
+
+                                    <div class="limit-grid">
+                                        <div class="limit-card info">
+                                            <strong>Email PIN Verification</strong>
+                                            <p>Signers enter their email and receive a 6-digit code. This proves they control the inbox at the moment of signing. PINs expire after 10 minutes and lock after 3 failed attempts.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Consent Capture</strong>
+                                            <p>Every signer must check an explicit consent checkbox before signing. The consent timestamp is recorded on the audit record with field history tracking.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Document Hash</strong>
+                                            <p>A SHA-256 hash of the final PDF is computed and stored on the audit record. This proves the document has not been modified since signing.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Verification Certificate</strong>
+                                            <p>Every signed PDF includes a certificate block showing signer names, roles, timestamps, and a verification URL. Anyone can verify the document's authenticity.</p>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <!-- Sig Templates -->
+                                <section id="sig-templates" class="content-section">
+                                    <h3 class="section-heading">Setting Up Signature Templates</h3>
+                                    <p>Add signature placeholders to your Word template using the <code>&#123;@Signature_Role&#125;</code> syntax.</p>
+
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>Placeholder</th><th>Replaced With</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><code>&#123;@Signature_Buyer&#125;</code></td><td>Electronically signed by John Smith on 2026-04-08 10:30:00 PDT</td></tr>
+                                            <tr><td><code>&#123;@Signature_Seller&#125;</code></td><td>Electronically signed by Jane Doe on 2026-04-08 14:15:00 PDT</td></tr>
+                                            <tr><td><code>&#123;@Signature&#125;</code></td><td>Used for single-signer documents (no role name needed)</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <div class="card-tip">
+                                        <strong>Template Tip</strong>
+                                        <p>Place signature tags on their own line with a label, like: <code>Buyer Signature: &#123;@Signature_Buyer&#125;</code>. The tag is replaced with the signer's typed name and timestamp. Use any role name — it maps to the Signer Role picklist (Buyer, Seller, Witness, Guarantor, etc.).</p>
+                                    </div>
+
+                                    <div class="card-tip info">
+                                        <strong>Multi-Signer Documents</strong>
+                                        <p>Add multiple signature placeholders for different roles. Each signer gets their own email with a unique link. The PDF is only generated after <strong>all</strong> signers have completed. Unsigned placeholders are preserved until the signer completes.</p>
+                                    </div>
+                                </section>
+
+                                <!-- Sig Flow -->
+                                <section id="sig-flow" class="content-section">
+                                    <h3 class="section-heading">The Signing Flow</h3>
+                                    <p>Here is what each signer experiences when they receive a signature request.</p>
+
+                                    <div class="step-visual">
+                                        <div class="step-card">
+                                            <div class="num">1</div>
+                                            <strong>Email</strong>
+                                            <p>Signer receives a branded email with a secure link.</p>
+                                        </div>
+                                        <div class="step-card">
+                                            <div class="num">2</div>
+                                            <strong>Verify</strong>
+                                            <p>Enter email, receive a 6-digit PIN, enter it to prove inbox control.</p>
+                                        </div>
+                                        <div class="step-card">
+                                            <div class="num">3</div>
+                                            <strong>Review</strong>
+                                            <p>Expand the document preview to read the full document before signing.</p>
+                                        </div>
+                                        <div class="step-card">
+                                            <div class="num">4</div>
+                                            <strong>Sign</strong>
+                                            <p>Type full name, check consent box, click Sign Document.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="limit-grid">
+                                        <div class="limit-card warning">
+                                            <strong>Token Expiry</strong>
+                                            <p>Signing links expire after <strong>48 hours</strong>. If a signer misses the window, create a new signature request.</p>
+                                        </div>
+                                        <div class="limit-card warning">
+                                            <strong>PIN Security</strong>
+                                            <p>PINs are hashed with SHA-256 before storage — plaintext is never saved. After 3 failed attempts, the link is locked permanently.</p>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <!-- Sig Verify -->
+                                <section id="sig-verify" class="content-section">
+                                    <h3 class="section-heading">Document Verification</h3>
+                                    <p>Every signed PDF includes an Electronic Signature Certificate at the bottom with signer details and a verification URL.</p>
+
+                                    <div class="limit-grid">
+                                        <div class="limit-card info">
+                                            <strong>Certificate on PDF</strong>
+                                            <p>The certificate shows: Document ID, completion date, each signer's name, role, email, and email verification timestamp. It also includes the verification page URL.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Online Verification</strong>
+                                            <p>The verify page (<code>/apex/DocGenVerify</code>) accepts a Document ID to show the full audit trail. It also has a file upload — drag any PDF onto it to compute a SHA-256 hash and check if it matches a signed document.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Field History Tracking</strong>
+                                            <p>All key audit fields (signer name, email, signed date, hash, IP, consent, PIN verification) have field history tracking enabled. If an admin modifies an audit record, Salesforce logs the change.</p>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <!-- Sig Admin Setup -->
+                                <section id="sig-admin" class="content-section">
+                                    <h3 class="section-heading">Signature Admin Setup</h3>
+                                    <p>Complete these steps to enable signatures in your org.</p>
+
+                                    <div class="pro-tip-box">
+                                        <strong>Setup Checklist:</strong>
+                                        <ol>
+                                            <li><strong>Create a Salesforce Site</strong> — Setup &gt; Sites &gt; create a site pointing to <code>DocGenSignature</code> as the active page. This is the public page signers access.</li>
+                                            <li><strong>Assign Guest Permissions</strong> — Assign the <strong>DocGen Guest Signature</strong> permission set to the site's guest user profile. This grants access to signature Apex classes and objects.</li>
+                                            <li><strong>Configure Email Branding</strong> — Go to the <strong>Signatures</strong> tab in the Command Hub. Set your company name, brand color, logo URL, and customize the email subject/message.</li>
+                                            <li><strong>Set the Site URL</strong> — In Signature Settings, enter your site's base URL so signing links and verification URLs resolve correctly.</li>
+                                            <li><strong>Assign User Permissions</strong> — Users who create signature requests need the <strong>DocGen Admin</strong> or <strong>DocGen User</strong> permission set.</li>
+                                        </ol>
+                                    </div>
+
+                                    <div class="card-tip info">
+                                        <strong>Email Deliverability</strong>
+                                        <p>Ensure your org's email deliverability is set to <strong>All Email</strong> (Setup &gt; Email &gt; Deliverability). PIN verification emails will not be delivered if this is set to System Email Only.</p>
+                                    </div>
+
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>Object</th><th>Purpose</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><strong>DocGen Signature Request</strong></td><td>Parent record for a signing session. Links to a template and related record.</td></tr>
+                                            <tr><td><strong>DocGen Signer</strong></td><td>One per signer per request. Tracks status, typed name, PIN verification, consent.</td></tr>
+                                            <tr><td><strong>DocGen Signature Audit</strong></td><td>Immutable audit record created at signing time. IP, user agent, hash, consent, PIN timestamp.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </section>
+
                                 <!-- Flow -->
-                                <section id="flow" class="content-section">
                                     <h3 class="section-heading">Automation with Flow</h3>
                                     <p>Trigger document creation automatically using Flow Actions.</p>
                                     <div class="flow-card">
