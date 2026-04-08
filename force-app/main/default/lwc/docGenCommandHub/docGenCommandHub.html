@@ -20,6 +20,10 @@
                     <lightning-icon icon-name="utility:layers" size="x-small" class="nav-icon"></lightning-icon>
                     <span>Bulk Generation</span>
                 </button>
+                <button class={signaturesTabClass} onclick={handleShowSignatures}>
+                    <lightning-icon icon-name="utility:edit_form" size="x-small" class="nav-icon"></lightning-icon>
+                    <span>Signatures</span>
+                </button>
                 <button class={helpTabClass} onclick={handleShowHelp}>
                     <lightning-icon icon-name="utility:knowledge_base" size="x-small" class="nav-icon"></lightning-icon>
                     <span>Learning Center</span>
@@ -63,6 +67,17 @@
                         </div>
                         <div class="panel-body">
                             <c-doc-gen-bulk-runner></c-doc-gen-bulk-runner>
+                        </div>
+                    </template>
+
+                    <!-- SIGNATURES -->
+                    <template if:true={isSignatures}>
+                        <div class="panel-header">
+                            <h2>Signature Settings</h2>
+                            <p>Configure email branding, site URL, and signature behavior.</p>
+                        </div>
+                        <div class="panel-body">
+                            <c-doc-gen-signature-settings></c-doc-gen-signature-settings>
                         </div>
                     </template>
 
