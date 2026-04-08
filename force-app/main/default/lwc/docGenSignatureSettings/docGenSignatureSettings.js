@@ -90,7 +90,9 @@ export default class DocGenSignatureSettings extends LightningElement {
         this.isSaving = true;
         this.saveMessage = '';
         try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveSettings({ experienceSiteUrl: this.siteUrl });
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveSignatureSettings({
                 brandColor: this.brandColor,
                 logoUrl: this.logoUrl,

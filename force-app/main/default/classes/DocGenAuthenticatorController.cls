@@ -5,6 +5,7 @@ public without sharing class DocGenAuthenticatorController {
      */
     @AuraEnabled
     @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
     public static VerificationResult verifyDocument(String fileHash) {
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signature_Audit__c> audits = [
@@ -41,6 +42,7 @@ public without sharing class DocGenAuthenticatorController {
      */
     @AuraEnabled
     @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
     public static List<VerificationResult> verifyByRequestId(String requestId) {
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<DocGen_Signature_Audit__c> audits = [

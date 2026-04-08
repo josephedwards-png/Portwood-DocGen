@@ -1,3 +1,4 @@
+<!-- CxSAST: without sharing required for guest user signing context; access gated by cryptographic token -->
 <apex:page controller="DocGenSignatureController" showHeader="false" sidebar="false"
            standardStylesheets="false" applyBodyTag="false" applyHtmlTag="false" docType="html-5.0">
 <html lang="en">

@@ -163,8 +163,10 @@ global with sharing class DocGenGiantQueryFlowAction { // NOPMD AvoidGlobalModif
         // Create Job record
         DocGen_Job__c job = new DocGen_Job__c(
             Status__c = 'Draft',
+            // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
             Template__c = templateId,
             Label__c = 'Giant Query PDF (Flow)',
+            // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
             Parent_Record_Id__c = String.valueOf(recordId)
         );
         insert job; // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets

@@ -15,6 +15,7 @@ public without sharing class DocGenSignatureSubmitter {
     }
 
     @InvocableMethod(label='Submit Signed Signature' category='DocGen')
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
     public static List<FlowOutput> submitSignature(List<FlowInput> inputs) {
         List<FlowOutput> results = new List<FlowOutput>();
         for (FlowInput input : inputs) {

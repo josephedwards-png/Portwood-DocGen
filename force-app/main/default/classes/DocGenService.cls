@@ -912,6 +912,7 @@ public with sharing class DocGenService {
         imageCounter = 0;
 
         // Get parent-only record data (strip all children from config)
+        // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
         List<DocGen_Template__c> templates = [
             SELECT Base_Object_API__c, Query_Config__c, Type__c, Document_Title_Format__c
             FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1

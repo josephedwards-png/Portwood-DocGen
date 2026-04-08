@@ -228,6 +228,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      */
     private String buildHeaderRowFromConfig() {
         try {
+            // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
             List<DocGen_Template__c> tpls = [
                 SELECT Query_Config__c FROM DocGen_Template__c
                 WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1

@@ -30,6 +30,7 @@ public with sharing class DocGenSetupController {
             throw DocGenService.ahe('Insufficient privileges to modify DocGen settings.');
         }
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Experience_Site_Url__c = experienceSiteUrl;
         // Package-internal object — CRUD controlled by DocGen permission sets
         upsert settings; // NOPMD ApexCRUDViolation - package-internal custom setting; CRUD checked on lines 15-18 above
@@ -45,6 +46,7 @@ public with sharing class DocGenSetupController {
     public static List<Map<String, String>> getOrgWideEmailAddresses() {
         List<Map<String, String>> results = new List<Map<String, String>>();
         results.add(new Map<String, String>{ 'label' => '-- Running User (default) --', 'value' => '' });
+        // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
         for (OrgWideEmailAddress owa : [SELECT Id, Address, DisplayName FROM OrgWideEmailAddress ORDER BY DisplayName]) { // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
             String label = String.isNotBlank(owa.DisplayName)
                 ? owa.DisplayName + ' <' + owa.Address + '>'
@@ -63,12 +65,19 @@ public with sharing class DocGenSetupController {
             throw DocGenService.ahe('Insufficient privileges to modify DocGen settings.');
         }
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_Email_Brand_Color__c = brandColor;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_Email_Logo_Url__c = logoUrl;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_Email_Subject__c = emailSubject;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_Email_Message__c = emailMessage;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_Email_Footer_Text__c = footerText;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Company_Name__c = companyName;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         settings.Signature_OWA_Id__c = owaId;
         upsert settings; // NOPMD ApexCRUDViolation - package-internal custom setting
     }

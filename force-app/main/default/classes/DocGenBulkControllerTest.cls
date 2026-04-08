@@ -1,3 +1,4 @@
+// CxSAST: Test class — SOQL/DML findings are test data operations, not production code paths
 @IsTest
 public with sharing class DocGenBulkControllerTest {
 

@@ -391,6 +391,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 if (!result || !result.base64) { throw new Error('Document generation returned empty result.'); }
                 const docTitle = result.title || 'Document';
                 if (saveToRecord) {
+                    // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                     await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: result.base64, extension: 'pptx' });
                     this.showToast('Success', 'PPTX saved to record.', 'success');
                 } else {
@@ -410,6 +411,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         this.error = null;
         try {
             this.showToast('Info', 'Checking dataset size...', 'info');
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             const result = await generateDocumentGiantQuery({
                 templateId: this.selectedTemplateId,
                 recordId: this.recordId
@@ -420,6 +422,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 const saveToRecord = this.outputMode === 'save';
                 const docTitle = result.title || 'Document';
                 if (saveToRecord) {
+                    // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                     await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: result.base64, extension: 'pdf' });
                     this.showToast('Success', 'PDF saved to record.', 'success');
                 } else {
@@ -448,6 +451,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         const mergedBytes = mergePdfs(pdfBytesArray);
         const mergedBase64 = this._uint8ArrayToBase64(mergedBytes);
         if (saveToRecord) {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: mergedBase64, extension: 'pdf' });
             this.showToast('Success', 'Merged PDF saved to record.', 'success');
         } else {
@@ -483,6 +487,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             }
             const saveToRecord = this.outputMode === 'save';
             if (saveToRecord) {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await saveGeneratedDocument({ recordId: this.recordId, fileName: 'Document Packet', base64Data: finalBase64, extension: 'pdf' });
                 this.showToast('Success', 'Document packet saved to record.', 'success');
             } else {
@@ -512,6 +517,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             const mergedBase64 = this._uint8ArrayToBase64(mergedBytes);
             const saveToRecord = this.outputMode === 'save';
             if (saveToRecord) {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await saveGeneratedDocument({ recordId: this.recordId, fileName: 'Merged Document', base64Data: mergedBase64, extension: 'pdf' });
                 this.showToast('Success', 'Merged PDF saved to record.', 'success');
             } else {
@@ -543,6 +549,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             const finalBase64 = this._uint8ArrayToBase64(finalBytes);
             const saveToRecord = this.outputMode === 'save';
             if (saveToRecord) {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await saveGeneratedDocument({ recordId: this.recordId, fileName: 'Merged Child PDFs', base64Data: finalBase64, extension: 'pdf' });
                 this.showToast('Success', 'Merged PDF saved to record.', 'success');
             } else {
@@ -599,6 +606,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
         const fileBytes = buildDocx(parts.allXmlParts, allImages);
         const fileBase64 = this._uint8ArrayToBase64(fileBytes);
         if (saveToRecord) {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: fileBase64, extension });
             this.showToast('Success', extension.toUpperCase() + ' saved to record.', 'success');
         } else {
@@ -700,6 +708,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             // 8. Download or save
             const saveToRecord = this.outputMode === 'save';
             if (saveToRecord) {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await saveGeneratedDocument({ recordId: this.recordId, fileName: docTitle, base64Data: fileBase64, extension: 'docx' });
                 this.showToast('Success', 'DOCX saved to record.', 'success');
             } else {
@@ -709,6 +718,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
 
             // 9. Clean up fragment CVs server-side
             try {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await cleanupGiantQueryFragments({ jobId });
             } catch (cleanupErr) {
                 console.warn('DocGen: Fragment cleanup failed (non-fatal)', cleanupErr);
@@ -940,6 +950,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
             this.showProgressBar = true;
             this.progressPercent = 0;
             this.loadingMessage = 'Starting PDF generation...';
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             const giantResult = await launchGiantQueryPdfBatch({
                 templateId: this.selectedTemplateId,
                 recordId: this.recordId,
@@ -1000,6 +1011,7 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 this.progressPercent = 100;
                 this.showToast('Success', `PDF downloaded (${fileSizeMB}MB) — ${totalRecords.toLocaleString()} ${giantRelationship} rows.`, 'success');
                 // Clean up parts
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 try { await cleanupGiantQueryFragments({ jobId }); } catch (cleanupErr) { console.warn('Cleanup:', cleanupErr); }
             } else {
                 throw new Error('PDF generation completed but no output found.');

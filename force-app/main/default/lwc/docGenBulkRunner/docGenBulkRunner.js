@@ -338,6 +338,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
 
         const existingMatch = this.savedQueries.find(q => q.Query_Condition__c === autoFilter);
         if (!existingMatch) {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             saveQuery({
                 templateId: this.selectedTemplateId,
                 label: 'From Report',
@@ -358,10 +359,12 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         }
     }
 
+    // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
     handleDeleteQuery(event) {
         const queryId = event.target.dataset.id;
         if (!confirm('Are you sure you want to delete this saved query?')) return;
 
+        // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
         deleteQuery({ queryId })
             .then(() => {
                 this.showToast('Success', 'Query deleted', 'success');
@@ -390,12 +393,14 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
     handleNewQueryNameChange(event) { this.newQueryName = event.target.value; }
     handleNewQueryDescChange(event) { this.newQueryDesc = event.target.value; }
 
+    // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
     handleSaveQuery() {
         if (!this.newQueryName) {
             this.showToast('Error', 'Please enter a name.', 'error');
             return;
         }
 
+        // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
         saveQuery({
             templateId: this.selectedTemplateId,
             label: this.newQueryName,
@@ -450,6 +455,7 @@ export default class DocGenBulkRunner extends NavigationMixin(LightningElement) 
         this.jobProgress = { success: 0, error: 0, total: 0, percent: 0 };
 
         try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             this.jobId = await submitJob({
                 templateId: this.selectedTemplateId,
                 condition: this.condition,

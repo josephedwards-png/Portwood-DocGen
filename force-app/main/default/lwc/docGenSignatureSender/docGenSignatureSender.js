@@ -315,12 +315,14 @@ export default class DocGenSignatureSender extends LightningElement {
             const signersJson = JSON.stringify(signersPayload);
 
             if (this.sourceMode === 'template') {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 this.signerResults = await createTemplateSignerRequest({
                     templateId: this.selectedDocGenTemplateId,
                     relatedRecordId: this.recordId,
                     signersJson: signersJson
                 });
             } else {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 this.signerResults = await createMultiSignerRequest({
                     contentDocumentId: this.selectedDocId,
                     relatedRecordId: this.recordId,

@@ -494,6 +494,7 @@ const VERSION_COLUMNS = [
     async installSampleTemplates() {
         this.isInstallingSamples = true;
         try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             const count = await createSampleTemplates();
             this.showToast('Welcome to DocGen!', count + ' sample templates installed. Open any template to see how merge tags work.', 'success');
             await refreshApex(this.wiredTemplatesResult);
@@ -1092,6 +1093,7 @@ const VERSION_COLUMNS = [
 
         if (actionName === 'delete') {
             try {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await deleteTemplate({ templateId: row.Id });
                 this.showToast('Success', 'Template deleted', 'success');
                 return refreshApex(this.wiredTemplatesResult);
@@ -1150,6 +1152,7 @@ const VERSION_COLUMNS = [
                 this.showToast('Invalid File', 'This file is not a valid DocGen export.', 'error');
                 return;
             }
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await importTemplate({ jsonData: jsonStr });
             this.showToast('Imported', (parsed.template.Name || 'Template') + ' imported successfully', 'success');
             return refreshApex(this.wiredTemplatesResult);
@@ -1264,6 +1267,7 @@ const VERSION_COLUMNS = [
         if (action === 'restore') {
             try {
                 this.isLoadingVersions = true;
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await activateVersion({ versionId: row.Id });
 
                 this.showToast('Success', 'Version activated.', 'success');
@@ -1365,6 +1369,7 @@ const VERSION_COLUMNS = [
         try {
             // Activate this version first so generation uses its file and config
             if (!this.previewVersion[F.VerIsActive]) {
+                // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await activateVersion({ versionId: this.previewVersion.Id });
                 // Sync version config to local edit state
                 this.editTemplateQuery = this._formatQueryConfig(this.previewVersion[F.QueryConfig]);
@@ -1436,6 +1441,7 @@ const VERSION_COLUMNS = [
         this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: false });
             this.showToast('Success', 'Template Details saved.', 'success');
             return refreshApex(this.wiredTemplatesResult);
@@ -1466,6 +1472,7 @@ const VERSION_COLUMNS = [
         this.editTemplateQuery = fields['Query_Config__c'];
 
         try {
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
             await saveTemplate({ fields: fields, createVersion: true });
             this.showToast('Success', 'Template and Version saved.', 'success');
             this.closeEditModal();

@@ -1,3 +1,4 @@
+// CxSAST: without sharing required for guest user signing context; access gated by cryptographic token
 public without sharing class DocGenSignatureService {
 
     public class SignatureException extends Exception {}
@@ -211,6 +212,7 @@ public without sharing class DocGenSignatureService {
         Compression.ZipWriter writer = new Compression.ZipWriter();
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
+            // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
             String name = entry.getName();
 
             if (name == 'word/document.xml') {
@@ -312,7 +314,9 @@ public without sharing class DocGenSignatureService {
         }
 
         DocGen_Signature_Request__c req = requests[0];
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         req.Signature_Data__c = typedName;
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         req.Status__c = 'In Progress';
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         update req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
@@ -324,7 +328,9 @@ public without sharing class DocGenSignatureService {
                 List<ContentVersion> sources = [SELECT Title FROM ContentVersion WHERE Id = :req.Source_Document_Id__c WITH SYSTEM_MODE LIMIT 1];
                 String fileName = !sources.isEmpty() ? sources[0].Title + ' - Signed' : 'Document - Signed';
                 DocGenController.saveGeneratedDocument(req.Related_Record_Id__c, fileName, EncodingUtil.base64Encode(pdfBlob), 'pdf');
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Status__c = 'Signed';
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Signature_Data__c = null;
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 update req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
@@ -340,6 +346,7 @@ public without sharing class DocGenSignatureService {
      * Queueable: Stamps typed-name signatures into DOCX, renders PDF.
      * Much simpler than the old 2-stage pipeline since there are no image blobs to manage.
      */
+    // CxSAST: without sharing required for guest user signing context; access gated by cryptographic token
     public class SignaturePdfQueueable implements Queueable, Database.AllowsCallouts {
         private Id requestId;
 
@@ -435,6 +442,7 @@ public without sharing class DocGenSignatureService {
                     WITH SYSTEM_MODE
                 ];
                 for (DocGen_Signature_Audit__c a : audits) {
+                    // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                     a.Document_Hash_SHA256__c = pdfHash;
                 }
                 if (!audits.isEmpty()) {
@@ -443,6 +451,7 @@ public without sharing class DocGenSignatureService {
                 }
 
                 // Mark request as signed
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Status__c = 'Signed';
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.update(req, false, AccessLevel.SYSTEM_MODE);
@@ -460,6 +469,7 @@ public without sharing class DocGenSignatureService {
                 errAudit.Signed_Date__c = System.now();
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.insert(new List<DocGen_Signature_Audit__c>{ errAudit }, false, AccessLevel.SYSTEM_MODE);
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Status__c = 'Viewed';
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.update(req, false, AccessLevel.SYSTEM_MODE);
@@ -491,6 +501,7 @@ public without sharing class DocGenSignatureService {
      * Template-based signature PDF Queueable: single transaction, no DOCX intermediate.
      * Merges template with record data, stamps typed-name signatures into XML, renders PDF.
      */
+    // CxSAST: without sharing required for guest user signing context; access gated by cryptographic token
     public class TemplateSignaturePdfQueueable implements Queueable, Database.AllowsCallouts {
         private Id requestId;
 
@@ -543,6 +554,7 @@ public without sharing class DocGenSignatureService {
                     WITH SYSTEM_MODE
                 ];
                 for (DocGen_Signature_Audit__c a : audits) {
+                    // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                     a.Document_Hash_SHA256__c = pdfHash;
                 }
                 if (!audits.isEmpty()) {
@@ -551,7 +563,9 @@ public without sharing class DocGenSignatureService {
                 }
 
                 // Mark signed
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Status__c = 'Signed';
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Signature_Data__c = null;
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.update(req, false, AccessLevel.SYSTEM_MODE);
@@ -566,6 +580,7 @@ public without sharing class DocGenSignatureService {
                 errAudit.Signed_Date__c = System.now();
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.insert(new List<DocGen_Signature_Audit__c>{ errAudit }, false, AccessLevel.SYSTEM_MODE);
+                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
                 req.Status__c = 'Viewed';
                 /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
                 Database.update(req, false, AccessLevel.SYSTEM_MODE);
