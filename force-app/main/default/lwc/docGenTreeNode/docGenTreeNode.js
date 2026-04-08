@@ -47,7 +47,7 @@ export default class DocGenTreeNode extends LightningElement {
     handlePickerToggleField(event) {
         const apiName = event.currentTarget.dataset.api;
         this.dispatchEvent(new CustomEvent('fieldtoggle', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, fieldName: apiName }
         }));
     }
@@ -56,7 +56,7 @@ export default class DocGenTreeNode extends LightningElement {
     handleRemoveField(event) {
         const apiName = event.currentTarget.dataset.api;
         this.dispatchEvent(new CustomEvent('fieldtoggle', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, fieldName: apiName }
         }));
     }
@@ -65,7 +65,7 @@ export default class DocGenTreeNode extends LightningElement {
     handleExpandParent(event) {
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('expandparent', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName }
         }));
     }
@@ -75,7 +75,7 @@ export default class DocGenTreeNode extends LightningElement {
         const apiName = event.currentTarget.dataset.api;
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('parentfieldtoggle', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName, fieldName: apiName }
         }));
     }
@@ -84,7 +84,7 @@ export default class DocGenTreeNode extends LightningElement {
         const apiName = event.currentTarget.dataset.api;
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('parentfieldtoggle', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName, fieldName: apiName }
         }));
     }
@@ -95,7 +95,7 @@ export default class DocGenTreeNode extends LightningElement {
         event.stopPropagation();
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('removechild', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName }
         }));
     }
@@ -105,7 +105,7 @@ export default class DocGenTreeNode extends LightningElement {
         event.stopPropagation();
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('removeparent', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName }
         }));
     }
@@ -114,7 +114,7 @@ export default class DocGenTreeNode extends LightningElement {
     handleExpandChild(event) {
         const relName = event.currentTarget.dataset.rel;
         this.dispatchEvent(new CustomEvent('expandchild', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, relName }
         }));
     }
@@ -122,19 +122,19 @@ export default class DocGenTreeNode extends LightningElement {
     // ── Clause changes ──────────────────────────────────────────
     handleWhereChange(event) {
         this.dispatchEvent(new CustomEvent('clausechange', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, field: 'whereClause', value: event.target.value }
         }));
     }
     handleOrderByChange(event) {
         this.dispatchEvent(new CustomEvent('clausechange', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, field: 'orderBy', value: event.target.value }
         }));
     }
     handleLimitChange(event) {
         this.dispatchEvent(new CustomEvent('clausechange', {
-            bubbles: true, composed: true,
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
             detail: { path: this.nodeData.path, field: 'limitAmount', value: event.target.value }
         }));
     }

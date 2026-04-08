@@ -217,7 +217,7 @@ public with sharing class DocGenSignatureSenderController {
         Blob randomBytes = Crypto.generateAesKey(256);
         Blob hash = Crypto.generateDigest('SHA-256', Blob.valueOf(EncodingUtil.convertToHex(randomBytes) + signerEmail));
         String token = EncodingUtil.convertToHex(hash);
-        String signatureUrl = getSiteBaseUrl() + '/apex/DocGenSignature?token=' + token;
+        String signingPageUrl = getSiteBaseUrl() + '/apex/DocGenSignature?token=' + token;
 
         DocGen_Signature_Request__c req = new DocGen_Signature_Request__c();
         req.Signer_Name__c = signerName;
@@ -233,12 +233,12 @@ public with sharing class DocGenSignatureSenderController {
         String documentTitle = getDocumentTitle(contentVersionId);
         DocGenSignatureEmailService.sendSignatureRequestEmails(
             new List<DocGenSignatureEmailService.SignerEmail>{
-                new DocGenSignatureEmailService.SignerEmail(signerName, signerEmail, null, signatureUrl, null)
+                new DocGenSignatureEmailService.SignerEmail(signerName, signerEmail, null, signingPageUrl, null)
             },
             documentTitle
         );
 
-        return signatureUrl;
+        return signingPageUrl;
     }
 
     /**
