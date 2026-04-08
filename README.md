@@ -149,9 +149,7 @@ Five ways to combine PDFs:
 
 Records with **2,000 to 50,000+ child records** are detected automatically. Same template, same button — the engine handles pagination and async processing behind the scenes.
 
-### E-Signatures (Beta)
-
-> **This feature is in beta.** We welcome feedback, bug reports, and feature requests. Please share your experience in the [Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) or open a [GitHub Issue](https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues).
+### E-Signatures
 
 Collect legally valid electronic signatures directly from DocGen — no third-party tools required. Built-in Simple Electronic Signature (SES) support that's valid under the US ESIGN Act and UETA.
 
