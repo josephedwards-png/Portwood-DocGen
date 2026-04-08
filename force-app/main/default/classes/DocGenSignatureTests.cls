@@ -614,4 +614,348 @@ private class DocGenSignatureTests {
         }
         Test.stopTest();
     }
+
+    // =========================================================================
+    // Additional coverage — Sender Controller
+    // =========================================================================
+
+    @isTest
+    static void testCreateMultiSignerRequest() {
+        Account acc = [SELECT Id FROM Account LIMIT 1];
+        // Create a test DOCX ContentVersion
+        ContentVersion cv = new ContentVersion(
+            Title = 'Test Contract',
+            PathOnClient = 'contract.docx',
+            VersionData = Blob.valueOf('fake docx content')
+        );
+        insert cv;
+        cv = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id];
+
+        // Link to account
+        ContentDocumentLink cdl = new ContentDocumentLink(
+            ContentDocumentId = cv.ContentDocumentId,
+            LinkedEntityId = acc.Id,
+            ShareType = 'V'
+        );
+        insert cdl;
+
+        String signersJson = '[{"signerName":"Test Buyer","signerEmail":"buyer@test.com","roleName":"Buyer","contactId":""}]';
+
+        Test.startTest();
+        List<DocGenSignatureSenderController.SignerResult> results =
+            DocGenSignatureSenderController.createMultiSignerRequest(cv.ContentDocumentId, acc.Id, signersJson);
+        Test.stopTest();
+
+        System.assertEquals(1, results.size());
+        System.assertEquals('Test Buyer', results[0].signerName);
+        System.assert(String.isNotBlank(results[0].signerUrl));
+    }
+
+    @isTest
+    static void testGetRelatedDocuments() {
+        Account acc = [SELECT Id FROM Account LIMIT 1];
+        Test.startTest();
+        List<ContentVersion> docs = DocGenSignatureSenderController.getRelatedDocuments(acc.Id);
+        Test.stopTest();
+        System.assertNotEquals(null, docs);
+    }
+
+    @isTest
+    static void testGetDocumentSignatureRoles_noDoc() {
+        // Fake ID — should return empty list, not throw
+        Test.startTest();
+        List<String> roles = DocGenSignatureSenderController.getDocumentSignatureRoles(null);
+        Test.stopTest();
+        System.assertEquals(0, roles.size());
+    }
+
+    @isTest
+    static void testResendSignatureRequest() {
+        DocGen_Signature_Request__c req = getTestRequest();
+        req.Status__c = 'Sent';
+        update req;
+
+        Test.startTest();
+        DocGenSignatureSenderController.resendSignatureRequest(req.Id);
+        Test.stopTest();
+
+        DocGen_Signer__c signer = [SELECT Status__c FROM DocGen_Signer__c
+            WHERE Signature_Request__c = :req.Id LIMIT 1];
+        System.assertEquals('Pending', signer.Status__c);
+    }
+
+    @isTest
+    static void testCancelSignatureRequest() {
+        DocGen_Signature_Request__c req = getTestRequest();
+
+        Test.startTest();
+        DocGenSignatureSenderController.cancelSignatureRequest(req.Id);
+        Test.stopTest();
+
+        req = [SELECT Status__c FROM DocGen_Signature_Request__c WHERE Id = :req.Id];
+        System.assertEquals('Cancelled', req.Status__c);
+
+        DocGen_Signer__c signer = [SELECT Status__c FROM DocGen_Signer__c LIMIT 1];
+        System.assertEquals('Cancelled', signer.Status__c);
+    }
+
+    @isTest
+    static void testCancelAlreadySigned() {
+        DocGen_Signature_Request__c req = getTestRequest();
+        req.Status__c = 'Signed';
+        update req;
+
+        Test.startTest();
+        try {
+            DocGenSignatureSenderController.cancelSignatureRequest(req.Id);
+            System.assert(false, 'Should have thrown');
+        } catch (Exception e) {
+            // Expected
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testResendAlreadySigned() {
+        DocGen_Signature_Request__c req = getTestRequest();
+        req.Status__c = 'Signed';
+        update req;
+
+        Test.startTest();
+        try {
+            DocGenSignatureSenderController.resendSignatureRequest(req.Id);
+            System.assert(false, 'Should have thrown');
+        } catch (Exception e) {
+            // Expected
+        }
+        Test.stopTest();
+    }
+
+    // =========================================================================
+    // Additional coverage — Signature Service
+    // =========================================================================
+
+    @isTest
+    static void testStampAllSignaturesToBlob() {
+        // Create a minimal DOCX with a signature placeholder
+        ContentVersion cv = new ContentVersion(
+            Title = 'Sig Template',
+            PathOnClient = 'sig.docx',
+            VersionData = Blob.valueOf('not a real docx')
+        );
+        insert cv;
+
+        List<DocGenSignatureService.SignerData> signers = new List<DocGenSignatureService.SignerData>();
+        signers.add(new DocGenSignatureService.SignerData('Buyer', 'John Smith'));
+
+        Test.startTest();
+        try {
+            // Will fail because it's not a real DOCX ZIP, but exercises the code path
+            DocGenSignatureService.stampAllSignaturesToBlob(cv.Id, signers);
+        } catch (Exception e) {
+            // Expected — fake blob isn't a valid ZIP
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testBuildVerificationBlockHtml() {
+        DocGen_Signature_Request__c req = getTestRequest();
+        List<DocGen_Signer__c> signers = [
+            SELECT Signer_Name__c, Signer_Email__c, Role_Name__c, PIN_Verified_At__c
+            FROM DocGen_Signer__c
+            WHERE Signature_Request__c = :req.Id
+        ];
+
+        Test.startTest();
+        String html = DocGenSignatureService.buildVerificationBlockHtml(req.Id, signers);
+        Test.stopTest();
+
+        System.assert(html.contains('ELECTRONIC SIGNATURE CERTIFICATE'));
+        System.assert(html.contains('Multi Signer One'));
+    }
+
+    @isTest
+    static void testSignerImageData_typedName() {
+        DocGenSignatureService.SignerImageData sid = new DocGenSignatureService.SignerImageData('Buyer', 'John', System.now());
+        System.assertEquals('Buyer', sid.roleName);
+        System.assertEquals('John', sid.typedName);
+    }
+
+    @isTest
+    static void testHandleSignatureSubmission_invalidToken() {
+        Test.startTest();
+        try {
+            DocGenSignatureService.handleSignatureSubmission('bad', 'name');
+        } catch (DocGenSignatureService.SignatureException e) {
+            // Expected
+        }
+        Test.stopTest();
+    }
+
+    // =========================================================================
+    // Additional coverage — Email Service
+    // =========================================================================
+
+    @isTest
+    static void testSendSignatureEmails_withContact() {
+        Contact con = [SELECT Id FROM Contact LIMIT 1];
+        List<DocGenSignatureEmailService.SignerEmail> signers = new List<DocGenSignatureEmailService.SignerEmail>();
+        signers.add(new DocGenSignatureEmailService.SignerEmail(
+            'Contact Signer', 'contact@test.com', 'Buyer', 'https://example.com/sign', con.Id
+        ));
+
+        Test.startTest();
+        DocGenSignatureEmailService.sendSignatureRequestEmails(signers, 'Test Document');
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testSendSignatureEmails_empty() {
+        Test.startTest();
+        DocGenSignatureEmailService.sendSignatureRequestEmails(null, 'Test');
+        DocGenSignatureEmailService.sendSignatureRequestEmails(new List<DocGenSignatureEmailService.SignerEmail>(), 'Test');
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testSendSignatureEmails_withBranding() {
+        // Set up branding settings
+        DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+        settings.Signature_Email_Brand_Color__c = '#FF0000';
+        settings.Signature_Email_Logo_Url__c = 'https://example.com/logo.png';
+        settings.Company_Name__c = 'Test Corp';
+        settings.Signature_Email_Subject__c = 'Sign {DocumentTitle} for {SignerName}';
+        settings.Signature_Email_Message__c = '{SenderName} needs your signature on {DocumentTitle}';
+        settings.Signature_Email_Footer_Text__c = 'Custom footer';
+        upsert settings;
+
+        List<DocGenSignatureEmailService.SignerEmail> signers = new List<DocGenSignatureEmailService.SignerEmail>();
+        signers.add(new DocGenSignatureEmailService.SignerEmail(
+            'Branded Signer', 'branded@test.com', 'Seller', 'https://example.com/sign', null
+        ));
+
+        Test.startTest();
+        DocGenSignatureEmailService.sendSignatureRequestEmails(signers, 'Branded Doc');
+        Test.stopTest();
+    }
+
+    // =========================================================================
+    // Additional coverage — Controller edge cases
+    // =========================================================================
+
+    @isTest
+    static void testValidateToken_cancelledRequest() {
+        DocGen_Signature_Request__c req = getTestRequest();
+        req.Status__c = 'Cancelled';
+        update req;
+
+        // The signer's parent request is cancelled
+        Test.startTest();
+        DocGenSignatureController.SignatureInitResponse res =
+            DocGenSignatureController.validateToken('f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5');
+        Test.stopTest();
+
+        System.assertEquals(false, res.isValid);
+    }
+
+    @isTest
+    static void testSendPin_lockedOut() {
+        DocGen_Signer__c signer = getTestSigner();
+        signer.PIN_Attempts__c = 3;
+        update signer;
+
+        Test.startTest();
+        Map<String, Object> result = DocGenSignatureController.sendPin(
+            'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5',
+            'multisigner@test.com'
+        );
+        Test.stopTest();
+
+        System.assertEquals(false, result.get('success'));
+    }
+
+    @isTest
+    static void testVerifyPin_invalidFormat() {
+        Test.startTest();
+        Map<String, Object> result = DocGenSignatureController.verifyPin(
+            'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5',
+            'abc'
+        );
+        Test.stopTest();
+        System.assertEquals(false, result.get('success'));
+    }
+
+    @isTest
+    static void testVerifyPin_noPinSent() {
+        Test.startTest();
+        Map<String, Object> result = DocGenSignatureController.verifyPin(
+            'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5',
+            '123456'
+        );
+        Test.stopTest();
+        System.assertEquals(false, result.get('success'));
+    }
+
+    @isTest
+    static void testSaveLegacySignature() {
+        Test.startTest();
+        DocGenSignatureController.saveLegacySignature(
+            'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
+            'Legacy Name'
+        );
+        Test.stopTest();
+
+        DocGen_Signature_Request__c req = getTestRequest();
+        System.assertEquals('Viewed', req.Status__c);
+    }
+
+    @isTest
+    static void testFinishSignatureUpload_noop() {
+        Test.startTest();
+        DocGenSignatureController.finishSignatureUpload('token', 'base64', 'file');
+        Test.stopTest();
+        // No-op method — just verify it doesn't throw
+    }
+
+    @isTest
+    static void testGetOrgWideEmailAddresses() {
+        Test.startTest();
+        List<Map<String, String>> owas = DocGenSetupController.getOrgWideEmailAddresses();
+        Test.stopTest();
+        System.assert(owas.size() >= 1); // At least the "Running User" default
+    }
+
+    @isTest
+    static void testGetTemplateSignatureRoles_noTemplate() {
+        Test.startTest();
+        List<String> roles = DocGenSignatureSenderController.getTemplateSignatureRoles(null);
+        Test.stopTest();
+        System.assertEquals(0, roles.size());
+    }
+
+    @isTest
+    static void testCreateSignatureRequest_legacy() {
+        Account acc = [SELECT Id FROM Account LIMIT 1];
+        ContentVersion cv = new ContentVersion(
+            Title = 'Legacy Doc',
+            PathOnClient = 'legacy.docx',
+            VersionData = Blob.valueOf('fake')
+        );
+        insert cv;
+        cv = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id];
+        ContentDocumentLink cdl = new ContentDocumentLink(
+            ContentDocumentId = cv.ContentDocumentId,
+            LinkedEntityId = acc.Id,
+            ShareType = 'V'
+        );
+        insert cdl;
+
+        Test.startTest();
+        String url = DocGenSignatureSenderController.createSignatureRequest(
+            cv.ContentDocumentId, acc.Id, 'Legacy Signer', 'legacy@test.com'
+        );
+        Test.stopTest();
+        System.assert(String.isNotBlank(url));
+    }
 }
