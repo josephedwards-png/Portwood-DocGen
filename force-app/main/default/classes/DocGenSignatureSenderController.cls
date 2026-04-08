@@ -29,7 +29,7 @@ public with sharing class DocGenSignatureSenderController {
         List<DocGen_Template_Version__c> activeVersions = [
             SELECT Id FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
+            WITH USER_MODE LIMIT 1
         ];
         if (activeVersions.isEmpty()) return new List<String>();
 
@@ -197,7 +197,8 @@ public with sharing class DocGenSignatureSenderController {
         req.Related_Record_Id__c = relatedRecordId;
         req.Status__c = 'Sent';
         // Package-internal object — CRUD controlled by DocGen permission sets
-        insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        /* sfge-disable-next-line ApexFlsViolation */
+        Database.insert(req, AccessLevel.USER_MODE); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         String documentTitle = getDocumentTitle(contentVersionId);
         return createSignersAndNotify(req.Id, null, documentTitle, signerInputs);
@@ -281,6 +282,7 @@ public with sharing class DocGenSignatureSenderController {
         String siteUrl = getSiteBaseUrl();
         List<Map<String, Object>> results = new List<Map<String, Object>>();
 
+        /* sfge-disable-next-line ApexFlsViolation */
         List<DocGen_Signature_Request__c> requests = [
             SELECT Id, Name, Status__c, Source_Document_Id__c, CreatedDate,
                    (SELECT Id, Signer_Name__c, Signer_Email__c, Role_Name__c,
@@ -521,6 +523,7 @@ public with sharing class DocGenSignatureSenderController {
      */
     @AuraEnabled
     public static void cancelSignatureRequest(Id requestId) {
+        /* sfge-disable-next-line ApexFlsViolation */
         DocGen_Signature_Request__c req = [
             SELECT Id, Status__c
             FROM DocGen_Signature_Request__c
@@ -539,6 +542,7 @@ public with sharing class DocGenSignatureSenderController {
         Database.update(req, false, AccessLevel.SYSTEM_MODE);
 
         // Invalidate all unsigned signers
+        /* sfge-disable-next-line ApexFlsViolation */
         List<DocGen_Signer__c> unsignedSigners = [
             SELECT Id, Status__c FROM DocGen_Signer__c
             WHERE Signature_Request__c = :requestId AND Status__c != 'Signed'

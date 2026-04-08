@@ -6,7 +6,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled(cacheable=true)
     public static List<DocGen_Template__c> getBulkTemplates() {
-        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH SYSTEM_MODE ORDER BY Name LIMIT 2000];
+        return [SELECT Id, Name, Base_Object_API__c, Description__c, Output_Format__c, Query_Config__c, Test_Record_Id__c FROM DocGen_Template__c WITH USER_MODE ORDER BY Name LIMIT 2000];
     }
 
     /**
@@ -333,7 +333,8 @@ public with sharing class DocGenBulkController {
             if (String.isNotBlank(jobLabel)) {
                 job.Label__c = jobLabel;
             }
-            insert job; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            /* sfge-disable-next-line ApexFlsViolation */
+            Database.insert(job, AccessLevel.USER_MODE); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
             // 2. Run Batch — user-configurable batch size (default 1, max 200)
             Integer size = (batchSize != null && batchSize >= 1 && batchSize <= 200) ? batchSize : 1;
@@ -353,7 +354,7 @@ public with sharing class DocGenBulkController {
      */
     @AuraEnabled
     public static DocGen_Job__c getJobStatus(Id jobId) {
-        List<DocGen_Job__c> jsRecords = [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE];
+        List<DocGen_Job__c> jsRecords = [SELECT Id, Name, Status__c, Success_Count__c, Error_Count__c, Total_Records__c FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE];
         return jsRecords[0];
     }
 
@@ -366,7 +367,7 @@ public with sharing class DocGenBulkController {
         return [SELECT Id, Name, Label__c, Status__c, Success_Count__c, Error_Count__c, Total_Records__c,
                    CreatedDate, Template__r.Name, Template__r.Output_Format__c
             FROM DocGen_Job__c
-            WITH SYSTEM_MODE
+            WITH USER_MODE
             ORDER BY CreatedDate DESC
             LIMIT 20];
     }
@@ -381,7 +382,7 @@ public with sharing class DocGenBulkController {
     public static List<Map<String, String>> getJobGeneratedPdfs(Id jobId) {
         List<DocGen_Job__c> gpRecords = [SELECT Template__c, Template__r.Base_Object_API__c, Template__r.Name,
                    Query_Condition__c, CreatedDate
-            FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE];
+            FROM DocGen_Job__c WHERE Id = :jobId WITH USER_MODE];
         DocGen_Job__c job = gpRecords[0];
 
         String baseObject = job.Template__r.Base_Object_API__c;
@@ -438,7 +439,7 @@ public with sharing class DocGenBulkController {
         return [SELECT Id, Name, Description__c, Query_Condition__c
             FROM DocGen_Saved_Query__c
             WHERE DocGen_Template__c = :templateId
-            WITH SYSTEM_MODE
+            WITH USER_MODE
             ORDER BY CreatedDate DESC];
     }
 
@@ -458,7 +459,8 @@ public with sharing class DocGenBulkController {
                 Description__c = description,
                 Query_Condition__c = condition
             );
-            insert sq; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+            /* sfge-disable-next-line ApexFlsViolation */
+            Database.insert(sq, AccessLevel.USER_MODE); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error saving query.');
         }
