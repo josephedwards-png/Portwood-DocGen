@@ -306,7 +306,7 @@ public without sharing class DocGenSignatureService {
         DocGen_Signature_Request__c req = requests[0];
         req.Signature_Data__c = typedName;
         req.Status__c = 'In Progress';
-        update req;
+        update req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         if (Test.isRunningTest()) {
             try {
@@ -316,7 +316,7 @@ public without sharing class DocGenSignatureService {
                 DocGenController.saveGeneratedDocument(req.Related_Record_Id__c, fileName, EncodingUtil.base64Encode(pdfBlob), 'pdf');
                 req.Status__c = 'Signed';
                 req.Signature_Data__c = null;
-                update req;
+                update req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
             } catch (Exception e) {
                 System.debug(LoggingLevel.ERROR, 'DocGen: Test path signature error: ' + e.getMessage());
             }

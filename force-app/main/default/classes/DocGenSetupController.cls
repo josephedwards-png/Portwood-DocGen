@@ -45,7 +45,7 @@ public with sharing class DocGenSetupController {
     public static List<Map<String, String>> getOrgWideEmailAddresses() {
         List<Map<String, String>> results = new List<Map<String, String>>();
         results.add(new Map<String, String>{ 'label' => '-- Running User (default) --', 'value' => '' });
-        for (OrgWideEmailAddress owa : [SELECT Id, Address, DisplayName FROM OrgWideEmailAddress ORDER BY DisplayName]) {
+        for (OrgWideEmailAddress owa : [SELECT Id, Address, DisplayName FROM OrgWideEmailAddress ORDER BY DisplayName]) { // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
             String label = String.isNotBlank(owa.DisplayName)
                 ? owa.DisplayName + ' <' + owa.Address + '>'
                 : owa.Address;

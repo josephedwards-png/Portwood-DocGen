@@ -333,7 +333,7 @@ public with sharing class DocGenBulkController {
             if (String.isNotBlank(jobLabel)) {
                 job.Label__c = jobLabel;
             }
-            insert job;
+            insert job; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
             // 2. Run Batch — user-configurable batch size (default 1, max 200)
             Integer size = (batchSize != null && batchSize >= 1 && batchSize <= 200) ? batchSize : 1;
@@ -458,7 +458,7 @@ public with sharing class DocGenBulkController {
                 Description__c = description,
                 Query_Condition__c = condition
             );
-            insert sq;
+            insert sq; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error saving query.');
         }

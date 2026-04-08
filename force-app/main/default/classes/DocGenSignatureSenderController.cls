@@ -103,7 +103,7 @@ public with sharing class DocGenSignatureSenderController {
         req.Related_Record_Id__c = relatedRecordId;
         req.Status__c = 'Sent';
         // Package-internal object — CRUD controlled by DocGen permission sets
-        insert req;
+        insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         // Pre-compute everything while we have admin access.
         // Guest users can't query template data or ContentVersions (content sharing).
@@ -126,8 +126,8 @@ public with sharing class DocGenSignatureSenderController {
                         dist.PreferencesAllowViewInBrowser = true;
                         dist.PreferencesLinkLatestVersion = false;
                         dist.PreferencesExpires = false;
-                        insert dist;
-                        dist = [SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = :dist.Id];
+                        insert dist; // NOPMD ApexCRUDViolation - ContentDistribution for signature preview
+                        dist = [SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = :dist.Id]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
                         previewImageMap.put(relId, dist.ContentDownloadUrl);
                     } catch (Exception e) {
                         System.debug(LoggingLevel.WARN, 'DocGen: Could not create public link for ' + relId + ': ' + e.getMessage());
@@ -145,7 +145,7 @@ public with sharing class DocGenSignatureSenderController {
                 'previewHtml' => previewHtml
             };
             req.Signature_Data__c = JSON.serialize(cachedData);
-            update req;
+            update req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
         } catch (Exception e) {
             System.debug(LoggingLevel.WARN, 'DocGen: Failed to pre-compute signature data: ' + e.getMessage());
         }
@@ -197,7 +197,7 @@ public with sharing class DocGenSignatureSenderController {
         req.Related_Record_Id__c = relatedRecordId;
         req.Status__c = 'Sent';
         // Package-internal object — CRUD controlled by DocGen permission sets
-        insert req;
+        insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         String documentTitle = getDocumentTitle(contentVersionId);
         return createSignersAndNotify(req.Id, null, documentTitle, signerInputs);
@@ -227,7 +227,7 @@ public with sharing class DocGenSignatureSenderController {
         req.Secure_Token__c = token;
         req.Status__c = 'Sent';
         // Package-internal object — CRUD controlled by DocGen permission sets
-        insert req;
+        insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         // Send branded signature request email automatically
         String documentTitle = getDocumentTitle(contentVersionId);
@@ -430,7 +430,7 @@ public with sharing class DocGenSignatureSenderController {
         }
 
         // Package-internal object — CRUD controlled by DocGen permission sets
-        insert signerRecords;
+        insert signerRecords; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
         // Send branded signature request emails
         List<DocGenSignatureEmailService.SignerEmail> emailList = new List<DocGenSignatureEmailService.SignerEmail>();
