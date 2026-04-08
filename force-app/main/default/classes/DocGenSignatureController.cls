@@ -142,6 +142,7 @@ public without sharing class DocGenSignatureController {
     @AuraEnabled
     @RemoteAction
     public static Map<String, Object> sendPin(String token, String email) {
+        // CxSAST: Apex_CRUD_Violation — SYSTEM_MODE required for guest user context; CRUD enforced by DocGen permission sets
         Map<String, Object> result = new Map<String, Object>();
 
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
@@ -449,6 +450,7 @@ public without sharing class DocGenSignatureController {
         return res;
     }
 
+    // CxSAST: Apex_CRUD_ContentDistribution — SYSTEM_MODE required for guest user context; ContentDistribution created for signature document preview
     private static String getOrCreatePublicLink(ContentVersion cv) {
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         List<ContentDistribution> dists = [

@@ -85,6 +85,8 @@ public with sharing class DocGenSignatureSenderController {
      * No pre-generated DOCX needed — PDF is merged from template at signing time.
      */
     @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
+    // CxSAST: Apex_CRUD_ContentDistribution — ContentDistribution created for signature preview images
     public static List<SignerResult> createTemplateSignerRequest(Id templateId, String relatedRecordId, String signersJson) {
         // Validate template exists
         /* code-analyzer-suppress ApexFlsViolation */
@@ -181,6 +183,7 @@ public with sharing class DocGenSignatureSenderController {
      * signersJson: [{roleName, contactId, signerName, signerEmail}, ...]
      */
     @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
     public static List<SignerResult> createMultiSignerRequest(Id contentDocumentId, String relatedRecordId, String signersJson) {
         // Resolve latest ContentVersionId
         List<ContentDocument> docs = [SELECT LatestPublishedVersionId FROM ContentDocument WHERE Id = :contentDocumentId WITH SYSTEM_MODE LIMIT 1];
@@ -213,6 +216,7 @@ public with sharing class DocGenSignatureSenderController {
      * Legacy single-signer request creation (backward compat).
      */
     @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
     public static String createSignatureRequest(Id contentDocumentId, String relatedRecordId, String signerName, String signerEmail) {
         List<ContentDocument> docs = [SELECT LatestPublishedVersionId FROM ContentDocument WHERE Id = :contentDocumentId WITH SYSTEM_MODE LIMIT 1];
         if (docs.isEmpty()) {
@@ -465,6 +469,7 @@ public with sharing class DocGenSignatureSenderController {
      * Generates new tokens for security (old links become invalid).
      */
     @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
     public static void resendSignatureRequest(Id requestId) {
         /* code-analyzer-suppress ApexFlsViolation */
         DocGen_Signature_Request__c req = [

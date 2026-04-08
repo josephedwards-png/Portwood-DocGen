@@ -28,7 +28,7 @@ public with sharing class DocGenBulkController {
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
         }
-        return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - inputs validated by sanitizeCondition() which rejects SOQL keywords and dangerous chars
+        return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - inputs validated by sanitizeCondition() which rejects SOQL keywords and dangerous chars // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() validation + sanitizeCondition() + USER_MODE
     }
 
     /**
