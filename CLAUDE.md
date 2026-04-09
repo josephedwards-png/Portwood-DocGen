@@ -144,9 +144,15 @@ Expected: `PASS: 24  FAIL: 0  ALL TESTS PASSED`
 
 Self-contained — creates all test data, runs full document generation pipeline, validates output, cleans up. Zero dependencies on pre-existing org data.
 
-**When adding features:** Add assertions to `scripts/e2e-test.apex` first.
+**MANDATORY: When adding ANY feature, field, merge tag, or configuration:**
+1. Add assertions to `scripts/e2e-test.apex` FIRST — before or alongside the feature code
+2. Every new merge tag syntax must have a processXmlForTest() assertion
+3. Every new custom field must be verified in the permission set validation section
+4. Every new Apex class must be added to the permission set checks
+5. Every new VF page must be verified in the guest permission set checks
+6. If the e2e test count doesn't increase with a feature commit, the commit is incomplete
 
-### 2. Apex Test Suite (629 tests, 76% coverage)
+### 2. Apex Test Suite (850+ tests, 75% coverage)
 ```bash
 sf apex run test --target-org <org> --test-level RunLocalTests --wait 15 --code-coverage
 ```
@@ -156,7 +162,7 @@ Expected: `Outcome: Passed`, `Pass Rate: 100%`, org-wide coverage ≥ 75%
 ```bash
 sf code-analyzer run --workspace "force-app/" --rule-selector "Security" --rule-selector "AppExchange" --view table
 ```
-Expected: `Found 0 violations.`
+Expected: `0 High severity violation(s) found.` (30 Moderate false positives are acceptable — see `code-analyzer.yml`)
 
 Runs PMD security rules, AppExchange-specific rules, and Salesforce Graph Engine (SFGE) taint analysis. SFGE timeouts on complex methods are normal — only violations count.
 
