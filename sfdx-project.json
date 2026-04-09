@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.37.0 — Boolean Conditional Fix + Checkbox Rendering",
-      "versionNumber": "1.37.0.NEXT",
-      "ancestorId": "04tal000006Ug9dAAC",
+      "versionName": "1.38.0 — Community Bug Fixes",
+      "versionNumber": "1.38.0.NEXT",
+      "ancestorId": "04tal000006UgBFAA0",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
