@@ -168,7 +168,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            DocGenController.saveTemplate(fields, false);
+            DocGenController.saveTemplate(fields, false, null);
             Test.stopTest();
 
             DocGen_Template__c updated = [SELECT Name, Category__c, Description__c FROM DocGen_Template__c WHERE Id = :tpl.Id];
@@ -201,7 +201,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            DocGenController.saveTemplate(fields, true);
+            DocGenController.saveTemplate(fields, true, null);
             Test.stopTest();
 
             List<DocGen_Template_Version__c> versions = [
@@ -829,7 +829,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            DocGenController.saveTemplate(fields, false);
+            DocGenController.saveTemplate(fields, false, null);
             Test.stopTest();
 
             DocGen_Template__c updated = [SELECT Is_Default__c FROM DocGen_Template__c WHERE Id = :tpl.Id];
@@ -868,7 +868,7 @@ private class DocGenControllerTests {
                 'Document_Title_Format__c' => null,
                 'Is_Default__c' => true
             };
-            DocGenController.saveTemplate(fields1, false);
+            DocGenController.saveTemplate(fields1, false, null);
 
             // Now set tpl2 as default — should unset tpl1
             Map<String, Object> fields2 = new Map<String, Object>{
@@ -885,7 +885,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            DocGenController.saveTemplate(fields2, false);
+            DocGenController.saveTemplate(fields2, false, null);
             Test.stopTest();
 
             DocGen_Template__c updatedTpl1 = [SELECT Is_Default__c FROM DocGen_Template__c WHERE Id = :tpl1.Id];
@@ -965,7 +965,7 @@ private class DocGenControllerTests {
             Test.startTest();
             Boolean caughtException = false;
             try {
-                DocGenController.saveTemplate(fields, false);
+                DocGenController.saveTemplate(fields, false, null);
             } catch (AuraHandledException e) {
                 caughtException = true;
             }
@@ -1306,7 +1306,7 @@ private class DocGenControllerTests {
             };
 
             Test.startTest();
-            DocGenController.saveTemplate(fields, true);
+            DocGenController.saveTemplate(fields, true, null);
             Test.stopTest();
 
             // The old version should be deactivated
