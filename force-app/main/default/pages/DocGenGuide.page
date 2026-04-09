@@ -170,6 +170,7 @@
     <a href="#child-loops">Child Record Loops</a>
     <a href="#repeating-tables">Repeating Table Rows</a>
     <a href="#conditionals">Conditional Sections</a>
+    <a href="#comparisons">Comparisons (IF / ELSE)</a>
     <a href="#formatting">Date &amp; Number Formatting</a>
     <a href="#aggregates">Aggregates (SUM, COUNT, AVG)</a>
     <a href="#images">Dynamic Images</a>
@@ -422,6 +423,43 @@
 
 <p>The entire block — including any text, tables, or images between the tags — is removed from the output when the condition is false or blank. This works for paragraphs, table rows, and multi-line content.</p>
 
+<h3>Else Blocks</h3>
+
+<p>Use <code>{:else}</code> inside a conditional to show alternative content when the condition is false:</p>
+
+<table>
+    <tr><th>What You Type</th><th>Output (true)</th><th>Output (false/blank)</th></tr>
+    <tr><td><code>{#IsActive}Active{:else}Inactive{/IsActive}</code></td><td>Active</td><td>Inactive</td></tr>
+    <tr><td><code>{#Industry}Sector: {Industry}{:else}No industry on file{/Industry}</code></td><td>Sector: Technology</td><td>No industry on file</td></tr>
+</table>
+
+<h3>Inverse Conditionals</h3>
+
+<p>Use the <code>{^Field}</code> prefix (caret instead of hash) to show content only when a field is <strong>false, blank, or null</strong> — the opposite of <code>{#Field}</code>:</p>
+
+<table>
+    <tr><th>What You Type</th><th>When It Shows</th><th>When It's Hidden</th></tr>
+    <tr><td><code>{^HasDiscount}No discount applied{/HasDiscount}</code></td><td>Field is <strong>false</strong> or blank</td><td>Field is <strong>true</strong> or has a value</td></tr>
+    <tr><td><code>{^Email}No email on file{/Email}</code></td><td>Email is <strong>blank/null</strong></td><td>Email has a value</td></tr>
+</table>
+
+<p>Inverse conditionals also support <code>{:else}</code> blocks:</p>
+<p><code>{^HasDiscount}Standard pricing{:else}Discount applied{/HasDiscount}</code></p>
+
+<h2 id="comparisons">Comparisons (IF / ELSE)</h2>
+
+<p>Compare a field against a specific value using <code>{#IF Field operator Value}</code>. Supports both string and numeric comparisons.</p>
+
+<table>
+    <tr><th>What You Type</th><th>Output</th><th>Operator</th></tr>
+    <tr><td><code>{#IF Industry = Technology}Tech partner{/IF}</code></td><td>Tech partner (when Industry is "Technology")</td><td>Equals</td></tr>
+    <tr><td><code>{#IF Amount > 50000}Premium{:else}Standard{/IF}</code></td><td>Premium (when Amount &gt; 50000)</td><td>Greater than</td></tr>
+    <tr><td><code>{#IF Status != Closed}Still open{/IF}</code></td><td>Still open (when Status is not "Closed")</td><td>Not equals</td></tr>
+    <tr><td><code>{#IF Quantity >= 100}Bulk order{/IF}</code></td><td>Bulk order (when Quantity &ge; 100)</td><td>Greater or equal</td></tr>
+</table>
+
+<div class="tip"><strong>Supported operators:</strong> <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> — Numeric comparison is attempted first; falls back to alphabetical string comparison.</div>
+
 <h2 id="formatting">Date &amp; Number Formatting</h2>
 
 <p>Add a format specifier after a colon to control how values display:</p>
@@ -435,7 +473,10 @@
     <tr><td><code>{Rate:percent}</code></td><td>15.5%</td><td>Percentage</td></tr>
     <tr><td><code>{Quantity:number}</code></td><td>1,234</td><td>Number with commas</td></tr>
     <tr><td><code>{Price:#,##0.00}</code></td><td>1,234.56</td><td>Custom decimal format</td></tr>
+    <tr><td><code>{IsActive:checkbox}</code></td><td>[X] or [ ]</td><td>Checkbox (true/false)</td></tr>
 </table>
+
+<div class="tip"><strong>Checkbox format</strong> renders <code>[X]</code> for truthy values and <code>[ ]</code> for false/blank. Use it inline with labels: <code>Active: {IsActive:checkbox}  Discount: {HasDiscount:checkbox}</code></div>
 
 <h2 id="aggregates">Aggregates (SUM, COUNT, AVG)</h2>
 

@@ -268,18 +268,34 @@
                     <h3 class="slds-text-heading_small slds-var-m-bottom_small">Conditional Content</h3>
                     <p class="slds-var-m-bottom_small">Show or hide content based on field values:</p>
                     <div class="slds-box slds-theme_shade slds-var-m-bottom_small">
-                        <code>&#123;%IsActive&#125;</code> — Content here only appears if IsActive is truthy<br/>
-                        <code>&#123;%/IsActive&#125;</code> — End of conditional block
+                        <code>&#123;#IsActive&#125;</code>Content shown when true<code>&#123;/IsActive&#125;</code><br/>
+                        <code>&#123;#IsActive&#125;</code>Active<code>&#123;:else&#125;</code>Inactive<code>&#123;/IsActive&#125;</code> — Else block<br/>
+                        <code>&#123;^HasDiscount&#125;</code>No discount<code>&#123;/HasDiscount&#125;</code> — Inverse (show when false/blank)
                     </div>
-                    <p class="slds-text-body_small slds-text-color_weak">Conditional blocks work with boolean fields, or any field value that is non-null and non-empty.</p>
+                    <p class="slds-text-body_small slds-text-color_weak">Conditional blocks work with boolean fields, or any field value that is non-null and non-empty. Use <code>&#123;^Field&#125;</code> for the inverse.</p>
                 </div>
 
                 <div class="slds-box slds-theme_default slds-var-m-bottom_medium">
-                    <h3 class="slds-text-heading_small slds-var-m-bottom_small">Date Formatting</h3>
-                    <p class="slds-var-m-bottom_small">Format date fields using pipe syntax:</p>
+                    <h3 class="slds-text-heading_small slds-var-m-bottom_small">Comparisons (IF / ELSE)</h3>
+                    <p class="slds-var-m-bottom_small">Compare a field against a value:</p>
                     <div class="slds-box slds-theme_shade slds-var-m-bottom_small">
-                        <code>&#123;CreatedDate|MM/dd/yyyy&#125;</code> — Outputs: 03/18/2026<br/>
-                        <code>&#123;CloseDate|MMMM d, yyyy&#125;</code> — Outputs: March 18, 2026
+                        <code>&#123;#IF Industry = Technology&#125;</code>Tech partner<code>&#123;/IF&#125;</code><br/>
+                        <code>&#123;#IF Amount &gt; 50000&#125;</code>Premium<code>&#123;:else&#125;</code>Standard<code>&#123;/IF&#125;</code><br/>
+                        <code>&#123;#IF Status != Closed&#125;</code>Still open<code>&#123;/IF&#125;</code>
+                    </div>
+                    <p class="slds-text-body_small slds-text-color_weak">Operators: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> — Numeric comparison tried first, then string.</p>
+                </div>
+
+                <div class="slds-box slds-theme_default slds-var-m-bottom_medium">
+                    <h3 class="slds-text-heading_small slds-var-m-bottom_small">Date &amp; Number Formatting</h3>
+                    <p class="slds-var-m-bottom_small">Add a format specifier after a colon:</p>
+                    <div class="slds-box slds-theme_shade slds-var-m-bottom_small">
+                        <code>&#123;CloseDate:MM/dd/yyyy&#125;</code> — Outputs: 03/18/2026<br/>
+                        <code>&#123;CloseDate:MMMM d, yyyy&#125;</code> — Outputs: March 18, 2026<br/>
+                        <code>&#123;Amount:currency&#125;</code> — Outputs: $500,000.00<br/>
+                        <code>&#123;Rate:percent&#125;</code> — Outputs: 15.5%<br/>
+                        <code>&#123;Quantity:number&#125;</code> — Outputs: 1,234<br/>
+                        <code>&#123;IsActive:checkbox&#125;</code> — Outputs: [X] or [ ]
                     </div>
                 </div>
 

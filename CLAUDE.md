@@ -136,21 +136,37 @@ DOCX output preserves whatever fonts are in the template file. If users need cus
 
 **All three checks MUST pass before every release. No exceptions.**
 
-### 1. E2E Test Script (24 tests)
+### 1. E2E Test Suite (8 chained scripts)
 ```bash
-sf apex run --target-org <org> -f scripts/e2e-test.apex
+sf apex run --target-org <org> -f scripts/e2e-01-permissions.apex
+sf apex run --target-org <org> -f scripts/e2e-02-template-crud.apex
+sf apex run --target-org <org> -f scripts/e2e-03-generate-pdf.apex
+sf apex run --target-org <org> -f scripts/e2e-04-generate-docx.apex
+sf apex run --target-org <org> -f scripts/e2e-05-generate-bulk.apex
+sf apex run --target-org <org> -f scripts/e2e-06-signatures.apex
+sf apex run --target-org <org> -f scripts/e2e-07-syntax.apex
+sf apex run --target-org <org> -f scripts/e2e-08-cleanup.apex
 ```
-Expected: `PASS: 24  FAIL: 0  ALL TESTS PASSED`
+Expected: Each script prints `PASS: N  FAIL: 0  ALL TESTS PASSED`
 
-Self-contained — creates all test data, runs full document generation pipeline, validates output, cleans up. Zero dependencies on pre-existing org data.
+Scripts run in sequence: 01 is standalone, 02 creates test data, 03-06 depend on 02, 07 is standalone (uses processXmlForTest), 08 cleans up everything.
 
 **MANDATORY: When adding ANY feature, field, merge tag, or configuration:**
-1. Add assertions to `scripts/e2e-test.apex` FIRST — before or alongside the feature code
-2. Every new merge tag syntax must have a processXmlForTest() assertion
-3. Every new custom field must be verified in the permission set validation section
-4. Every new Apex class must be added to the permission set checks
-5. Every new VF page must be verified in the guest permission set checks
-6. If the e2e test count doesn't increase with a feature commit, the commit is incomplete
+1. Add assertions to the appropriate e2e script FIRST — before or alongside the feature code
+2. Script domain mapping:
+   - `e2e-01-permissions` — new Apex classes, VF pages, custom objects, field permissions
+   - `e2e-02-template-crud` — template creation, version management, data retrieval
+   - `e2e-03-generate-pdf` — PDF generation, output verification
+   - `e2e-04-generate-docx` — DOCX generation, ZIP validation, client-side assembly
+   - `e2e-05-generate-bulk` — bulk jobs, saved queries, job analysis
+   - `e2e-06-signatures` — signature requests, PIN flow, settings, verification
+   - `e2e-07-syntax` — ALL merge tag types via processXmlForTest()
+   - `e2e-08-cleanup` — add delete statements for any new custom objects
+3. Every new merge tag syntax must have a processXmlForTest() assertion in e2e-07
+4. Every new custom field must be verified in the permission set validation in e2e-01
+5. Every new Apex class must be added to the permission set checks in e2e-01
+6. Every new VF page must be verified in the guest permission set checks in e2e-01
+7. Each script must stay under 18,000 characters (Anonymous Apex limit is 20,000)
 
 ### 2. Apex Test Suite (850+ tests, 75% coverage)
 ```bash

@@ -115,6 +115,7 @@
                                         <a href="#child-loops" class="nav-item">Child Loops</a>
                                         <a href="#repeating-tables" class="nav-item">Repeating Tables</a>
                                         <a href="#conditionals" class="nav-item">Conditionals</a>
+                                        <a href="#comparisons" class="nav-item">Comparisons (IF)</a>
                                         <a href="#formatting" class="nav-item">Formatting</a>
                                         <a href="#aggregates" class="nav-item">Aggregates</a>
                                         <a href="#images" class="nav-item">Images</a>
@@ -470,6 +471,49 @@
                                     </table>
 
                                     <p>The entire block -- including any text, tables, or images between the tags -- is removed from the output when the condition is false or blank.</p>
+
+                                    <h4>Else Blocks</h4>
+                                    <p>Use <code>&#123;:else&#125;</code> inside a conditional to show alternative content when the condition is false:</p>
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>What You Type</th><th>Output (true)</th><th>Output (false/blank)</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><code>&#123;#IsActive&#125;Active&#123;:else&#125;Inactive&#123;/IsActive&#125;</code></td><td>Active</td><td>Inactive</td></tr>
+                                            <tr><td><code>&#123;#Industry&#125;Sector: &#123;Industry&#125;&#123;:else&#125;No industry on file&#123;/Industry&#125;</code></td><td>Sector: Technology</td><td>No industry on file</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <h4>Inverse Conditionals</h4>
+                                    <p>Use <code>&#123;^Field&#125;</code> (caret instead of hash) to show content only when a field is <strong>false, blank, or null</strong>:</p>
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>What You Type</th><th>When It Shows</th><th>When It's Hidden</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><code>&#123;^HasDiscount&#125;No discount applied&#123;/HasDiscount&#125;</code></td><td>Field is <strong>false</strong> or blank</td><td>Field is <strong>true</strong></td></tr>
+                                            <tr><td><code>&#123;^Email&#125;No email on file&#123;/Email&#125;</code></td><td>Email is <strong>blank/null</strong></td><td>Email has a value</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p>Inverse conditionals also support <code>&#123;:else&#125;</code> blocks.</p>
+                                </section>
+
+                                <section id="comparisons" class="content-section">
+                                    <h3 class="section-heading">Comparisons (IF / ELSE)</h3>
+                                    <p>Compare a field against a specific value using <code>&#123;#IF Field operator Value&#125;</code>. Supports both string and numeric comparisons.</p>
+
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>What You Type</th><th>Output</th><th>Operator</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><code>&#123;#IF Industry = Technology&#125;Tech partner&#123;/IF&#125;</code></td><td>Tech partner</td><td>Equals</td></tr>
+                                            <tr><td><code>&#123;#IF Amount &gt; 50000&#125;Premium&#123;:else&#125;Standard&#123;/IF&#125;</code></td><td>Premium or Standard</td><td>Greater than</td></tr>
+                                            <tr><td><code>&#123;#IF Status != Closed&#125;Still open&#123;/IF&#125;</code></td><td>Still open</td><td>Not equals</td></tr>
+                                            <tr><td><code>&#123;#IF Quantity &gt;= 100&#125;Bulk order&#123;/IF&#125;</code></td><td>Bulk order</td><td>Greater or equal</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p><strong>Supported operators:</strong> <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> -- Numeric comparison is attempted first; falls back to string comparison.</p>
                                 </section>
 
                                 <section id="formatting" class="content-section">
@@ -488,8 +532,10 @@
                                             <tr><td><code>&#123;Rate:percent&#125;</code></td><td>15.5%</td><td>Percentage</td></tr>
                                             <tr><td><code>&#123;Quantity:number&#125;</code></td><td>1,234</td><td>Number with commas</td></tr>
                                             <tr><td><code>&#123;Price:#,##0.00&#125;</code></td><td>1,234.56</td><td>Custom decimal format</td></tr>
+                                            <tr><td><code>&#123;IsActive:checkbox&#125;</code></td><td>[X] or [ ]</td><td>Checkbox (true/false)</td></tr>
                                         </tbody>
                                     </table>
+                                    <p><strong>Checkbox format</strong> renders <code>[X]</code> for truthy values and <code>[ ]</code> for false/blank. Use it inline: <code>Active: &#123;IsActive:checkbox&#125;  Discount: &#123;HasDiscount:checkbox&#125;</code></p>
                                 </section>
 
                                 <section id="aggregates" class="content-section">

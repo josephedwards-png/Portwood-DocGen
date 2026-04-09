@@ -70,44 +70,107 @@ try {
     else { fail++; System.debug('OPPORTUNITY CREATED: FAIL'); }
 } catch (Exception e) { fail++; System.debug('OPPORTUNITY CREATED: FAIL — ' + e.getMessage()); }
 
-// ===== Build DOCX with all merge tag types =====
+// ===== Build rich styled DOCX — business proposal with colors, tables, all tag types =====
 try {
-    String docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    // Reusable XML fragments
+    String S = '<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="1F4E79"/><w:spacing w:before="360" w:after="120"/></w:pPr>'
+        + '<w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="28"/></w:rPr><w:t>';
+    String hc = '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="1F4E79"/></w:tcPr>';
+    String hw = '<w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/></w:rPr><w:t>';
+    String B = '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">';
+
+    String dx = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
-        + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        + '<w:body>'
-        // Basic fields
-        + '<w:p><w:r><w:t>Company: {Name}</w:t></w:r></w:p>'
-        + '<w:p><w:r><w:t>Industry: {Industry}</w:t></w:r></w:p>'
-        + '<w:p><w:r><w:t>Phone: {Phone}</w:t></w:r></w:p>'
-        + '<w:p><w:r><w:t>Website: {Website}</w:t></w:r></w:p>'
-        // Child loop
-        + '<w:p><w:r><w:t>{#Contacts}</w:t></w:r></w:p>'
-        + '<w:p><w:r><w:t>- {FirstName} {LastName} ({Title})</w:t></w:r></w:p>'
-        + '<w:p><w:r><w:t>{/Contacts}</w:t></w:r></w:p>'
-        // Conditional with else
-        + '<w:p><w:r><w:t>{#IsActive}Active Account{:else}Inactive Account{/IsActive}</w:t></w:r></w:p>'
-        // Inverse conditional
-        + '<w:p><w:r><w:t>{^HasDiscount}No discount applied{/HasDiscount}</w:t></w:r></w:p>'
-        // Aggregate
-        + '<w:p><w:r><w:t>Contact count: {COUNT:Contacts}</w:t></w:r></w:p>'
-        // Signature placeholder (should be preserved)
-        + '<w:p><w:r><w:t>{@Signature_Buyer}</w:t></w:r></w:p>'
-        // Table structure with loop
-        + '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>'
-        + '<w:tr><w:tc><w:p><w:r><w:t>Name</w:t></w:r></w:p></w:tc>'
-        + '<w:tc><w:p><w:r><w:t>Title</w:t></w:r></w:p></w:tc></w:tr>'
-        + '<w:tr><w:tc><w:p><w:r><w:t>{#Contacts}</w:t></w:r></w:p></w:tc></w:tr>'
-        + '<w:tr><w:tc><w:p><w:r><w:t>{FirstName}</w:t></w:r></w:p></w:tc>'
-        + '<w:tc><w:p><w:r><w:t>{Title}</w:t></w:r></w:p></w:tc></w:tr>'
-        + '<w:tr><w:tc><w:p><w:r><w:t>{/Contacts}</w:t></w:r></w:p></w:tc></w:tr>'
+        + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>'
+        // ── COVER PAGE ──
+        + '<w:p><w:pPr><w:spacing w:before="4320"/><w:jc w:val="center"/></w:pPr>'
+        + '<w:r><w:rPr><w:b/><w:sz w:val="72"/><w:szCs w:val="72"/><w:color w:val="1F4E79"/></w:rPr>'
+        + '<w:t>BUSINESS PROPOSAL</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:jc w:val="center"/><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="8" w:color="1F4E79"/></w:pBdr><w:spacing w:after="360"/></w:pPr></w:p>'
+        + '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'
+        + '<w:r><w:rPr><w:sz w:val="40"/><w:color w:val="404040"/></w:rPr>'
+        + '<w:t>Prepared for {Name}</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:spacing w:before="480"/><w:jc w:val="center"/></w:pPr>'
+        + '<w:r><w:rPr><w:sz w:val="24"/><w:color w:val="808080"/></w:rPr>'
+        + '<w:t>{BillingCity}, {BillingState}</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:spacing w:before="1440"/><w:jc w:val="center"/></w:pPr>'
+        + '<w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="C00000"/></w:rPr>'
+        + '<w:t>CONFIDENTIAL</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+        // ── PAGE 2: COMPANY OVERVIEW (white on blue) ──
+        + '<w:p>' + S + 'COMPANY OVERVIEW</w:t></w:r></w:p>'
+        + '<w:p>' + B + 'Industry: </w:t></w:r><w:r><w:t>{Industry}</w:t></w:r></w:p>'
+        + '<w:p>' + B + 'Phone: </w:t></w:r><w:r><w:t>{Phone}</w:t></w:r></w:p>'
+        + '<w:p>' + B + 'Website: </w:t></w:r><w:r><w:t>{Website}</w:t></w:r></w:p>'
+        + '<w:p>' + B + 'Address: </w:t></w:r>'
+        + '<w:r><w:t>{BillingStreet}, {BillingCity}, {BillingState} {BillingPostalCode}</w:t></w:r></w:p>'
+        // ── Conditional: industry check with else ──
+        + '<w:p>' + B + 'Sector: </w:t></w:r>'
+        + '<w:r><w:rPr><w:i/><w:color w:val="2E75B6"/></w:rPr>'
+        + '<w:t>{#Industry}Classified under {Industry}{:else}No industry on file{/Industry}</w:t></w:r></w:p>'
+        // ── IF comparison ──
+        + '<w:p>' + B + 'Classification: </w:t></w:r>'
+        + '<w:r><w:t>{#IF Industry = Technology}Technology Partner{:else}General Partner{/IF}</w:t></w:r></w:p>'
+        // ── Inverse conditional ──
+        + '<w:p><w:r><w:rPr><w:i/><w:color w:val="808080"/></w:rPr>'
+        + '<w:t>{^HasDiscount}Standard pricing applies — no discount on file.{/HasDiscount}</w:t></w:r></w:p>'
+        // ── Section: TEAM DIRECTORY ──
+        + '<w:p>' + S + 'TEAM DIRECTORY</w:t></w:r></w:p>';
+
+    // ── Styled table with blue header, borders ──
+    String tb = '<w:tblBorders>'
+        + '<w:top w:val="single" w:sz="6" w:color="1F4E79"/><w:left w:val="single" w:sz="6" w:color="1F4E79"/>'
+        + '<w:bottom w:val="single" w:sz="6" w:color="1F4E79"/><w:right w:val="single" w:sz="6" w:color="1F4E79"/>'
+        + '<w:insideH w:val="single" w:sz="4" w:color="BDD7EE"/><w:insideV w:val="single" w:sz="4" w:color="BDD7EE"/>'
+        + '</w:tblBorders>';
+    dx += '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>' + tb + '</w:tblPr>'
+        // Header row
+        + '<w:tr><w:tc>' + hc + '<w:p>' + hw + 'Name</w:t></w:r></w:p></w:tc>'
+        + '<w:tc>' + hc + '<w:p>' + hw + 'Title</w:t></w:r></w:p></w:tc>'
+        + '<w:tc>' + hc + '<w:p>' + hw + 'Email</w:t></w:r></w:p></w:tc></w:tr>'
+        // Loop open
+        + '<w:tr><w:tc><w:p><w:r><w:t>{#Contacts}</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>'
+        // Data row
+        + '<w:tr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>{FirstName} {LastName}</w:t></w:r></w:p></w:tc>'
+        + '<w:tc><w:p><w:r><w:t>{Title}</w:t></w:r></w:p></w:tc>'
+        + '<w:tc><w:p><w:r><w:rPr><w:color w:val="2E75B6"/></w:rPr><w:t>{Email}</w:t></w:r></w:p></w:tc></w:tr>'
+        // Loop close
+        + '<w:tr><w:tc><w:p><w:r><w:t>{/Contacts}</w:t></w:r></w:p></w:tc><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>'
         + '</w:tbl>'
-        // Section properties with margins
+        // Aggregate — bold italic blue
+        + '<w:p><w:pPr><w:spacing w:before="120"/></w:pPr>'
+        + '<w:r><w:rPr><w:b/><w:i/><w:color w:val="1F4E79"/></w:rPr>'
+        + '<w:t xml:space="preserve">Total Team Members: {COUNT:Contacts}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+        // ── PAGE 3: DEAL SUMMARY ──
+        + '<w:p>' + S + 'DEAL SUMMARY</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>{#Opportunities}</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:ind w:left="360"/></w:pPr>'
+        + B + '{Name}</w:t></w:r>'
+        + '<w:r><w:t xml:space="preserve"> — {Amount:currency} — Closing: {CloseDate:MM/dd/yyyy}</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:ind w:left="720"/></w:pPr>'
+        + '<w:r><w:rPr><w:i/><w:color w:val="548235"/></w:rPr>'
+        + '<w:t xml:space="preserve">Stage: {StageName}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>{/Opportunities}</w:t></w:r></w:p>'
+        // ── Section: ACCEPTANCE ──
+        + '<w:p>' + S + 'ACCEPTANCE</w:t></w:r></w:p>'
+        + '<w:p><w:pPr><w:spacing w:before="120"/></w:pPr>'
+        + '<w:r><w:rPr><w:i/><w:color w:val="404040"/></w:rPr>'
+        + '<w:t>By signing below, the parties agree to the terms outlined in this proposal.</w:t></w:r></w:p>'
+        // Signature with underline border
+        + '<w:p><w:pPr><w:spacing w:before="480"/>'
+        + '<w:pBdr><w:bottom w:val="single" w:sz="4" w:color="000000"/></w:pBdr></w:pPr>'
+        + '<w:r><w:rPr><w:b/><w:sz w:val="24"/></w:rPr><w:t>{@Signature_Buyer}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="808080"/></w:rPr>'
+        + '<w:t>Authorized Signature</w:t></w:r></w:p>'
+        // Section properties
         + '<w:sectPr>'
+        + '<w:headerReference w:type="default" r:id="rId2"/>'
+        + '<w:footerReference w:type="default" r:id="rId3"/>'
         + '<w:pgSz w:w="12240" w:h="15840"/>'
-        + '<w:pgMar w:top="720" w:right="1080" w:bottom="720" w:left="1080" w:header="360" w:footer="360"/>'
-        + '</w:sectPr>'
-        + '</w:body></w:document>';
+        + '<w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080" w:header="360" w:footer="360"/>'
+        + '<w:titlePg/></w:sectPr></w:body></w:document>';
+    String docXml = dx;
 
     String relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -116,6 +179,8 @@ try {
 
     String wordRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>'
+        + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>'
         + '</Relationships>';
 
     String contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -123,20 +188,41 @@ try {
         + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
         + '<Default Extension="xml" ContentType="application/xml"/>'
         + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        + '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+        + '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
         + '</Types>';
+
+    String headerXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        + '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="1F4E79"/></w:pBdr><w:jc w:val="right"/></w:pPr>'
+        + '<w:r><w:rPr><w:i/><w:sz w:val="16"/><w:color w:val="808080"/></w:rPr>'
+        + '<w:t>Business Proposal — Confidential</w:t></w:r></w:p></w:hdr>';
+    String F = '<w:rPr><w:sz w:val="16"/><w:color w:val="808080"/></w:rPr>';
+    String footerXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        + '<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="4" w:color="1F4E79"/></w:pBdr><w:jc w:val="center"/></w:pPr>'
+        + '<w:r>' + F + '<w:t xml:space="preserve">Page </w:t></w:r>'
+        + '<w:r>' + F + '<w:fldChar w:fldCharType="begin"/></w:r><w:r>' + F + '<w:instrText> PAGE </w:instrText></w:r>'
+        + '<w:r>' + F + '<w:fldChar w:fldCharType="separate"/></w:r><w:r>' + F + '<w:t>1</w:t></w:r><w:r>' + F + '<w:fldChar w:fldCharType="end"/></w:r>'
+        + '<w:r>' + F + '<w:t xml:space="preserve"> of </w:t></w:r>'
+        + '<w:r>' + F + '<w:fldChar w:fldCharType="begin"/></w:r><w:r>' + F + '<w:instrText> NUMPAGES </w:instrText></w:r>'
+        + '<w:r>' + F + '<w:fldChar w:fldCharType="separate"/></w:r><w:r>' + F + '<w:t>3</w:t></w:r><w:r>' + F + '<w:fldChar w:fldCharType="end"/></w:r>'
+        + '</w:p></w:ftr>';
 
     Compression.ZipWriter zw = new Compression.ZipWriter();
     zw.addEntry('[Content_Types].xml', Blob.valueOf(contentTypes));
     zw.addEntry('_rels/.rels', Blob.valueOf(relsXml));
     zw.addEntry('word/_rels/document.xml.rels', Blob.valueOf(wordRels));
     zw.addEntry('word/document.xml', Blob.valueOf(docXml));
+    zw.addEntry('word/header1.xml', Blob.valueOf(headerXml));
+    zw.addEntry('word/footer1.xml', Blob.valueOf(footerXml));
     Blob docxBlob = zw.getArchive();
 
     if (docxBlob != null && docxBlob.size() > 100) { pass++; System.debug('DOCX BUILT: PASS — ' + docxBlob.size() + ' bytes'); }
     else { fail++; System.debug('DOCX BUILT: FAIL'); }
 
     // ===== Create Template =====
-    String qc = 'Name, Industry, Phone, Website, (SELECT FirstName, LastName, Email, Title FROM Contacts)';
+    String qc = 'Name, Industry, Phone, Website, BillingStreet, BillingCity, BillingState, BillingPostalCode, (SELECT FirstName, LastName, Email, Title FROM Contacts), (SELECT Name, Amount, StageName, CloseDate FROM Opportunities)';
     DocGen_Template__c t = new DocGen_Template__c(
         Name='E2E Test Template', Base_Object_API__c='Account', Type__c='Word',
         Output_Format__c='PDF', Query_Config__c=qc,
