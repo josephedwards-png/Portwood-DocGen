@@ -3714,9 +3714,8 @@ private class DocGenMiscTests {
         String result = DocGenService.processXmlForTest(xml, data);
         Test.stopTest();
 
-        // Boolean false is non-null, so the catch-all branch renders the content.
-        // Only null values (missing keys) hide conditional sections.
-        System.assert(result.contains('Should Not Appear'), 'False boolean (non-null) should render content, got: ' + result);
+        // Boolean false should hide content — only Boolean true shows conditional sections.
+        System.assert(!result.contains('Should Not Appear'), 'False boolean should hide content, got: ' + result);
     }
 
     @IsTest
