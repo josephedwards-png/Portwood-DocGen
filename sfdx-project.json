@@ -1,7 +1,7 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.38.0 — Community Bug Fixes",
+      "versionName": "1.38.0 — IF Conditionals + Else + Bug Fixes",
       "versionNumber": "1.38.0.NEXT",
       "ancestorId": "04tal000006UgBFAA0",
       "path": "force-app",
@@ -58,6 +58,7 @@
     "Portwood DocGen Managed@1.34.0-1": "04tal000006UXkfAAG",
     "Portwood DocGen Managed@1.35.0-1": "04tal000006UfjpAAC",
     "Portwood DocGen Managed@1.36.0-1": "04tal000006Ug9dAAC",
-    "Portwood DocGen Managed@1.37.0-1": "04tal000006UgBFAA0"
+    "Portwood DocGen Managed@1.37.0-1": "04tal000006UgBFAA0",
+    "Portwood DocGen Managed@1.38.0-1": "04tal000006UhP3AAK"
   }
 }

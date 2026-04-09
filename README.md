@@ -261,6 +261,7 @@ These are Salesforce platform limitations, not DocGen bugs:
 | JavaScript | Ignored by the renderer | N/A |
 | Even/odd page headers | Not currently supported | Same header on all pages |
 | Multiple section headers | One header/footer set per document | Use page breaks, not section-specific headers |
+| Multi-column layouts | CSS columns not supported by the PDF engine | Use tables for column layouts |
 | E-signatures (QES) | SES signatures are built-in; Qualified Electronic Signatures (EU eIDAS) require a certified provider | Use built-in SES for most use cases |
 
 ---
