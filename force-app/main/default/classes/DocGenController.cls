@@ -1003,7 +1003,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
     @AuraEnabled
     // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
-    public static void saveTemplate(Map<String, Object> fields, Boolean createVersion) {
+    public static void saveTemplate(Map<String, Object> fields, Boolean createVersion, String contentVersionId) {
         // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
         try {
             // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
@@ -1070,24 +1070,20 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     update activeVersions; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
                 }
 
-                // Get latest ContentVersionId
-                List<ContentDocumentLink> links = [
-                    SELECT ContentDocument.LatestPublishedVersionId
-                    FROM ContentDocumentLink
-                    WHERE LinkedEntityId = :templateId
-                    WITH USER_MODE ORDER BY ContentDocument.CreatedDate DESC // NOPMD — internal template file lookup
-                    // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
-                    LIMIT 1
-                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
-                ];
-
-
-                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
-
-                String cvId = null;
-                if (!links.isEmpty()) {
-                    cvId = links[0].ContentDocument.LatestPublishedVersionId;
-                // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
+                // Use specific ContentVersion ID if provided (from upload event),
+                // otherwise fall back to latest version on the document
+                String cvId = contentVersionId;
+                if (String.isBlank(cvId)) {
+                    List<ContentDocumentLink> links = [
+                        SELECT ContentDocument.LatestPublishedVersionId
+                        FROM ContentDocumentLink
+                        WHERE LinkedEntityId = :templateId
+                        WITH USER_MODE ORDER BY ContentDocument.CreatedDate DESC
+                        LIMIT 1
+                    ];
+                    if (!links.isEmpty()) {
+                        cvId = links[0].ContentDocument.LatestPublishedVersionId;
+                    }
                 }
 
 
