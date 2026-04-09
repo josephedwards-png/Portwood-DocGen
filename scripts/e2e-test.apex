@@ -156,6 +156,84 @@ try {
     else { fail++; System.debug('TEST 6b: previewRecordData children... FAIL'); }
 } catch (Exception e) { fail++; System.debug('TEST 6: Data retrieval... FAIL — ' + e.getMessage()); }
 
+// ===== TEST 6c: Single Document Generation (with output file) =====
+try {
+    // Build a minimal DOCX template with merge tags
+    String docXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        + '<w:body>'
+        + '<w:p><w:r><w:t>Company: {Name}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>Industry: {Industry}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>Contacts:</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>{#Contacts}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>- {FirstName} {LastName} ({Title})</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>{/Contacts}</w:t></w:r></w:p>'
+        + '<w:p><w:r><w:t>Active: {IsActive:checkbox}</w:t></w:r></w:p>'
+        + '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>'
+        + '</w:body></w:document>';
+    String relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        + '</Relationships>';
+    String contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        + '</Types>';
+
+    Compression.ZipWriter zw = new Compression.ZipWriter();
+    zw.addEntry('[Content_Types].xml', Blob.valueOf(contentTypes));
+    zw.addEntry('_rels/.rels', Blob.valueOf(relsXml));
+    zw.addEntry('word/document.xml', Blob.valueOf(docXml));
+    Blob docxBlob = zw.getArchive();
+
+    // Upload as ContentVersion linked to the template
+    ContentVersion cv = new ContentVersion(Title='E2E Test Template', PathOnClient='e2e_test.docx', VersionData=docxBlob, FirstPublishLocationId=tmplId);
+    insert cv;
+    cv = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Id = :cv.Id];
+
+    // Update the active version to point to this ContentVersion
+    List<DocGen_Template_Version__c> activeVers = [SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c WHERE Template__c = :tmplId AND Is_Active__c = true LIMIT 1];
+    if (!activeVers.isEmpty()) {
+        activeVers[0].Content_Version_Id__c = cv.Id;
+        activeVers[0].Query_Config__c = 'Name, Industry, (SELECT FirstName, LastName, Title FROM Contacts)';
+        update activeVers;
+    }
+
+    // Generate PDF document
+    Map<String, Object> genResult = DocGenController.processAndReturnDocument(tmplId, acctId);
+    String base64Pdf = (String) genResult.get('base64');
+    String docTitle = (String) genResult.get('title');
+
+    if (String.isNotBlank(base64Pdf)) {
+        // Save the generated PDF to the Account so user can download and inspect
+        ContentVersion pdfCv = new ContentVersion(Title='E2E Generated PDF - ' + docTitle, PathOnClient='e2e_output.pdf',
+            VersionData=EncodingUtil.base64Decode(base64Pdf), FirstPublishLocationId=acctId);
+        insert pdfCv;
+        pass++; System.debug('TEST 6c: PDF generated and saved to Account... PASS');
+        System.debug('>>> DOWNLOAD PDF: Navigate to Account "E2E Test Corp" > Files tab to inspect the generated PDF');
+    } else {
+        fail++; System.debug('TEST 6c: PDF generation returned empty... FAIL');
+    }
+
+    // Switch template to DOCX output and generate
+    DocGen_Template__c tDocx = [SELECT Id, Output_Format__c FROM DocGen_Template__c WHERE Id = :tmplId];
+    tDocx.Output_Format__c = 'Native';
+    update tDocx;
+    Map<String, Object> docxResult = DocGenController.processAndReturnDocument(tmplId, acctId);
+    String base64Docx = (String) docxResult.get('base64');
+    if (String.isNotBlank(base64Docx)) {
+        ContentVersion docxCv = new ContentVersion(Title='E2E Generated DOCX', PathOnClient='e2e_output.docx',
+            VersionData=EncodingUtil.base64Decode(base64Docx), FirstPublishLocationId=acctId);
+        insert docxCv;
+        pass++; System.debug('TEST 6d: DOCX generated and saved to Account... PASS');
+        System.debug('>>> DOWNLOAD DOCX: Navigate to Account "E2E Test Corp" > Files tab to inspect the generated DOCX');
+    } else {
+        fail++; System.debug('TEST 6d: DOCX generation returned empty... FAIL');
+    }
+} catch (Exception e) { fail++; System.debug('TEST 6c/d: Document generation... FAIL — ' + e.getMessage()); }
+
 // ===== TEST 7: Bulk Generation =====
 try {
     Integer ct = DocGenBulkController.validateFilter('Account', 'Name = \'E2E Test Corp\'');
