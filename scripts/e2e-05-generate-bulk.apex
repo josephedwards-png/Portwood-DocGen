@@ -118,6 +118,13 @@ try {
     } else { fail++; System.debug('GET BULK TEMPLATES: FAIL — null'); }
 } catch (Exception e) { fail++; System.debug('GET BULK TEMPLATES: FAIL — ' + e.getMessage()); }
 
+// ===== Direct generateDocument (simulates batch execute — NOT Aura context) =====
+try {
+    Id docId = DocGenService.generateDocument(tmplId, acctId);
+    if (docId != null) { pass++; System.debug('GENERATE DOCUMENT (non-Aura): PASS — ' + docId); }
+    else { fail++; System.debug('GENERATE DOCUMENT (non-Aura): FAIL — null'); }
+} catch (Exception e) { fail++; System.debug('GENERATE DOCUMENT (non-Aura): FAIL — ' + e.getMessage()); }
+
 // ===== Clean up job =====
 try {
     if (jobId != null) {
