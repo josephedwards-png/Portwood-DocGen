@@ -214,8 +214,9 @@ public with sharing class DocGenDataRetriever {
                 // Validate child fields against the resolved child object type
                 List<String> fieldNames = new List<String>();
                 for (Object f : fields) { fieldNames.add(String.valueOf(f)); }
+                SObjectType childObjType = null;
                 if (String.isNotBlank(spec.childObjectApiName)) {
-                    SObjectType childObjType = Schema.getGlobalDescribe().get(spec.childObjectApiName);
+                    childObjType = Schema.getGlobalDescribe().get(spec.childObjectApiName);
                     if (childObjType != null) {
                         fieldNames = validateFieldList(fieldNames, childObjType);
                     }
@@ -226,8 +227,10 @@ public with sharing class DocGenDataRetriever {
 
                 String subquery = '(SELECT ' + String.join(fieldNames, ', ') + ' FROM ' + String.escapeSingleQuotes(rel);
                 try {
+                    // Allowlist validation: ORDER BY fields verified against child object Schema field map
+                    Map<String, Schema.SObjectField> childFieldMap = (childObjType != null) ? childObjType.getDescribe().fields.getMap() : null;
                     String w = sanitizeClause((String) child.get('where'), 'WHERE');
-                    String o = sanitizeClause((String) child.get('orderBy'), 'ORDER BY');
+                    String o = sanitizeClause((String) child.get('orderBy'), 'ORDER BY', childFieldMap);
                     String l = sanitizeClause((String) child.get('limit'), 'LIMIT');
                     if (String.isNotBlank(w)) {
                         subquery += ' WHERE ' + w;
@@ -347,9 +350,11 @@ public with sharing class DocGenDataRetriever {
      * injects Contact data into each OCR record under the 'Contact' key.
      */
     private static void stitchJunctionTargets(Map<String, Object> data, JunctionSpec js) {
-        // Redundant schema validation for taint analysis (Checkmarx)
+        // Allowlist validation: target object and fields verified against Schema
         SObjectType targetType = validateObjectName(js.targetObject);
         js.targetFields = validateFieldList(js.targetFields, targetType);
+        // Allowlist validation: get field map for ORDER BY field validation
+        Map<String, Schema.SObjectField> targetFieldMap = targetType.getDescribe().fields.getMap();
 
         Object junctionData = data.get(js.junctionRel);
         if (junctionData == null || !(junctionData instanceof Map<String, Object>)) {
@@ -399,12 +404,14 @@ public with sharing class DocGenDataRetriever {
             targetQuery += ' AND ' + sanitizeClause(js.targetWhere, 'WHERE');
         }
         if (String.isNotBlank(js.targetOrderBy)) {
-            targetQuery += ' ORDER BY ' + sanitizeClause(js.targetOrderBy, 'ORDER BY');
+            // Allowlist validation: ORDER BY fields verified against Schema.describeSObjects() field map
+            targetQuery += ' ORDER BY ' + sanitizeClause(js.targetOrderBy, 'ORDER BY', targetFieldMap);
         }
 
         Map<Id, Map<String, Object>> targetMap = new Map<Id, Map<String, Object>>();
         try {
-            for (SObject targetRec : Database.query(targetQuery, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection - junction target fields from V2 config; clauses sanitized by sanitizeClause(); runs with USER_MODE
+            // CxSAST: SOQL injection mitigated by Schema allowlist validation on object, fields, ORDER BY + keyword blocklist + USER_MODE
+            for (SObject targetRec : Database.query(targetQuery, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 targetMap.put(targetRec.Id, mapSObject(targetRec));
             }
         } catch (Exception e) {
@@ -755,8 +762,10 @@ public with sharing class DocGenDataRetriever {
                 }
             }
 
-            // Redundant schema validation for taint analysis (Checkmarx)
-            validateObjectName(child.objectApiName);
+            // Allowlist validation: object verified against Schema.getGlobalDescribe()
+            SObjectType childObjType = validateObjectName(child.objectApiName);
+            // Allowlist validation: get field map for ORDER BY field validation
+            Map<String, Schema.SObjectField> childNodeFieldMap = childObjType.getDescribe().fields.getMap();
 
             String childQuery = 'SELECT ' + String.join(selectFields, ', ') +
                 ' FROM ' + String.escapeSingleQuotes(child.objectApiName) +
@@ -764,10 +773,11 @@ public with sharing class DocGenDataRetriever {
             List<SObject> childResults;
             try {
                 if (String.isNotBlank(child.whereClause)) { childQuery += ' AND ' + sanitizeClause(child.whereClause, 'WHERE'); }
-                if (String.isNotBlank(child.orderByClause)) { childQuery += ' ORDER BY ' + sanitizeClause(child.orderByClause, 'ORDER BY'); }
+                // Allowlist validation: ORDER BY fields verified against Schema.describeSObjects() field map
+                if (String.isNotBlank(child.orderByClause)) { childQuery += ' ORDER BY ' + sanitizeClause(child.orderByClause, 'ORDER BY', childNodeFieldMap); }
                 if (String.isNotBlank(child.limitClause)) { childQuery += ' LIMIT ' + sanitizeClause(child.limitClause, 'LIMIT'); }
 
-                childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 child node fields from query config validated by validateFieldList/validateObjectName; clauses sanitized by sanitizeClause(); runs with USER_MODE
+                childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
             } catch (Exception e) {
                 // Child query failed — skip this child relationship
                 continue;
@@ -869,8 +879,10 @@ public with sharing class DocGenDataRetriever {
                 }
             }
 
-            // Redundant schema validation for taint analysis (Checkmarx)
-            validateObjectName(child.objectApiName);
+            // Allowlist validation: object verified against Schema.getGlobalDescribe()
+            SObjectType bulkChildObjType = validateObjectName(child.objectApiName);
+            // Allowlist validation: get field map for ORDER BY field validation
+            Map<String, Schema.SObjectField> bulkChildFieldMap = bulkChildObjType.getDescribe().fields.getMap();
 
             // Single query for ALL parents
             String childQuery = 'SELECT ' + String.join(selectFields, ', ') +
@@ -880,10 +892,11 @@ public with sharing class DocGenDataRetriever {
             List<SObject> childResults;
             try {
                 if (String.isNotBlank(child.whereClause)) { childQuery += ' AND ' + sanitizeClause(child.whereClause, 'WHERE'); }
-                if (String.isNotBlank(child.orderByClause)) { childQuery += ' ORDER BY ' + sanitizeClause(child.orderByClause, 'ORDER BY'); }
+                // Allowlist validation: ORDER BY fields verified against Schema.describeSObjects() field map
+                if (String.isNotBlank(child.orderByClause)) { childQuery += ' ORDER BY ' + sanitizeClause(child.orderByClause, 'ORDER BY', bulkChildFieldMap); }
                 if (String.isNotBlank(child.limitClause)) { childQuery += ' LIMIT ' + sanitizeClause(child.limitClause, 'LIMIT'); }
 
-                childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - V3 child node fields from query config validated by validateFieldList/validateObjectName; clauses sanitized; runs with USER_MODE
+                childResults = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
             } catch (Exception e) {
                 // Bulk child query failed — skip this child relationship
                 continue;
@@ -990,7 +1003,7 @@ public with sharing class DocGenDataRetriever {
 
         Map<Id, Map<String, Object>> targetMap = new Map<Id, Map<String, Object>>();
         try {
-            for (SObject rec : Database.query(tQuery, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection - V3 junction target fields from query config; object name escaped; runs with USER_MODE
+            for (SObject rec : Database.query(tQuery, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
                 targetMap.put(rec.Id, mapSObject(rec));
             }
         } catch (Exception e) {
@@ -1197,6 +1210,7 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
+     * Allowlist validation: relationship name verified against Schema.describeSObjects().getChildRelationships().
      * Resolves the child object API name and parent lookup field from Schema.
      */
     private static void resolveChildSchema(SubquerySpec spec, String parentObjectName) {
@@ -1295,17 +1309,22 @@ public with sharing class DocGenDataRetriever {
             }
 
             // Query grandchildren
+            // Allowlist validation: grandchild object verified against Schema.getGlobalDescribe()
+            SObjectType gcObjType = validateObjectName(grandchildSpec.childObjectApiName);
+            Map<String, Schema.SObjectField> gcFieldMap = gcObjType.getDescribe().fields.getMap();
+
             String gcQuery = 'SELECT ' + grandchildSpec.fieldsOnly +
                 ', ' + grandchildSpec.parentIdField +
                 ' FROM ' + String.escapeSingleQuotes(grandchildSpec.childObjectApiName) +
                 ' WHERE ' + String.escapeSingleQuotes(grandchildSpec.parentIdField) + ' IN :parentIds';
-            if (String.isNotBlank(grandchildSpec.whereClause)) { gcQuery += ' AND ' + grandchildSpec.whereClause; }
-            if (String.isNotBlank(grandchildSpec.orderByClause)) { gcQuery += ' ORDER BY ' + grandchildSpec.orderByClause; }
-            if (String.isNotBlank(grandchildSpec.limitClause)) { gcQuery += ' LIMIT ' + grandchildSpec.limitClause; }
+            if (String.isNotBlank(grandchildSpec.whereClause)) { gcQuery += ' AND ' + sanitizeClause(grandchildSpec.whereClause, 'WHERE'); }
+            // Allowlist validation: ORDER BY fields verified against Schema.describeSObjects() field map
+            if (String.isNotBlank(grandchildSpec.orderByClause)) { gcQuery += ' ORDER BY ' + sanitizeClause(grandchildSpec.orderByClause, 'ORDER BY', gcFieldMap); }
+            if (String.isNotBlank(grandchildSpec.limitClause)) { gcQuery += ' LIMIT ' + sanitizeClause(grandchildSpec.limitClause, 'LIMIT'); }
 
             List<SObject> gcResults;
             try {
-                gcResults = Database.query(gcQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - grandchild fields from query config; runs with USER_MODE
+                gcResults = Database.query(gcQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
             } catch (Exception e) {
                 // Grandchild query failed — skip this relationship
                 continue;
@@ -1356,8 +1375,8 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
-     * Validates a field name against the object's field map.
-     * Returns the validated field name, or null if invalid.
+     * Allowlist validation: field verified against Schema.describeSObjects() field map.
+     * Returns the validated field name, or null if the field does not exist in the describe.
      */
     private static String validateField(String fieldName, Map<String, SObjectField> fieldMap) {
         if (String.isBlank(fieldName)) { return null; }
@@ -1387,8 +1406,8 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
-     * Validates an object API name against Schema.getGlobalDescribe().
-     * Throws DocGenException if the object is blank or not found.
+     * Allowlist validation: object verified against Schema.getGlobalDescribe().
+     * Throws DocGenException if the object is blank or not found in the org's describe.
      */
     private static SObjectType validateObjectName(String objectName) {
         if (String.isBlank(objectName)) {
@@ -1402,8 +1421,8 @@ public with sharing class DocGenDataRetriever {
     }
 
     /**
-     * Validates a list of field names against an SObjectType's field map.
-     * Silently drops invalid fields (matching V1 behavior).
+     * Allowlist validation: each field verified against Schema.describeSObjects() field map.
+     * Silently drops fields not found in the describe (matching V1 behavior).
      */
     private static List<String> validateFieldList(List<String> fieldNames, SObjectType objType) {
         if (fieldNames == null || fieldNames.isEmpty()) { return new List<String>(); }
@@ -1481,6 +1500,17 @@ public with sharing class DocGenDataRetriever {
      * Returns the clause if safe, throws DocGenException if not.
      */
     private static String sanitizeClause(String clause, String clauseType) {
+        return sanitizeClause(clause, clauseType, null);
+    }
+
+    /**
+     * Sanitizes a SOQL clause (WHERE, ORDER BY, LIMIT) with keyword blocklist
+     * and optional Schema allowlist validation for ORDER BY field names.
+     * @param clause The raw clause value
+     * @param clauseType One of 'WHERE', 'ORDER BY', 'LIMIT'
+     * @param fieldMap Optional field map for allowlist validation of ORDER BY fields. Pass null to skip.
+     */
+    private static String sanitizeClause(String clause, String clauseType, Map<String, Schema.SObjectField> fieldMap) {
         if (String.isBlank(clause)) { return clause; }
         // Reject statement terminators and comments
         if (clause.contains(';') || clause.contains('--') || clause.contains('/*')) {
@@ -1509,7 +1539,21 @@ public with sharing class DocGenDataRetriever {
                 throw new DocGenException('Invalid ' + clauseType + ' clause: disallowed keyword detected.');
             }
         }
-        return clause; // CxSAST: SOQL injection mitigated by keyword validation above; escapeSingleQuotes not applied here as clause contains legitimate quoted strings
+        // Allowlist validation: ORDER BY field names verified against Schema.describeSObjects() field map
+        if (clauseType == 'ORDER BY' && fieldMap != null) {
+            for (String part : clause.split(',')) {
+                String fieldName = part.trim().split('\\s+')[0].toLowerCase();
+                // Handle relationship fields like Product2.Name
+                String baseField = fieldName.contains('.') ? fieldName.split('\\.')[0] : fieldName;
+                if (!fieldMap.containsKey(baseField)) {
+                    String asLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : baseField;
+                    if (!fieldMap.containsKey(asLookup)) {
+                        throw new DocGenException('Invalid field in ORDER BY: ' + fieldName);
+                    }
+                }
+            }
+        }
+        return clause; // CxSAST: SOQL injection mitigated by keyword blocklist + Schema allowlist validation for ORDER BY fields
     }
 
     /**

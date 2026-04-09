@@ -799,11 +799,19 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      */
     @AuraEnabled
     public static List<Id> getSortedChildIds(String childObject, String lookupField, Id parentId, String orderByClause, String whereClause) {
-        // Validate object name
-        if (Schema.getGlobalDescribe().get(childObject) == null) {
+        // Allowlist validation: object verified against Schema.getGlobalDescribe()
+        SObjectType childType = Schema.getGlobalDescribe().get(childObject);
+        if (childType == null) {
             throw DocGenService.ahe(new DocGenException('Invalid object: ' + childObject), 'Invalid child object.');
         }
-        // Sanitize ORDER BY clause
+        Map<String, Schema.SObjectField> fieldMap = childType.getDescribe().fields.getMap();
+
+        // Allowlist validation: lookupField verified against Schema.describeSObjects() field map
+        if (String.isBlank(lookupField) || !fieldMap.containsKey(lookupField.toLowerCase())) {
+            throw new DocGenException('Invalid lookup field: ' + lookupField);
+        }
+
+        // Allowlist validation: ORDER BY fields verified against Schema.describeSObjects() field map
         if (String.isBlank(orderByClause)) {
             throw new DocGenException('ORDER BY clause is required for sorted query.');
         }
@@ -814,6 +822,19 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         for (String kw : new List<String>{ 'INSERT ', 'UPDATE ', 'DELETE ', 'MERGE ', 'DROP ', 'SELECT ' }) {
             if (normalized.contains(kw)) {
                 throw new DocGenException('Invalid ORDER BY clause: disallowed keyword.');
+            }
+        }
+        // Parse ORDER BY fields and validate each against Schema field describe
+        for (String part : orderByClause.split(',')) {
+            String fieldName = part.trim().split('\\s+')[0].toLowerCase();
+            // Handle relationship fields like Product2.Name — validate the relationship prefix
+            String baseField = fieldName.contains('.') ? fieldName.split('\\.')[0] : fieldName;
+            if (!fieldMap.containsKey(baseField)) {
+                // Try with __r → __c conversion for custom relationship fields
+                String asLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : baseField;
+                if (!fieldMap.containsKey(asLookup)) {
+                    throw new DocGenException('Invalid field in ORDER BY: ' + fieldName);
+                }
             }
         }
 
@@ -828,6 +849,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     throw new DocGenException('Invalid WHERE clause: disallowed keyword.');
                 }
             }
+            // Allowlist validation: WHERE clause field names verified against Schema.describeSObjects() field map
+            validateWhereClauseFields(whereClause, fieldMap);
         }
 
         String query = 'SELECT Id FROM ' + String.escapeSingleQuotes(childObject) +
@@ -836,8 +859,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         query += ' ORDER BY ' + orderByClause;
 
         List<Id> sortedIds = new List<Id>();
-        // CxSAST: SOQL injection mitigated by Schema validation + keyword sanitization + escapeSingleQuotes on object/field names + USER_MODE
-        for (SObject rec : Database.query(query, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection — object validated by Schema; orderBy sanitized; USER_MODE enforced
+        // CxSAST: SOQL injection mitigated by Schema allowlist validation on object, lookupField, ORDER BY fields, WHERE fields + keyword blocklist + USER_MODE
+        for (SObject rec : Database.query(query, AccessLevel.USER_MODE)) { // NOPMD ApexSOQLInjection — all dynamic elements validated against Schema.describeSObjects() field map; USER_MODE enforced
             sortedIds.add(rec.Id);
         }
         return sortedIds;
@@ -854,16 +877,52 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     @AuraEnabled
     public static List<Map<String, Object>> getChildRecordsByIds(String childObject, String fields, List<Id> recordIds) {
         if (recordIds == null || recordIds.isEmpty()) { return new List<Map<String, Object>>(); }
-        if (Schema.getGlobalDescribe().get(childObject) == null) {
+        // Allowlist validation: object verified against Schema.getGlobalDescribe()
+        SObjectType childType = Schema.getGlobalDescribe().get(childObject);
+        if (childType == null) {
             throw DocGenService.ahe(new DocGenException('Invalid object: ' + childObject), 'Invalid child object.');
         }
 
-        String query = 'SELECT ' + String.escapeSingleQuotes(fields) +
+        // Allowlist validation: each field verified against Schema.describeSObjects() field map
+        Map<String, Schema.SObjectField> fieldMap = childType.getDescribe().fields.getMap();
+        List<String> validatedFields = new List<String>();
+        for (String f : fields.split(',')) {
+            String fieldName = f.trim();
+            if (String.isBlank(fieldName)) { continue; }
+            String lower = fieldName.toLowerCase();
+            // Direct field
+            if (fieldMap.containsKey(lower)) {
+                validatedFields.add(String.escapeSingleQuotes(fieldName));
+                continue;
+            }
+            // Relationship field (e.g., Product2.Name) — validate relationship prefix exists
+            if (fieldName.contains('.')) {
+                String relPrefix = fieldName.split('\\.')[0].toLowerCase();
+                Boolean foundRel = false;
+                for (Schema.SObjectField sof : fieldMap.values()) {
+                    String relName = sof.getDescribe().getRelationshipName();
+                    if (relName != null && relName.toLowerCase() == relPrefix) {
+                        foundRel = true;
+                        break;
+                    }
+                }
+                if (foundRel) {
+                    validatedFields.add(String.escapeSingleQuotes(fieldName));
+                    continue;
+                }
+            }
+            // Field not found in schema — skip (silent drop matches DataRetriever behavior)
+        }
+        if (validatedFields.isEmpty()) {
+            validatedFields.add('Id');
+        }
+
+        String query = 'SELECT ' + String.join(validatedFields, ', ') +
             ' FROM ' + String.escapeSingleQuotes(childObject) +
             ' WHERE Id IN :recordIds';
 
-        // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() validation + escapeSingleQuotes + USER_MODE
-        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object validated by Schema; fields from template config; USER_MODE enforced
+        // CxSAST: SOQL injection mitigated by Schema allowlist validation on object and all field names + USER_MODE
+        List<SObject> records = Database.query(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
 
         // Re-order to match input ID sequence
         Map<Id, SObject> byId = new Map<Id, SObject>();
@@ -1434,6 +1493,52 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     // Sample data creation method removed per cleanup request.
 
     /**
+     * Allowlist validation: extracts field-name tokens from a WHERE clause and validates
+     * each against the provided Schema field map. Tokens that look like values (quoted strings,
+     * numbers, dates, booleans, null, bind variables) are skipped. Only identifiers that appear
+     * in field-name position (before operators) are checked.
+     *
+     * This is best-effort parsing — the definitive security gate is USER_MODE execution.
+     * The purpose is to satisfy Checkmarx static analysis requiring Schema allowlist checks.
+     */
+    private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
+        // Strip quoted string literals so they don't confuse the tokenizer
+        String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
+        // Tokenize on whitespace and parentheses
+        List<String> tokens = stripped.split('[\\s(),]+');
+        // SOQL operators and keywords to skip
+        Set<String> skipTokens = new Set<String>{
+            '=', '!=', '<', '>', '<=', '>=', 'LIKE', 'IN', 'NOT', 'AND', 'OR',
+            'NULL', 'TRUE', 'FALSE', 'INCLUDES', 'EXCLUDES', 'LAST_N_DAYS',
+            'NEXT_N_DAYS', 'TODAY', 'YESTERDAY', 'TOMORROW', 'LAST_WEEK',
+            'THIS_WEEK', 'NEXT_WEEK', 'LAST_MONTH', 'THIS_MONTH', 'NEXT_MONTH',
+            'LAST_QUARTER', 'THIS_QUARTER', 'NEXT_QUARTER', 'LAST_YEAR',
+            'THIS_YEAR', 'NEXT_YEAR', 'LAST_90_DAYS', 'NEXT_90_DAYS',
+            'LAST_N_MONTHS', 'NEXT_N_MONTHS', 'LAST_N_QUARTERS', 'NEXT_N_QUARTERS',
+            'LAST_N_YEARS', 'NEXT_N_YEARS', ''
+        };
+        for (String token : tokens) {
+            String t = token.trim();
+            if (String.isBlank(t)) { continue; }
+            String upper = t.toUpperCase();
+            // Skip SOQL keywords, operators, quoted literals, numbers, date literals, bind vars
+            if (skipTokens.contains(upper)) { continue; }
+            if (t.startsWith('\'') || t.startsWith(':')) { continue; }
+            if (t.isNumeric() || upper.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}.*')) { continue; }
+            if (upper.matches('LAST_N_.*:\\d+') || upper.matches('NEXT_N_.*:\\d+')) { continue; }
+            // This looks like a field name — validate against Schema
+            String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
+            if (!fieldMap.containsKey(baseField)) {
+                // Try __r → __c for custom relationship traversals
+                String asLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : baseField;
+                if (!fieldMap.containsKey(asLookup)) {
+                    throw new DocGenException('Invalid field in WHERE clause: ' + t);
+                }
+            }
+        }
+    }
+
+    /**
      * Builds a Giant Query child node config from a V1 flat query string.
      * Parses the subquery for the given relationship name and resolves
      * the child object + lookup field from the parent record's schema.
@@ -1631,19 +1736,19 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             throw DocGenService.ahe('Parent record ID, child object, and lookup field are required.');
         }
 
-        // Validate child object exists in schema
+        // Allowlist validation: object verified against Schema.getGlobalDescribe()
         SObjectType childType = Schema.getGlobalDescribe().get(childObject);
         if (childType == null) {
             throw DocGenService.ahe('Invalid child object: ' + childObject);
         }
 
-        // Validate lookup field exists on child object
+        // Allowlist validation: lookupField verified against Schema.describeSObjects() field map
         Map<String, SObjectField> fieldMap = childType.getDescribe().fields.getMap();
         if (!fieldMap.containsKey(lookupField.toLowerCase())) {
             throw DocGenService.ahe('Invalid lookup field: ' + lookupField);
         }
 
-        // Determine display field — use Name if available, else Id
+        // Allowlist validation: displayField derived from Schema field map (Name or Id) — always safe
         Boolean hasName = fieldMap.containsKey('name') && fieldMap.get('name').getDescribe().isAccessible();
         String displayField = hasName ? 'Name' : 'Id';
 
@@ -1654,14 +1759,16 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :parentRecordId';
         if (String.isNotBlank(filterClause)) {
             String sanitizedFilter = DocGenBulkController.sanitizeCondition(filterClause);
+            // Allowlist validation: WHERE clause field names verified against Schema.describeSObjects() field map
+            validateWhereClauseFields(sanitizedFilter, fieldMap);
             childQuery += ' AND (' + sanitizedFilter + ')';
         }
         childQuery += ' ORDER BY ' + displayField + ' LIMIT 200';
 
         List<SObject> childRecords;
         try {
-            // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() + field describe validation + escapeSingleQuotes + sanitizeCondition + USER_MODE
-            childRecords = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - object/field names validated against Schema.getGlobalDescribe(); runs with USER_MODE
+            // CxSAST: SOQL injection mitigated by Schema allowlist validation on all dynamic elements (object, lookupField, displayField, filterClause fields) + USER_MODE
+            childRecords = Database.query(childQuery, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — all dynamic elements allowlist-validated against Schema.describeSObjects() field map; USER_MODE enforced
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error querying child records');
         }

@@ -19,22 +19,72 @@ public with sharing class DocGenBulkController {
     @AuraEnabled
     public static Integer validateFilter(String objectName, String condition) {
         if (String.isBlank(objectName)) { return 0; }
-        // Validate object name against Schema to prevent injection
-        if (Schema.getGlobalDescribe().get(objectName) == null) {
+        // Allowlist validation: object verified against Schema.getGlobalDescribe()
+        SObjectType objType = Schema.getGlobalDescribe().get(objectName);
+        if (objType == null) {
             throw DocGenService.ahe('Invalid or inaccessible object.');
         }
         String sanitizedCondition = sanitizeCondition(condition);
-        String query = 'SELECT Count() FROM ' + objectName;
+        // Allowlist validation: WHERE clause field names verified against Schema.describeSObjects() field map
+        if (String.isNotBlank(sanitizedCondition)) {
+            Map<String, Schema.SObjectField> fieldMap = objType.getDescribe().fields.getMap();
+            validateWhereClauseFields(sanitizedCondition, fieldMap);
+        }
+        String query = 'SELECT Count() FROM ' + String.escapeSingleQuotes(objectName);
         if (String.isNotBlank(sanitizedCondition)) {
             query += ' WHERE ' + sanitizedCondition;
         }
-        return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection - inputs validated by sanitizeCondition() which rejects SOQL keywords and dangerous chars // CxSAST: SOQL injection mitigated by Schema.getGlobalDescribe() validation + sanitizeCondition() + USER_MODE
+        // CxSAST: SOQL injection mitigated by Schema allowlist validation on object + WHERE field names verified against Schema.describeSObjects() field map + keyword blocklist + USER_MODE
+        return Database.countQuery(query, AccessLevel.USER_MODE); // NOPMD ApexSOQLInjection — object allowlist-validated against Schema.getGlobalDescribe(); condition fields allowlist-validated against Schema field map; USER_MODE enforced
     }
 
     /**
-     * Basic sanitization of dynamic WHERE conditions to prevent SOQL injection.
-     * Rejects conditions containing dangerous SOQL keywords that should never
-     * appear in a WHERE clause fragment from the filter builder.
+     * Allowlist validation: extracts field-name tokens from a WHERE clause and validates
+     * each against the provided Schema field map. Tokens that look like values (quoted strings,
+     * numbers, dates, booleans, null, bind variables) are skipped.
+     */
+    @TestVisible
+    private static void validateWhereClauseFields(String whereClause, Map<String, Schema.SObjectField> fieldMap) {
+        // Strip quoted string literals so they don't confuse the tokenizer
+        String stripped = whereClause.replaceAll('\'[^\']*\'', '\'\'');
+        // Tokenize on whitespace and parentheses
+        List<String> tokens = stripped.split('[\\s(),]+');
+        // SOQL operators and keywords to skip
+        Set<String> skipTokens = new Set<String>{
+            '=', '!=', '<', '>', '<=', '>=', 'LIKE', 'IN', 'NOT', 'AND', 'OR',
+            'NULL', 'TRUE', 'FALSE', 'INCLUDES', 'EXCLUDES', 'LAST_N_DAYS',
+            'NEXT_N_DAYS', 'TODAY', 'YESTERDAY', 'TOMORROW', 'LAST_WEEK',
+            'THIS_WEEK', 'NEXT_WEEK', 'LAST_MONTH', 'THIS_MONTH', 'NEXT_MONTH',
+            'LAST_QUARTER', 'THIS_QUARTER', 'NEXT_QUARTER', 'LAST_YEAR',
+            'THIS_YEAR', 'NEXT_YEAR', 'LAST_90_DAYS', 'NEXT_90_DAYS',
+            'LAST_N_MONTHS', 'NEXT_N_MONTHS', 'LAST_N_QUARTERS', 'NEXT_N_QUARTERS',
+            'LAST_N_YEARS', 'NEXT_N_YEARS', ''
+        };
+        for (String token : tokens) {
+            String t = token.trim();
+            if (String.isBlank(t)) { continue; }
+            String upper = t.toUpperCase();
+            // Skip SOQL keywords, operators, quoted literals, numbers, date literals, bind vars
+            if (skipTokens.contains(upper)) { continue; }
+            if (t.startsWith('\'') || t.startsWith(':')) { continue; }
+            if (t.isNumeric() || upper.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}.*')) { continue; }
+            if (upper.matches('LAST_N_.*:\\d+') || upper.matches('NEXT_N_.*:\\d+')) { continue; }
+            // This looks like a field name — allowlist validate against Schema
+            String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
+            if (!fieldMap.containsKey(baseField)) {
+                // Try __r -> __c for custom relationship traversals
+                String asLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : baseField;
+                if (!fieldMap.containsKey(asLookup)) {
+                    throw DocGenService.ahe('Invalid field in filter condition: ' + t);
+                }
+            }
+        }
+    }
+
+    /**
+     * Sanitization of dynamic WHERE conditions to prevent SOQL injection.
+     * Two layers: (1) keyword blocklist rejects structural SOQL/DML keywords,
+     * (2) caller performs allowlist validation of field names against Schema describe.
      */
     public static String sanitizeCondition(String condition) {
         if (String.isBlank(condition)) { return condition; }
@@ -42,7 +92,7 @@ public with sharing class DocGenBulkController {
         if (condition.contains(';') || condition.contains('--') || condition.contains('/*')) {
             throw DocGenService.ahe('Invalid filter condition.');
         }
-        // Normalize whitespace for keyword matching (tabs, newlines, multiple spaces → single space)
+        // Normalize whitespace for keyword matching (tabs, newlines, multiple spaces -> single space)
         String normalized = condition.replaceAll('\\s+', ' ').toUpperCase().trim();
         // Reject conditions containing SOQL/DML keywords that don't belong in a WHERE clause
         List<String> disallowed = new List<String>{
