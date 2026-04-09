@@ -66,7 +66,7 @@ public with sharing class DocGenDataRetriever {
      */
     public static Map<String, Object> getRecordData(Id recordId, String baseObject, String fieldsConfig) {
         if (String.isBlank(baseObject) || String.isBlank(fieldsConfig) || recordId == null) {
-            throw DocGenService.ahe('Invalid parameters for data retrieval.');
+            throw new DocGenException('Invalid parameters for data retrieval.');
         }
 
         // Strip outer SELECT / FROM if user pasted a full SOQL query (V1 flat strings only)
@@ -111,7 +111,7 @@ public with sharing class DocGenDataRetriever {
 
         SObjectType objType = Schema.getGlobalDescribe().get(baseObject);
         if (objType == null) {
-            throw DocGenService.ahe('Invalid or inaccessible object.');
+            throw new DocGenException('Invalid or inaccessible object.');
         }
         Map<String, SObjectField> fieldMap = objType.getDescribe().fields.getMap();
 
@@ -136,7 +136,7 @@ public with sharing class DocGenDataRetriever {
             }
             data = mapSObject(results[0]);
         } catch (Exception e) {
-            throw DocGenService.ahe(e, 'Error executing query. Please verify your template configuration.');
+            throw new DocGenException('Error executing query. Please verify your template configuration: ' + e.getMessage());
         }
 
         // Stitch deeper levels (grandchildren, great-grandchildren)
@@ -333,7 +333,7 @@ public with sharing class DocGenDataRetriever {
             }
             data = mapSObject(results[0]);
         } catch (Exception e) {
-            throw DocGenService.ahe(e, 'Error executing query. Please verify your template configuration.');
+            throw new DocGenException('Error executing query. Please verify your template configuration: ' + e.getMessage());
         }
 
         // Stitch junction targets (two-hop: junction record → target object)
@@ -479,7 +479,7 @@ public with sharing class DocGenDataRetriever {
 
         List<Object> nodesJson = (List<Object>) config.get('nodes');
         if (nodesJson == null || nodesJson.isEmpty()) {
-            throw DocGenService.ahe('No query nodes defined.');
+            throw new DocGenException('No query nodes defined.');
         }
 
         Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
@@ -546,7 +546,7 @@ public with sharing class DocGenDataRetriever {
             }
         }
         if (root == null) {
-            throw DocGenService.ahe('No root node found in query tree.');
+            throw new DocGenException('No root node found in query tree.');
         }
 
         // Query root: SELECT fields, parentFields FROM object WHERE Id = :recordId
@@ -569,7 +569,7 @@ public with sharing class DocGenDataRetriever {
             }
             rootData = mapSObject(results[0]);
         } catch (Exception e) {
-            throw DocGenService.ahe(e);
+            throw new DocGenException(e.getMessage());
         }
 
         // Walk the tree: process children of each node
@@ -594,7 +594,7 @@ public with sharing class DocGenDataRetriever {
 
         List<Object> nodesJson = (List<Object>) config.get('nodes');
         if (nodesJson == null || nodesJson.isEmpty()) {
-            throw DocGenService.ahe('No query nodes defined.');
+            throw new DocGenException('No query nodes defined.');
         }
 
         Map<String, Schema.SObjectType> gd = Schema.getGlobalDescribe();
@@ -661,7 +661,7 @@ public with sharing class DocGenDataRetriever {
             }
         }
         if (root == null) {
-            throw DocGenService.ahe('No root node found in query tree.');
+            throw new DocGenException('No root node found in query tree.');
         }
 
         // Bulk root query: SELECT fields FROM object WHERE Id IN :recordIds
@@ -686,7 +686,7 @@ public with sharing class DocGenDataRetriever {
                 allData.put(rec.Id, mapSObject(rec));
             }
         } catch (Exception e) {
-            throw DocGenService.ahe(e);
+            throw new DocGenException(e.getMessage());
         }
 
         // Walk the tree in bulk: process children for all root records at once

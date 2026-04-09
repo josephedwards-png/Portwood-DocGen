@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.39.0 — In-App Docs + E2E Suite + IF/Else/Checkbox",
-      "versionNumber": "1.39.0.NEXT",
+      "versionName": "1.40.0 — Fix bulk generation + docs + E2E suite",
+      "versionNumber": "1.40.0.NEXT",
       "ancestorId": "04tal000006UgBFAA0",
       "path": "force-app",
       "default": true,
