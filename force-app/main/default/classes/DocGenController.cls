@@ -1524,8 +1524,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             // Skip SOQL keywords, operators, quoted literals, numbers, date literals, bind vars
             if (skipTokens.contains(upper)) { continue; }
             if (t.startsWith('\'') || t.startsWith(':')) { continue; }
-            if (t.isNumeric() || upper.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}.*')) { continue; }
-            if (upper.matches('LAST_N_.*:\\d+') || upper.matches('NEXT_N_.*:\\d+')) { continue; }
+            if (t.isNumeric() || Pattern.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}.*', upper)) { continue; }
+            if (Pattern.matches('LAST_N_.*:\\d+', upper) || Pattern.matches('NEXT_N_.*:\\d+', upper)) { continue; }
             // This looks like a field name — validate against Schema
             String baseField = t.contains('.') ? t.split('\\.')[0].toLowerCase() : t.toLowerCase();
             if (!fieldMap.containsKey(baseField)) {
