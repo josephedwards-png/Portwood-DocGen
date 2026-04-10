@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.40.0 — Fix bulk generation + docs + E2E suite",
-      "versionNumber": "1.40.0.NEXT",
-      "ancestorId": "04tal000006UhnFAAS",
+      "versionName": "1.41.0 — Fix table borders + bulk gen + heap estimator",
+      "versionNumber": "1.41.0.NEXT",
+      "ancestorId": "04tal000006UhyXAAS",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
