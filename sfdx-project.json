@@ -3,7 +3,7 @@
     {
       "versionName": "1.40.0 — Fix bulk generation + docs + E2E suite",
       "versionNumber": "1.40.0.NEXT",
-      "ancestorId": "04tal000006UgBFAA0",
+      "ancestorId": "04tal000006UhnFAAS",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -60,6 +60,7 @@
     "Portwood DocGen Managed@1.36.0-1": "04tal000006Ug9dAAC",
     "Portwood DocGen Managed@1.37.0-1": "04tal000006UgBFAA0",
     "Portwood DocGen Managed@1.38.0-1": "04tal000006UhP3AAK",
-    "Portwood DocGen Managed@1.39.0-1": "04tal000006UhnFAAS"
+    "Portwood DocGen Managed@1.39.0-1": "04tal000006UhnFAAS",
+    "Portwood DocGen Managed@1.40.0-1": "04tal000006UhyXAAS"
   }
 }
