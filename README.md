@@ -4,7 +4,7 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.37.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.40.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -17,10 +17,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006UgBFAA0 --wait 10 --target-org <your-org>
+sf package install --package 04tal000006UhyXAAS --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UgBFAA0) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UgBFAA0)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UhyXAAS) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UhyXAAS)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -57,6 +57,9 @@ Word is the most capable — it's the only format that supports images, barcodes
 | `{Parent.Field}` | Pull from a related record | `{Account.Name}`, `{Owner.Email}` |
 | `{#ChildList}...{/ChildList}` | Repeat for each child record | `{#Contacts}{FirstName}{/Contacts}` |
 | `{#BoolField}...{/BoolField}` | Show/hide based on checkbox | `{#IsActive}Active member{/IsActive}` |
+| `{#Field}...{:else}...{/Field}` | Show/hide with fallback | `{#Industry}Sector: {Industry}{:else}No industry{/Industry}` |
+| `{^Field}...{/Field}` | Show when field is false/blank | `{^HasDiscount}No discount applied{/HasDiscount}` |
+| `{#IF Field op Value}...{/IF}` | Compare field against value | `{#IF Amount > 50000}Premium{:else}Standard{/IF}` |
 | `{RichTextField}` | Rich text with formatting and images | `{Description}` renders bold, italic, lists |
 
 ### Formatting
@@ -67,6 +70,7 @@ Word is the most capable — it's the only format that supports images, barcodes
 | `{Amount:currency}` | $500,000.00 |
 | `{Rate:percent}` | 15.5% |
 | `{Quantity:number}` | 1,234 |
+| `{IsActive:checkbox}` | [X] or [ ] |
 
 ### Aggregates
 
@@ -380,12 +384,11 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.37.0 | **Latest (Released)** | `04tal000006UgBFAA0` |
+| v1.40.0 | **Latest (Released)** | `04tal000006UhyXAAS` |
+| v1.39.0 | Previous | `04tal000006UhnFAAS` |
+| v1.37.0 | Previous | `04tal000006UgBFAA0` |
 | v1.36.0 | Previous | `04tal000006Ug9dAAC` |
 | v1.34.0 | Previous | `04tal000006UXkfAAG` |
-| v1.32.0 | Previous | `04tal000006UXZNAA4` |
-| v1.29.0 | Previous | `04tal000006UVvlAAG` |
-| v1.27.0 | Previous | `04tal000006UPGrAAO` |
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
