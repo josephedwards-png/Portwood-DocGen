@@ -1095,8 +1095,22 @@ public with sharing class DocGenHtmlRenderer {
 
             // Table borders — check inline borders first, then style reference
             if (tblPr.contains('<w:tblBorders')) {
-                hasBorders = true;
-                tableStyle += ';border:0.5pt solid #000';
+                // Parse actual border values — only set hasBorders if at least one is real (not none/nil)
+                String tblBdr = extractElement(tblPr, 'w:tblBorders');
+                if (String.isNotBlank(tblBdr)) {
+                    String bTop = parseBorderSide(tblBdr, 'w:top');
+                    String bBottom = parseBorderSide(tblBdr, 'w:bottom');
+                    String bLeft = parseBorderSide(tblBdr, 'w:left');
+                    String bRight = parseBorderSide(tblBdr, 'w:right');
+                    String bInsH = parseBorderSide(tblBdr, 'w:insideH');
+                    String bInsV = parseBorderSide(tblBdr, 'w:insideV');
+                    if (bTop != null || bBottom != null || bLeft != null || bRight != null || bInsH != null || bInsV != null) {
+                        hasBorders = true;
+                        // Use the first real border found for the table-level style
+                        String rep = bTop != null ? bTop : (bInsH != null ? bInsH : (bLeft != null ? bLeft : '0.5pt solid #000'));
+                        tableStyle += ';border:' + rep;
+                    }
+                }
             } else if (tblPr.contains('w:tblStyle')) {
                 // Table uses a named style — resolve from styles.xml if available
                 String styleVal = extractAttr(tblPr, 'w:tblStyle', 'w:val');
