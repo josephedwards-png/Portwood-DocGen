@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.42.0 — Permission audit + signature Flow action",
-      "versionNumber": "1.42.0.NEXT",
-      "ancestorId": "04tal000006UiubAAC",
+      "versionName": "1.43.0 — Guided signatures, packets, decline, sequential signing",
+      "versionNumber": "1.43.0.NEXT",
+      "ancestorId": "04tal000006UkpxAAC",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -64,6 +64,17 @@
     "Portwood DocGen Managed@1.40.0-1": "04tal000006UhyXAAS",
     "Portwood DocGen Managed@1.41.0-1": "04tal000006UiubAAC",
     "Portwood DocGen Managed@1.42.0-1": "04tal000006UkoLAAS",
-    "Portwood DocGen Managed@1.42.0-2": "04tal000006UkpxAAC"
+    "Portwood DocGen Managed@1.42.0-2": "04tal000006UkpxAAC",
+    "Portwood DocGen Managed@1.43.0-1": "04tal000006hKG9AAM",
+    "Portwood DocGen Managed@1.43.0-2": "04tal000006hKJNAA2",
+    "Portwood DocGen Managed@1.43.0-3": "04tal000006hKMbAAM",
+    "Portwood DocGen Managed@1.43.0-4": "04tal000006hKODAA2",
+    "Portwood DocGen Managed@1.43.0-5": "04tal000006hKPpAAM",
+    "Portwood DocGen Managed@1.43.0-6": "04tal000006hKUfAAM",
+    "Portwood DocGen Managed@1.43.0-7": "04tal000006hKWHAA2",
+    "Portwood DocGen Managed@1.43.0-8": "04tal000006hKknAAE",
+    "Portwood DocGen Managed@1.43.0-9": "04tal000006hKuTAAU",
+    "Portwood DocGen Managed@1.43.0-10": "04tal000006hLNVAA2",
+    "Portwood DocGen Managed@1.43.0-11": "04tal000006hLTxAAM"
   }
 }

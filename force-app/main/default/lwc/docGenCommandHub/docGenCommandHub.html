@@ -142,8 +142,8 @@
                                     <h3>E-Signatures</h3>
                                     <nav class="learning-nav">
                                         <a href="#sig-overview" class="nav-item">Overview</a>
-                                        <a href="#sig-templates" class="nav-item">Template Setup</a>
-                                        <a href="#sig-flow" class="nav-item">Signing Flow</a>
+                                        <a href="#sig-templates" class="nav-item">Tag Syntax &amp; Types</a>
+                                        <a href="#sig-flow" class="nav-item">Guided Signing Flow</a>
                                         <a href="#sig-verify" class="nav-item">Verification</a>
                                         <a href="#sig-admin" class="nav-item">Admin Setup</a>
                                     </nav>
@@ -187,6 +187,10 @@
                                         <button class="pill-tag" data-tag="loop-contacts" onclick={handleCopyTag}>&#123;#List&#125;...&#123;/List&#125;</button>
                                         <button class="pill-tag" data-tag="\{*Barcode}" onclick={handleCopyTag}>&#123;*Barcode&#125;</button>
                                         <button class="pill-tag" data-tag="\{@Signature_Buyer}" onclick={handleCopyTag}>&#123;@Signature_Buyer&#125;</button>
+                                        <button class="pill-tag" data-tag="\{@Signature_Buyer:1:Full}" onclick={handleCopyTag}>&#123;@Signature_Buyer:1:Full&#125;</button>
+                                        <button class="pill-tag" data-tag="\{@Signature_Buyer:1:Initials}" onclick={handleCopyTag}>&#123;@Signature_Buyer:1:Initials&#125;</button>
+                                        <button class="pill-tag" data-tag="\{@Signature_Buyer:1:Date}" onclick={handleCopyTag}>&#123;@Signature_Buyer:1:Date&#125;</button>
+                                        <button class="pill-tag" data-tag="\{@Signature_Buyer:1:DatePick}" onclick={handleCopyTag}>&#123;@Signature_Buyer:1:DatePick&#125;</button>
                                     </div>
                                 </div>
                             </aside>
@@ -828,28 +832,117 @@
                                 </section>
 
                                 <section id="sig-templates" class="content-section">
-                                    <h3 class="section-heading">Setting Up Signature Templates</h3>
-                                    <p>Add signature placeholders to your Word template using the <code>&#123;@Signature_Role&#125;</code> syntax.</p>
+                                    <h3 class="section-heading">Signature Tag Syntax</h3>
+                                    <p>Signature tags are placeholders you add to your Word template that tell DocGen where signers need to sign, initial, or add a date. When the document is sent for signature, these placeholders are highlighted for the signer. As they step through each one, the placeholder is replaced with their actual input.</p>
+
+                                    <div class="card-tip info">
+                                        <strong>Tag Format:</strong> <code>&#123;@Signature_<em>Role</em>:<em>Order</em>:<em>Type</em>&#125;</code>
+                                        <p>All signature tags start with <code>@</code> to distinguish them from regular merge tags. The <code>@</code> prefix tells DocGen: "don't merge this with record data -- save it for the signer."</p>
+                                    </div>
+
+                                    <h3 class="section-heading" style="margin-top:1.5rem;">Understanding the Tag Parts</h3>
+
+                                    <div class="limit-grid">
+                                        <div class="limit-card info">
+                                            <strong>Role</strong>
+                                            <p>The role name identifies WHICH signer fills this placement. Use descriptive names like <code>Buyer</code>, <code>Seller</code>, <code>Witness</code>, or <code>Loan_Officer</code> (use underscores for multi-word roles). Each unique role creates a signer row in the Send For Signature form. The role is also shown to the signer so they know which placements are theirs.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Order</strong>
+                                            <p>The order number controls the SEQUENCE a signer walks through their placements. Order <code>1</code> is shown first, then <code>2</code>, then <code>3</code>, etc. This is per-role -- Buyer's steps 1-3 are completely independent from Seller's steps 1-2. If omitted, defaults to <code>1</code>.</p>
+                                        </div>
+                                    </div>
+
+                                    <h3 class="section-heading" style="margin-top:1.5rem;">Placement Types</h3>
+                                    <p>The type determines WHAT the signer does at each placement and what appears in the final signed PDF.</p>
 
                                     <table class="doc-table">
                                         <thead>
-                                            <tr><th>Placeholder</th><th>Replaced With</th></tr>
+                                            <tr><th>Type</th><th>What the Signer Does</th><th>What Appears in the PDF</th><th>Example Tag</th></tr>
                                         </thead>
                                         <tbody>
-                                            <tr><td><code>&#123;@Signature_Buyer&#125;</code></td><td>Electronically signed by John Smith on 2026-04-08 10:30:00 PDT</td></tr>
-                                            <tr><td><code>&#123;@Signature_Seller&#125;</code></td><td>Electronically signed by Jane Doe on 2026-04-08 14:15:00 PDT</td></tr>
-                                            <tr><td><code>&#123;@Signature&#125;</code></td><td>Used for single-signer documents (no role name needed)</td></tr>
+                                            <tr>
+                                                <td><strong>Full</strong></td>
+                                                <td>Types their full legal name. A text input is pre-filled with their name -- they can edit it. The name is rendered in an italic signature-style font in the action bar.</td>
+                                                <td>"Electronically signed by John Smith on April 13, 2026 at 3:45 PM PDT"</td>
+                                                <td><code>&#123;@Signature_Buyer:1:Full&#125;</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Initials</strong></td>
+                                                <td>Types their initials. The input is pre-filled with auto-generated initials from their name (e.g., "J.S." for John Smith). They can edit.</td>
+                                                <td>"J.S."</td>
+                                                <td><code>&#123;@Signature_Buyer:2:Initials&#125;</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Date</strong></td>
+                                                <td>No input needed -- the signer just clicks Confirm. The date is automatically captured from the server at the moment they confirm.</td>
+                                                <td>"April 13, 2026"</td>
+                                                <td><code>&#123;@Signature_Buyer:3:Date&#125;</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>DatePick</strong></td>
+                                                <td>A date picker appears where the signer selects a specific date. Useful for effective dates, start dates, or any date the signer needs to choose.</td>
+                                                <td>The date they selected (e.g., "2026-05-01")</td>
+                                                <td><code>&#123;@Signature_Buyer:4:DatePick&#125;</code></td>
+                                            </tr>
                                         </tbody>
                                     </table>
 
                                     <div class="card-tip">
-                                        <strong>Template Tip</strong>
-                                        <p>Place signature tags on their own line with a label, like: <code>Buyer Signature: &#123;@Signature_Buyer&#125;</code>. The tag is replaced with the signer's typed name and timestamp. Use any role name -- it maps to the Signer Role picklist (Buyer, Seller, Witness, Guarantor, etc.).</p>
+                                        <strong>Backward Compatible</strong>
+                                        <p><code>&#123;@Signature_Buyer&#125;</code> still works -- it is treated as <code>:1:Full</code>. If you have existing templates with the simple tag format, they will continue to work without changes. The signer will type their full name in a single step.</p>
+                                    </div>
+
+                                    <h3 class="section-heading" style="margin-top:1.5rem;">How It Works in Practice</h3>
+                                    <p>When you select a template in the <strong>Send For Signature</strong> tab, DocGen scans the document for all <code>&#123;@Signature_...&#125;</code> tags and shows you:</p>
+                                    <ul>
+                                        <li>Which roles were detected (e.g., "Buyer", "Seller")</li>
+                                        <li>How many placements each role has (e.g., "2 signatures, 1 initials")</li>
+                                        <li>Signer rows are automatically created for each role -- just fill in the name and email</li>
+                                    </ul>
+                                    <p style="margin-top:0.75rem;">When the signer opens their link, they see the full document with highlighted markers at each placement. An arrow points to the current step. They work through each one in order -- sign here, initial there, confirm this date -- and watch the document fill in as they go. After the last placement, they check a consent box and submit.</p>
+
+                                    <h3 class="section-heading" style="margin-top:1.5rem;">Common Patterns</h3>
+
+                                    <div class="limit-grid">
+                                        <div class="limit-card info">
+                                            <strong>Simple Agreement</strong>
+                                            <p>One signer, one signature. The most basic use case.</p>
+                                            <p><code>&#123;@Signature_Buyer&#125;</code></p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Contract with Initials</strong>
+                                            <p>One signer acknowledges sections with initials, then signs and dates at the end.</p>
+                                            <p>
+                                                Section 1: <code>&#123;@Signature_Buyer:1:Initials&#125;</code><br/>
+                                                Section 2: <code>&#123;@Signature_Buyer:2:Initials&#125;</code><br/>
+                                                Signature: <code>&#123;@Signature_Buyer:3:Full&#125;</code><br/>
+                                                Date: <code>&#123;@Signature_Buyer:4:Date&#125;</code>
+                                            </p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Two-Party Agreement</strong>
+                                            <p>Buyer and Seller each sign and date. Each gets their own email link and signing flow.</p>
+                                            <p>
+                                                Buyer: <code>&#123;@Signature_Buyer:1:Full&#125;</code><br/>
+                                                Buyer Date: <code>&#123;@Signature_Buyer:2:Date&#125;</code><br/>
+                                                Seller: <code>&#123;@Signature_Seller:1:Full&#125;</code><br/>
+                                                Seller Date: <code>&#123;@Signature_Seller:2:Date&#125;</code>
+                                            </p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>With Effective Date</strong>
+                                            <p>The signer picks an effective date (like a start date or closing date) before signing.</p>
+                                            <p>
+                                                Effective Date: <code>&#123;@Signature_Buyer:1:DatePick&#125;</code><br/>
+                                                Signature: <code>&#123;@Signature_Buyer:2:Full&#125;</code>
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div class="card-tip info">
-                                        <strong>Multi-Signer Documents</strong>
-                                        <p>Add multiple signature placeholders for different roles. Each signer gets their own email with a unique link. The PDF is only generated after <strong>all</strong> signers have completed. Unsigned placeholders are preserved until the signer completes.</p>
+                                        <strong>Multi-Signer &amp; Packets</strong>
+                                        <p>Use different role names for each signer. When sending, DocGen auto-detects roles from the template and populates the signer rows. You can also send <strong>multiple templates as a packet</strong> -- the signer walks through all documents in one session.</p>
                                     </div>
                                 </section>
 
@@ -866,29 +959,42 @@
                                         <div class="step-card">
                                             <div class="num">2</div>
                                             <strong>Verify</strong>
-                                            <p>Enter email, receive a 6-digit PIN, enter it to prove inbox control.</p>
+                                            <p>Enter email, receive a 6-digit PIN, verify identity.</p>
                                         </div>
                                         <div class="step-card">
                                             <div class="num">3</div>
-                                            <strong>Review</strong>
-                                            <p>Expand the document preview to read the full document before signing.</p>
+                                            <strong>Guided Signing</strong>
+                                            <p>The full document is shown with highlighted markers. An arrow points to each placement. Sign, initial, or date step by step.</p>
                                         </div>
                                         <div class="step-card">
                                             <div class="num">4</div>
-                                            <strong>Sign</strong>
-                                            <p>Type full name, check consent box, click Sign Document.</p>
+                                            <strong>Consent</strong>
+                                            <p>After all placements, check consent box and submit.</p>
                                         </div>
                                     </div>
 
                                     <div class="limit-grid">
+                                        <div class="limit-card info">
+                                            <strong>Resume Support</strong>
+                                            <p>If a signer closes the browser, they can return to the same link within 48 hours and resume exactly where they left off. Each placement is saved individually.</p>
+                                        </div>
+                                        <div class="limit-card info">
+                                            <strong>Decline</strong>
+                                            <p>Signers can decline with a reason. The sender is notified immediately via email.</p>
+                                        </div>
                                         <div class="limit-card warning">
                                             <strong>Token Expiry</strong>
-                                            <p>Signing links expire after <strong>48 hours</strong>. If a signer misses the window, create a new signature request.</p>
+                                            <p>Signing links expire after <strong>48 hours</strong>. After 3 failed PIN attempts, the link is locked permanently.</p>
                                         </div>
-                                        <div class="limit-card warning">
-                                            <strong>PIN Security</strong>
-                                            <p>PINs are hashed with SHA-256 before storage -- plaintext is never saved. After 3 failed attempts, the link is locked permanently.</p>
+                                        <div class="limit-card info">
+                                            <strong>Signing Order</strong>
+                                            <p>Choose <strong>Parallel</strong> (all signers at once) or <strong>Sequential</strong> (one at a time -- next signer is notified after previous completes).</p>
                                         </div>
+                                    </div>
+
+                                    <div class="card-tip">
+                                        <strong>Sender Notifications</strong>
+                                        <p>The sender receives email notifications when each signer completes, when all signatures are collected, and if anyone declines.</p>
                                     </div>
                                 </section>
 

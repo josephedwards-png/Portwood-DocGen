@@ -329,7 +329,13 @@ public class TestDataFactory {
                     WHERE AssigneeId = :UserInfo.getUserId() AND PermissionSetId = :ps[0].Id LIMIT 1
                 ];
                 if (existing.isEmpty()) {
-                    insert new PermissionSetAssignment(AssigneeId = UserInfo.getUserId(), PermissionSetId = ps[0].Id);
+                    // Wrap in System.runAs to isolate setup object DML (PermissionSetAssignment)
+                    // from non-setup DML (Account, Contact, etc.) in @TestSetup methods.
+                    // Without this, fresh packaging orgs throw MIXED_DML_OPERATION.
+                    User currentUser = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+                    System.runAs(currentUser) {
+                        insert new PermissionSetAssignment(AssigneeId = UserInfo.getUserId(), PermissionSetId = ps[0].Id);
+                    }
                 }
             }
         } catch (Exception e) {

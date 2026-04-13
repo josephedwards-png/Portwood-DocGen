@@ -88,6 +88,9 @@ try {
         if (containsNs(objs, 'DocGen_Signature_Audit__c')) { pass++; System.debug('ADMIN OBJ DocGen_Signature_Audit__c: PASS'); }
         else { fail++; System.debug('ADMIN OBJ DocGen_Signature_Audit__c: FAIL — found: ' + objs); }
 
+        if (containsNs(objs, 'DocGen_Signature_Placement__c')) { pass++; System.debug('ADMIN OBJ DocGen_Signature_Placement__c: PASS'); }
+        else { fail++; System.debug('ADMIN OBJ DocGen_Signature_Placement__c: FAIL — found: ' + objs); }
+
         if (containsNs(objs, 'DocGen_Saved_Query__c')) { pass++; System.debug('ADMIN OBJ DocGen_Saved_Query__c: PASS'); }
         else { fail++; System.debug('ADMIN OBJ DocGen_Saved_Query__c: FAIL — found: ' + objs); }
 
@@ -215,6 +218,9 @@ try {
 
         if (containsNs(go2, 'DocGen_Signature_Audit__c')) { pass++; System.debug('GUEST OBJ DocGen_Signature_Audit__c: PASS'); }
         else { fail++; System.debug('GUEST OBJ DocGen_Signature_Audit__c: FAIL — found: ' + go2); }
+
+        if (containsNs(go2, 'DocGen_Signature_Placement__c')) { pass++; System.debug('GUEST OBJ DocGen_Signature_Placement__c: PASS'); }
+        else { fail++; System.debug('GUEST OBJ DocGen_Signature_Placement__c: FAIL — found: ' + go2); }
     }
 } catch (Exception e) { fail++; System.debug('GUEST PERMS: FAIL — ' + e.getMessage()); }
 

@@ -52,8 +52,8 @@ public without sharing class DocGenSignatureController {
         } catch (Exception e) {
             // Not in a VF context
         }
-        // Fallback: try session-based IP (skip in test context — throws uncatchable exception)
-        if (!Test.isRunningTest()) {
+        // Fallback: try session-based IP (skip for guest users and tests — triggers uncatchable session error)
+        if (!Test.isRunningTest() && UserInfo.getUserType() != 'Guest') {
             try {
                 Map<String, String> session = Auth.SessionManagement.getCurrentSession();
                 String loginIp = session.get('SourceIp');
@@ -61,7 +61,7 @@ public without sharing class DocGenSignatureController {
                     return loginIp;
                 }
             } catch (Exception e) {
-                // Guest users may not have session info
+                // Session info unavailable
             }
         }
         return 'Unknown';
@@ -212,7 +212,12 @@ public without sharing class DocGenSignatureController {
         Database.update(signer, false, AccessLevel.SYSTEM_MODE);
 
         // Send PIN via email
-        sendPinEmail(signer.Signer_Email__c, pinStr);
+        String emailError = sendPinEmail(signer.Signer_Email__c, pinStr);
+        if (emailError != null) {
+            result.put('success', false);
+            result.put('message', 'Failed to send verification email. Please contact the sender.');
+            return result;
+        }
 
         result.put('success', true);
         result.put('message', 'A verification code has been sent to your email.');
@@ -325,11 +330,18 @@ public without sharing class DocGenSignatureController {
     /**
      * Sends the 6-digit PIN to the signer's email.
      */
-    private static void sendPinEmail(String email, String pin) {
+    private static String sendPinEmail(String email, String pin) {
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
         String brandColor = String.isNotBlank(settings.Signature_Email_Brand_Color__c)
             ? settings.Signature_Email_Brand_Color__c : '#0176D3';
         String companyName = settings.Company_Name__c;
+
+        // OWA is required for guest user context — warn if not configured
+        String owaId = settings.Signature_OWA_Id__c;
+        if (String.isBlank(owaId) && UserInfo.getUserType() == 'Guest') {
+            System.debug(LoggingLevel.ERROR, 'DocGen: PIN email failed — no Org-Wide Email Address configured in Signature Settings (required for guest users)');
+            return 'No Org-Wide Email Address configured. An admin must set one in DocGen Signature Settings.';
+        }
 
         String html = '<!DOCTYPE html><html><head><meta charset="utf-8"/></head>';
         html += '<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">';
@@ -354,14 +366,17 @@ public without sharing class DocGenSignatureController {
         email2.setSubject('Your DocGen Signature Verification Code');
         email2.setHtmlBody(html);
         email2.setSaveAsActivity(false);
-
-        // Use Org-Wide Email Address if configured
-        String owaId = settings.Signature_OWA_Id__c;
         if (String.isNotBlank(owaId)) {
             email2.setOrgWideEmailAddressId(owaId);
         }
 
-        Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email2 }, false);
+        List<Messaging.SendEmailResult> results = Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email2 }, false);
+        if (!results.isEmpty() && !results[0].isSuccess()) {
+            String errMsg = results[0].getErrors()[0].getMessage();
+            System.debug(LoggingLevel.ERROR, 'DocGen: PIN email send failed — ' + errMsg);
+            return errMsg;
+        }
+        return null;
     }
 
     private static SignatureInitResponse validateSignerToken(DocGen_Signer__c signer) {
@@ -715,6 +730,19 @@ public without sharing class DocGenSignatureController {
         parentReq.Status__c = 'In Progress';
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+
+        // All post-signature actions (PDF generation, notifications, sequential signing)
+        // are deferred to system context via platform event.
+        // Guest users cannot send emails, query User records, or access ContentVersion
+        // (triggers session ID error). The trigger runs as Automated Process user.
+        try {
+            DocGen_Signature_PDF__e pdfEvent = new DocGen_Signature_PDF__e();
+            pdfEvent.Request_Id__c = signer.Signature_Request__c;
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            EventBus.publish(pdfEvent);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'DocGen: Post-signature event publish failed: ' + e.getMessage());
+        }
 
         return result;
     }
@@ -1100,6 +1128,289 @@ public without sharing class DocGenSignatureController {
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'DocGen: Failed to clean up temp signature images: ' + e.getMessage());
         }
+    }
+
+    // =========================================================================
+    // Decline Signature
+    // =========================================================================
+
+    /**
+     * Allows a signer to decline the signature request with a reason.
+     * Marks the signer and parent request as Declined, creates an audit record.
+     */
+    @AuraEnabled
+    @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
+    public static Map<String, Object> declineSignature(String token, String reason) {
+        Map<String, Object> result = new Map<String, Object>();
+
+        if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
+            result.put('success', false);
+            result.put('message', 'Invalid security token.');
+            return result;
+        }
+
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signer__c> signers = [
+            SELECT Id, Status__c, Signer_Name__c, Signer_Email__c, Signature_Request__c,
+                   Role_Name__c, Contact__c, CreatedDate
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE LIMIT 1
+        ]; // NOPMD ApexCRUDViolation
+
+        if (signers.isEmpty()) {
+            result.put('success', false);
+            result.put('message', 'Signer not found.');
+            return result;
+        }
+
+        DocGen_Signer__c signer = signers[0];
+        if (signer.CreatedDate.addHours(TOKEN_EXPIRATION_HOURS) < System.now()) {
+            result.put('success', false);
+            result.put('message', 'This signature link has expired.');
+            return result;
+        }
+        if (signer.Status__c == 'Signed') {
+            result.put('success', false);
+            result.put('message', 'You have already signed this document.');
+            return result;
+        }
+        if (signer.Status__c == 'Declined') {
+            result.put('success', false);
+            result.put('message', 'You have already declined this request.');
+            return result;
+        }
+
+        // Mark signer as declined
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
+        signer.Status__c = 'Declined';
+        signer.Decline_Reason__c = String.isNotBlank(reason) ? reason.left(1000) : null;
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        Database.update(signer, false, AccessLevel.SYSTEM_MODE);
+
+        // Mark parent request as declined
+        DocGen_Signature_Request__c parentReq = new DocGen_Signature_Request__c(Id = signer.Signature_Request__c);
+        parentReq.Status__c = 'Declined';
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        Database.update(parentReq, false, AccessLevel.SYSTEM_MODE);
+
+        // Create audit record
+        DocGen_Signature_Audit__c audit = new DocGen_Signature_Audit__c();
+        audit.Signature_Request__c = signer.Signature_Request__c;
+        audit.Signer__c = signer.Id;
+        audit.Signer_Name__c = signer.Signer_Name__c;
+        audit.Signer_Email__c = signer.Signer_Email__c;
+        audit.Contact__c = signer.Contact__c;
+        audit.Signed_Date__c = System.now();
+        audit.IP_Address__c = captureClientIp();
+        audit.Consent_Captured__c = false;
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);
+
+        // Decline notification deferred to system context via platform event
+        // (guest users cannot query User records or send email — triggers session ID error)
+        try {
+            DocGen_Signature_PDF__e notifyEvent = new DocGen_Signature_PDF__e();
+            notifyEvent.Request_Id__c = signer.Signature_Request__c;
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            EventBus.publish(notifyEvent);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'DocGen: Decline notification event failed: ' + e.getMessage());
+        }
+
+        result.put('success', true);
+        result.put('message', 'You have declined this signature request.');
+        return result;
+    }
+
+    // =========================================================================
+    // Phase 2: Guided Signing — Per-Placement Endpoints
+    // =========================================================================
+
+    /**
+     * Returns all signature placements for a signer, ordered by document index then sequence.
+     * Used by the guided signing flow to build the step-through UI.
+     * Includes current status so the signer can resume where they left off.
+     */
+    @AuraEnabled
+    @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
+    public static List<Map<String, Object>> getSignerPlacements(String token) {
+        if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
+            throw new AuraHandledException('Invalid security token.');
+        }
+
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signer__c> signers = [
+            SELECT Id, Signature_Request__c, CreatedDate, PIN_Verified_At__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE LIMIT 1
+        ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        if (signers.isEmpty()) {
+            throw new AuraHandledException('Signer not found.');
+        }
+
+        DocGen_Signer__c signer = signers[0];
+        if (signer.CreatedDate.addHours(TOKEN_EXPIRATION_HOURS) < System.now()) {
+            throw new AuraHandledException('This signature link has expired.');
+        }
+
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signature_Placement__c> placements = [
+            SELECT Id, Sequence_Order__c, Placement_Type__c, Status__c,
+                   Signed_Value__c, Signed_At__c, Section_Context__c, Tag_Text__c,
+                   Document_Index__c
+            FROM DocGen_Signature_Placement__c
+            WHERE Signer__c = :signer.Id
+            WITH SYSTEM_MODE
+            ORDER BY Document_Index__c ASC, Sequence_Order__c ASC
+        ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        List<Map<String, Object>> result = new List<Map<String, Object>>();
+        for (DocGen_Signature_Placement__c plc : placements) {
+            Map<String, Object> m = new Map<String, Object>();
+            m.put('id', plc.Id);
+            m.put('sequence', plc.Sequence_Order__c);
+            m.put('type', plc.Placement_Type__c);
+            m.put('status', plc.Status__c);
+            m.put('signedValue', plc.Signed_Value__c);
+            m.put('signedAt', plc.Signed_At__c);
+            m.put('sectionContext', plc.Section_Context__c);
+            m.put('tagText', plc.Tag_Text__c);
+            m.put('documentIndex', plc.Document_Index__c);
+            result.add(m);
+        }
+        return result;
+    }
+
+    /**
+     * Signs a single placement during the guided signing flow.
+     * Persists the value, marks as signed, and returns the updated placement list.
+     */
+    @AuraEnabled
+    @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
+    public static List<Map<String, Object>> signPlacement(String token, Id placementId, String value) {
+        if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
+            throw new AuraHandledException('Invalid security token.');
+        }
+
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signer__c> signers = [
+            SELECT Id, CreatedDate, PIN_Verified_At__c, Status__c
+            FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE LIMIT 1
+        ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        if (signers.isEmpty()) {
+            throw new AuraHandledException('Signer not found.');
+        }
+
+        DocGen_Signer__c signer = signers[0];
+        if (signer.CreatedDate.addHours(TOKEN_EXPIRATION_HOURS) < System.now()) {
+            throw new AuraHandledException('This signature link has expired.');
+        }
+        if (signer.PIN_Verified_At__c == null) {
+            throw new AuraHandledException('Email verification is required.');
+        }
+
+        // Verify the placement belongs to this signer
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signature_Placement__c> plcs = [
+            SELECT Id, Signer__c, Status__c, Placement_Type__c
+            FROM DocGen_Signature_Placement__c
+            WHERE Id = :placementId AND Signer__c = :signer.Id
+            WITH SYSTEM_MODE LIMIT 1
+        ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        if (plcs.isEmpty()) {
+            throw new AuraHandledException('Placement not found.');
+        }
+
+        DocGen_Signature_Placement__c plc = plcs[0];
+        if (plc.Status__c == 'Signed') {
+            // Already signed — return current state (idempotent)
+            return getSignerPlacements(token);
+        }
+
+        // For Date type, auto-fill with server timestamp
+        if (plc.Placement_Type__c == 'Date') {
+            plc.Signed_Value__c = System.now().format('MMMM d, yyyy');
+        } else {
+            if (String.isBlank(value)) {
+                throw new AuraHandledException('Please provide a value.');
+            }
+            plc.Signed_Value__c = value.left(255);
+        }
+
+        plc.Status__c = 'Signed';
+        plc.Signed_At__c = System.now();
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        Database.update(plc, false, AccessLevel.SYSTEM_MODE);
+
+        return getSignerPlacements(token);
+    }
+
+    /**
+     * Returns a ContentVersion's binary data as base64 for guest users.
+     * Guest users cannot access /sfc/servlet.shepherd/ URLs directly (auth required).
+     * The signing page JS calls this per image, then injects as data URI.
+     */
+    @AuraEnabled
+    @RemoteAction
+    // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
+    public static Map<String, String> getImageBase64(String token, String contentVersionId) {
+        Map<String, String> result = new Map<String, String>();
+
+        if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
+            result.put('error', 'Invalid token');
+            return result;
+        }
+
+        // Validate the token is still valid (active signer)
+        /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+        List<DocGen_Signer__c> signers = [
+            SELECT Id, CreatedDate FROM DocGen_Signer__c
+            WHERE Secure_Token__c = :token
+            WITH SYSTEM_MODE LIMIT 1
+        ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        if (signers.isEmpty() || signers[0].CreatedDate.addHours(TOKEN_EXPIRATION_HOURS) < System.now()) {
+            result.put('error', 'Invalid or expired token');
+            return result;
+        }
+
+        // Validate ContentVersion ID format
+        if (String.isBlank(contentVersionId) || !contentVersionId.startsWith('068')) {
+            result.put('error', 'Invalid content version ID');
+            return result;
+        }
+
+        try {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            ContentVersion cv = [
+                SELECT VersionData, FileExtension
+                FROM ContentVersion
+                WHERE Id = :contentVersionId
+                WITH SYSTEM_MODE LIMIT 1
+            ]; // NOPMD ApexCRUDViolation - ContentVersion accessed for signature document preview
+
+            String mimeType = 'image/png';
+            if (cv.FileExtension == 'jpg' || cv.FileExtension == 'jpeg') mimeType = 'image/jpeg';
+            else if (cv.FileExtension == 'gif') mimeType = 'image/gif';
+            else if (cv.FileExtension == 'svg') mimeType = 'image/svg+xml';
+
+            result.put('base64', EncodingUtil.base64Encode(cv.VersionData));
+            result.put('mimeType', mimeType);
+        } catch (Exception e) {
+            result.put('error', 'Image not found');
+        }
+
+        return result;
     }
 
     /**

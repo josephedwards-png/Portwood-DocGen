@@ -334,6 +334,16 @@
         <field>DocGen_Signature_Request__c.Template__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Template_Ids__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Request__c.Signing_Order__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <!-- Signer fields (Admin: full access) -->
     <fieldPermissions>
         <editable>true</editable>
@@ -397,6 +407,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>DocGen_Signer__c.Decline_Reason__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>DocGen_Signer__c.Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -455,6 +470,53 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>DocGen_Signature_Audit__c.User_Agent__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <!-- Signature Placement fields (Admin: full access) -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Document_Index__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Placement_Type__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Section_Context__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Sequence_Order__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Signature_Request__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Signed_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Signed_Value__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <!-- DocGen_Signature_Placement__c.Signer__c is a required master-detail; FLS auto-granted -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>DocGen_Signature_Placement__c.Tag_Text__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
@@ -534,6 +596,16 @@
         <allowRead>true</allowRead>
         <modifyAllRecords>false</modifyAllRecords>
         <object>DocGen_Signature_Audit__c</object>
+        <viewAllFields>false</viewAllFields>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>DocGen_Signature_Placement__c</object>
         <viewAllFields>false</viewAllFields>
         <viewAllRecords>true</viewAllRecords>
     </objectPermissions>

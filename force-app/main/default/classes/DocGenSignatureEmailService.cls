@@ -178,6 +178,97 @@ public with sharing class DocGenSignatureEmailService {
         return html;
     }
 
+    // =========================================================================
+    // Sender Notifications
+    // =========================================================================
+
+    /**
+     * Notifies the sender that a signer has completed their signature.
+     */
+    public static void sendSignerCompletedNotification(Id requestId, DocGen_Signer__c signer) {
+        sendSenderNotification(
+            requestId,
+            'Signature Update: ' + signer.Signer_Name__c + ' has signed',
+            '<p>' + escapeHtml(signer.Signer_Name__c) + ' (' + escapeHtml(signer.Role_Name__c) + ') has completed their signature.</p>'
+        );
+    }
+
+    /**
+     * Notifies the sender that all signers have completed — signed PDF is attached.
+     */
+    public static void sendAllSignedNotification(Id requestId) {
+        sendSenderNotification(
+            requestId,
+            'All Signatures Complete',
+            '<p>All signers have completed their signatures. The signed PDF has been generated and attached to the record.</p>'
+        );
+    }
+
+    /**
+     * Notifies the sender that a signer has declined.
+     */
+    public static void sendDeclineNotification(Id requestId, DocGen_Signer__c signer, String reason) {
+        String body = '<p><strong>' + escapeHtml(signer.Signer_Name__c) + '</strong>';
+        if (String.isNotBlank(signer.Role_Name__c)) {
+            body += ' (' + escapeHtml(signer.Role_Name__c) + ')';
+        }
+        body += ' has <span style="color:#ea001e;font-weight:bold;">declined</span> to sign.</p>';
+        if (String.isNotBlank(reason)) {
+            body += '<p><strong>Reason:</strong> ' + escapeHtml(reason) + '</p>';
+        }
+        sendSenderNotification(requestId, 'Signature Declined: ' + signer.Signer_Name__c, body);
+    }
+
+    /**
+     * Sends a notification email to the user who created the signature request.
+     */
+    private static void sendSenderNotification(Id requestId, String subject, String bodyHtml) {
+        try {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            DocGen_Signature_Request__c req = [
+                SELECT CreatedById FROM DocGen_Signature_Request__c WHERE Id = :requestId WITH SYSTEM_MODE LIMIT 1
+            ]; // NOPMD
+
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            User sender = [SELECT Email FROM User WHERE Id = :req.CreatedById WITH SYSTEM_MODE LIMIT 1]; // NOPMD
+            if (String.isBlank(sender.Email)) return;
+
+            DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
+            String brandColor = String.isNotBlank(settings.Signature_Email_Brand_Color__c)
+                ? settings.Signature_Email_Brand_Color__c : '#0176D3';
+            String companyName = settings.Company_Name__c;
+
+            String html = '<!DOCTYPE html><html><head><meta charset="utf-8"/></head>';
+            html += '<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">';
+            html += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;">';
+            html += '<tr><td align="center" style="padding:24px 16px;">';
+            html += '<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">';
+            html += '<tr><td style="background:' + escapeHtml(brandColor) + ';padding:16px 32px;text-align:center;">';
+            if (String.isNotBlank(companyName)) {
+                html += '<span style="color:#fff;font-size:18px;font-weight:bold;">' + escapeHtml(companyName) + '</span>';
+            }
+            html += '</td></tr>';
+            html += '<tr><td style="padding:24px 32px;">' + bodyHtml;
+            html += '<p style="font-size:13px;color:#706e6b;margin-top:16px;">Request ID: ' + escapeHtml(String.valueOf(requestId)) + '</p>';
+            html += '</td></tr></table></td></tr></table></body></html>';
+
+            Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+            email.setToAddresses(new List<String>{ sender.Email });
+            email.setSubject('DocGen Signatures: ' + subject);
+            email.setHtmlBody(html);
+            email.setSaveAsActivity(false);
+
+            String owaId = settings.Signature_OWA_Id__c;
+            if (String.isNotBlank(owaId)) {
+                email.setOrgWideEmailAddressId(owaId);
+            }
+
+            Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ email }, false);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'DocGen: Sender notification failed: ' + e.getMessage());
+        }
+    }
+
     private static String escapeHtml(String input) {
         if (input == null) return '';
         return input.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;');

@@ -5,7 +5,7 @@
 public with sharing class DocGenHtmlRenderer {
 
     private static final String HTML_PREFIX =
-        '<html><head><style>' +
+        '<html><head><meta charset="utf-8"/><style>' +
         '@page { size: letter; margin: 1in; }' + // default — overridden by convertToHtmlWithHeaderFooter
         'body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.15; color: #000; }' +
         'h1 { font-size: 20pt; font-weight: bold; margin: 0 0 6pt 0; }' +
@@ -189,12 +189,12 @@ public with sharing class DocGenHtmlRenderer {
             '.docgen-page-num::before { content: counter(page); }' +
             '.docgen-page-total::before { content: counter(pages); }';
         String bodyTag = '<body>';
-        String dynamicPrefix = '<html><head><style>' + dynamicCss + '</style></head>' + bodyTag;
+        String dynamicPrefix = '<html><head><meta charset="utf-8"/><style>' + dynamicCss + '</style></head>' + bodyTag;
 
         // Always use dynamic prefix — it has resolved page dimensions and cell padding
         // Inject font-face CSS if provided
         if (String.isNotBlank(fontFaceCss)) {
-            dynamicPrefix = '<html><head><style>' + fontFaceCss + dynamicCss + '</style></head>' + bodyTag;
+            dynamicPrefix = '<html><head><meta charset="utf-8"/><style>' + fontFaceCss + dynamicCss + '</style></head>' + bodyTag;
         }
 
         // Insert running header/footer divs at top of body — Flying Saucer pulls them
@@ -272,7 +272,7 @@ public with sharing class DocGenHtmlRenderer {
         css += '.docgen-header table, .docgen-footer table { border-collapse: collapse; width: 100%; }';
         css += '.docgen-header td, .docgen-footer td { padding: 2pt; vertical-align: middle; }';
 
-        String result = '<html><head><style>' + css + '</style></head><body>';
+        String result = '<html><head><meta charset="utf-8"/><style>' + css + '</style></head><body>';
 
         if (String.isNotBlank(headerHtml)) {
             result += '<div class="docgen-header">' + headerHtml + '</div>';

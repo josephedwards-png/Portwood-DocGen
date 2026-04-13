@@ -83,47 +83,84 @@ public without sharing class DocGenSignatureService {
         String companyName = String.isNotBlank(settings.Company_Name__c)
             ? settings.Company_Name__c : 'DocGen';
 
-        String html = '<div style="margin-top:40px;padding-top:16px;border-top:2px solid ' + brandColor + ';">';
-        html += '<table style="width:100%;font-family:Helvetica,Arial,sans-serif;font-size:9px;color:#444;">';
+        // Query audit records for IP addresses and timestamps
+        Map<Id, DocGen_Signature_Audit__c> signerAuditMap = new Map<Id, DocGen_Signature_Audit__c>();
+        try {
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            List<DocGen_Signature_Audit__c> audits = [
+                SELECT Signer__c, IP_Address__c, User_Agent__c, Signed_Date__c, Consent_Captured__c
+                FROM DocGen_Signature_Audit__c
+                WHERE Signature_Request__c = :requestId AND Signer__c != null
+                WITH SYSTEM_MODE
+            ]; // NOPMD
+            for (DocGen_Signature_Audit__c a : audits) {
+                signerAuditMap.put(a.Signer__c, a);
+            }
+        } catch (Exception e) {
+            // Audit query failed — continue without IP data
+        }
+
+        String html = '<div style="page-break-before:always;margin-top:40px;padding-top:16px;border-top:3px solid ' + brandColor + ';">';
+        html += '<table style="width:100%;font-family:Helvetica,Arial,sans-serif;font-size:9pt;color:#333;border-collapse:collapse;">';
 
         // Header
-        html += '<tr><td colspan="2" style="padding-bottom:8px;font-size:10px;font-weight:bold;color:' + brandColor + ';">';
+        html += '<tr><td colspan="2" style="padding-bottom:12px;font-size:12pt;font-weight:bold;color:' + brandColor + ';">';
         html += 'ELECTRONIC SIGNATURE CERTIFICATE</td></tr>';
 
         // Document info
-        html += '<tr><td style="width:120px;padding:2px 0;font-weight:bold;">Document ID:</td>';
-        html += '<td style="padding:2px 0;">' + String.valueOf(requestId).escapeHtml4() + '</td></tr>';
+        html += '<tr><td style="width:140px;padding:3px 0;font-weight:bold;color:#555;">Document ID:</td>';
+        html += '<td style="padding:3px 0;">' + String.valueOf(requestId).escapeHtml4() + '</td></tr>';
 
-        html += '<tr><td style="padding:2px 0;font-weight:bold;">Completed:</td>';
-        html += '<td style="padding:2px 0;">' + System.now().format('yyyy-MM-dd HH:mm:ss z') + '</td></tr>';
+        html += '<tr><td style="padding:3px 0;font-weight:bold;color:#555;">Completed:</td>';
+        html += '<td style="padding:3px 0;">' + System.now().format('MMMM d, yyyy \'at\' h:mm a z') + '</td></tr>';
 
         // Signer details
-        html += '<tr><td colspan="2" style="padding-top:8px;padding-bottom:4px;font-weight:bold;">Signers:</td></tr>';
+        html += '<tr><td colspan="2" style="padding-top:16px;padding-bottom:6px;font-size:10pt;font-weight:bold;border-bottom:1px solid #ddd;">Signer Details</td></tr>';
 
         for (DocGen_Signer__c s : signers) {
-            String role = String.isNotBlank(s.Role_Name__c) ? ' (' + s.Role_Name__c + ')' : '';
-            html += '<tr><td style="padding:1px 0;padding-left:12px;" colspan="2">';
-            html += s.Signer_Name__c.escapeHtml4() + role.escapeHtml4();
-            html += ' &mdash; ' + s.Signer_Email__c.escapeHtml4();
-            if (s.PIN_Verified_At__c != null) {
-                html += ' &mdash; Email verified ' + s.PIN_Verified_At__c.format('yyyy-MM-dd HH:mm z');
+            DocGen_Signature_Audit__c audit = signerAuditMap.get(s.Id);
+            String role = String.isNotBlank(s.Role_Name__c) ? s.Role_Name__c : 'Signer';
+
+            html += '<tr><td colspan="2" style="padding:8px 0 2px 0;border-bottom:1px solid #eee;">';
+
+            // Name + Role
+            html += '<span style="font-weight:bold;font-size:10pt;">' + s.Signer_Name__c.escapeHtml4() + '</span>';
+            html += ' <span style="background:' + brandColor + ';color:#fff;font-size:7pt;font-weight:bold;padding:1px 6px;border-radius:8px;">' + role.escapeHtml4() + '</span><br/>';
+
+            // Email
+            html += '<span style="color:#555;">' + s.Signer_Email__c.escapeHtml4() + '</span><br/>';
+
+            // Audit details
+            if (audit != null) {
+                if (audit.Signed_Date__c != null) {
+                    html += '<span style="color:#555;">Signed: ' + audit.Signed_Date__c.format('MMMM d, yyyy \'at\' h:mm a z') + '</span><br/>';
+                }
+                if (String.isNotBlank(audit.IP_Address__c)) {
+                    html += '<span style="color:#555;">IP Address: ' + audit.IP_Address__c.escapeHtml4() + '</span><br/>';
+                }
+                if (audit.Consent_Captured__c) {
+                    html += '<span style="color:#2e844a;">&#10003; Consent captured</span><br/>';
+                }
             }
+            if (s.PIN_Verified_At__c != null) {
+                html += '<span style="color:#2e844a;">&#10003; Email verified ' + s.PIN_Verified_At__c.format('MMM d, yyyy h:mm a z') + '</span>';
+            }
+
             html += '</td></tr>';
         }
 
         // Verification footer
-        html += '<tr><td colspan="2" style="padding-top:8px;font-size:8px;color:#888;">';
+        html += '<tr><td colspan="2" style="padding-top:16px;font-size:8pt;color:#706e6b;">';
         html += 'This document was electronically signed using ' + companyName.escapeHtml4() + '. ';
-        html += 'The SHA-256 hash of this document is stored in a tamper-evident audit record with field history tracking. ';
+        html += 'The SHA-256 hash of this PDF is stored in a tamper-evident audit record with field history tracking enabled. ';
         if (String.isNotBlank(siteUrl)) {
             if (siteUrl.endsWith('/')) {
                 siteUrl = siteUrl.substring(0, siteUrl.length() - 1);
             }
-            // Build namespace-aware VF page path for subscriber orgs
             String ns = DocGenSignatureService.class.getName().substringBefore('.');
             String verifyPage = (String.isNotBlank(ns) && ns != 'DocGenSignatureService') ? '/apex/' + ns + '__DocGenVerify' : '/apex/DocGenVerify';
             String verifyUrl = siteUrl + verifyPage + '?id=' + String.valueOf(requestId);
-            html += 'Verify authenticity at: ' + verifyUrl.escapeHtml4();
+            html += 'Verify at: ' + verifyUrl.escapeHtml4();
         }
         html += '</td></tr>';
 
@@ -165,6 +202,8 @@ public without sharing class DocGenSignatureService {
      * Stamps typed-name signatures into already-merged XML strings.
      * Pure string operations — no ZIP, no blob loading, no heap pressure.
      * Used by the template-based signature flow for direct PDF rendering.
+     *
+     * Supports v3 placements (per-placement stamping) with fallback to v2 (per-signer replacement).
      */
     public static StampResult stampSignaturesInXml(
         String documentXml,
@@ -172,30 +211,81 @@ public without sharing class DocGenSignatureService {
         String contentTypesXml,
         List<SignerImageData> signers
     ) {
+        return stampSignaturesInXml(documentXml, relsXml, contentTypesXml, signers, null);
+    }
+
+    /**
+     * Stamps signatures using placement records when available (v3).
+     * Falls back to v2 bulk replacement when placements is null or empty.
+     */
+    public static StampResult stampSignaturesInXml(
+        String documentXml,
+        String relsXml,
+        String contentTypesXml,
+        List<SignerImageData> signers,
+        List<DocGen_Signature_Placement__c> placements
+    ) {
         Map<String, String> signatureImageUrls = new Map<String, String>();
 
-        for (SignerImageData sd : signers) {
-            String placeholder;
-            if (String.isBlank(sd.roleName)) {
-                placeholder = '{@Signature}';
-            } else {
-                placeholder = '{@Signature_' + sd.roleName.replaceAll(' ', '_') + '}';
-            }
+        if (placements != null && !placements.isEmpty()) {
+            // v3 path: stamp each placement individually
+            for (DocGen_Signature_Placement__c plc : placements) {
+                if (plc.Status__c != 'Signed' || String.isBlank(plc.Tag_Text__c)) continue;
 
-            if (String.isNotBlank(sd.typedName)) {
-                // Typed name signature — replace placeholder with styled text
-                String safeName = escapeXml(sd.typedName);
-                String dateStr = sd.signedDate != null
-                    ? sd.signedDate.format('yyyy-MM-dd HH:mm:ss z')
-                    : System.now().format('yyyy-MM-dd HH:mm:ss z');
-                String sigText = 'Electronically signed by ' + safeName + ' on ' + dateStr;
-                if (documentXml.contains(placeholder)) {
-                    documentXml = documentXml.replace(placeholder, sigText);
+                String replacement = buildPlacementText(plc);
+                if (documentXml.contains(plc.Tag_Text__c)) {
+                    // Replace only the FIRST occurrence of this exact tag
+                    documentXml = documentXml.replaceFirst(Pattern.quote(plc.Tag_Text__c), escapeXml(replacement));
+                }
+            }
+        } else {
+            // v2 fallback: replace all instances of {@Signature_Role} per signer
+            for (SignerImageData sd : signers) {
+                String placeholder;
+                if (String.isBlank(sd.roleName)) {
+                    placeholder = '{@Signature}';
+                } else {
+                    placeholder = '{@Signature_' + sd.roleName.replaceAll(' ', '_') + '}';
+                }
+
+                if (String.isNotBlank(sd.typedName)) {
+                    String safeName = escapeXml(sd.typedName);
+                    String dateStr = sd.signedDate != null
+                        ? sd.signedDate.format('yyyy-MM-dd HH:mm:ss z')
+                        : System.now().format('yyyy-MM-dd HH:mm:ss z');
+                    String sigText = 'Electronically signed by ' + safeName + ' on ' + dateStr;
+                    if (documentXml.contains(placeholder)) {
+                        documentXml = documentXml.replace(placeholder, sigText);
+                    }
                 }
             }
         }
 
         return new StampResult(documentXml, relsXml, contentTypesXml, signatureImageUrls);
+    }
+
+    /**
+     * Builds the replacement text for a signed placement based on its type.
+     */
+    private static String buildPlacementText(DocGen_Signature_Placement__c plc) {
+        String value = plc.Signed_Value__c;
+        String pType = plc.Placement_Type__c;
+
+        if (pType == 'Full') {
+            String dateStr = plc.Signed_At__c != null
+                ? plc.Signed_At__c.format('yyyy-MM-dd HH:mm:ss z')
+                : System.now().format('yyyy-MM-dd HH:mm:ss z');
+            return 'Electronically signed by ' + value + ' on ' + dateStr;
+        } else if (pType == 'Initials') {
+            return value; // Just the initials
+        } else if (pType == 'Date') {
+            // Auto server timestamp
+            DateTime dt = plc.Signed_At__c != null ? plc.Signed_At__c : System.now();
+            return dt.format('MMMM d, yyyy');
+        } else if (pType == 'DatePick') {
+            return value; // Signer-picked date string
+        }
+        return value != null ? value : '';
     }
 
     /**
@@ -515,7 +605,7 @@ public without sharing class DocGenSignatureService {
         public void execute(QueueableContext ctx) {
             /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
             List<DocGen_Signature_Request__c> requests = [
-                SELECT Id, Template__c, Related_Record_Id__c
+                SELECT Id, Template__c, Template_Ids__c, Related_Record_Id__c
                 FROM DocGen_Signature_Request__c
                 WHERE Id = :requestId
                 WITH SYSTEM_MODE LIMIT 1
@@ -528,6 +618,9 @@ public without sharing class DocGenSignatureService {
                 Blob pdfBlob;
                 if (Test.isRunningTest()) {
                     pdfBlob = Blob.toPdf('<html><body><p>Test PDF - Signed</p></body></html>');
+                } else if (String.isNotBlank(req.Template_Ids__c)) {
+                    // Multi-template packet
+                    pdfBlob = renderPacketSignaturePdf(requestId, req.Template_Ids__c, req.Related_Record_Id__c);
                 } else {
                     pdfBlob = renderTemplateSignaturePdf(requestId, req.Template__c, req.Related_Record_Id__c);
                 }
@@ -635,8 +728,19 @@ public without sharing class DocGenSignatureService {
                 signerImages.add(new SignerImageData(role, s.Signature_Data__c, System.now()));
             }
 
+            // Query placements for v3 stamping (null/empty = v2 fallback)
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            List<DocGen_Signature_Placement__c> placements = [
+                SELECT Id, Signer__c, Placement_Type__c, Sequence_Order__c, Signed_Value__c,
+                       Status__c, Signed_At__c, Tag_Text__c, Document_Index__c
+                FROM DocGen_Signature_Placement__c
+                WHERE Signature_Request__c = :reqId AND Status__c = 'Signed'
+                WITH SYSTEM_MODE
+                ORDER BY Document_Index__c ASC, Sequence_Order__c ASC
+            ]; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
             // Stamp typed-name signatures into merged XML
-            StampResult stamped = stampSignaturesInXml(documentXml, relsXml, contentTypesXml, signerImages);
+            StampResult stamped = stampSignaturesInXml(documentXml, relsXml, contentTypesXml, signerImages, placements);
 
             // Render PDF with template images only (no signature images needed)
             String html = DocGenHtmlRenderer.convertToHtml(stamped.documentXml, pdfImageMap);
@@ -653,6 +757,106 @@ public without sharing class DocGenSignatureService {
             html = html.replace('</body>', verifyBlock + '</body>');
 
             return Blob.toPdf(html);
+        }
+
+        /**
+         * Renders a multi-template packet as a single signed PDF.
+         * Merges each template, stamps placements per document, concatenates HTML with page breaks.
+         */
+        private Blob renderPacketSignaturePdf(Id reqId, String templateIdsJson, String recordId) {
+            List<Object> rawIds = (List<Object>) JSON.deserializeUntyped(templateIdsJson);
+            List<Id> templateIds = new List<Id>();
+            for (Object o : rawIds) templateIds.add((Id) o);
+
+            // Query template names for document headers
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            Map<Id, DocGen_Template__c> templateMap = new Map<Id, DocGen_Template__c>([
+                SELECT Id, Name FROM DocGen_Template__c WHERE Id IN :templateIds WITH SYSTEM_MODE
+            ]); // NOPMD
+
+            // Query all placements for this request
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            List<DocGen_Signature_Placement__c> allPlacements = [
+                SELECT Id, Signer__c, Placement_Type__c, Sequence_Order__c, Signed_Value__c,
+                       Status__c, Signed_At__c, Tag_Text__c, Document_Index__c
+                FROM DocGen_Signature_Placement__c
+                WHERE Signature_Request__c = :reqId AND Status__c = 'Signed'
+                WITH SYSTEM_MODE
+                ORDER BY Document_Index__c ASC, Sequence_Order__c ASC
+            ]; // NOPMD
+
+            // Query signers for v2 fallback
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            List<DocGen_Signer__c> signers = [
+                SELECT Id, Role_Name__c, Signature_Data__c
+                FROM DocGen_Signer__c
+                WHERE Signature_Request__c = :reqId AND Status__c = 'Signed'
+                WITH SYSTEM_MODE ORDER BY Sort_Order__c ASC
+            ]; // NOPMD
+            List<SignerImageData> signerImages = new List<SignerImageData>();
+            for (DocGen_Signer__c s : signers) {
+                signerImages.add(new SignerImageData(
+                    String.isNotBlank(s.Role_Name__c) ? s.Role_Name__c : 'Signer',
+                    s.Signature_Data__c, System.now()
+                ));
+            }
+
+            // Get cached image map
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            DocGen_Signature_Request__c reqData = [
+                SELECT Signature_Data__c FROM DocGen_Signature_Request__c WHERE Id = :reqId WITH SYSTEM_MODE LIMIT 1
+            ]; // NOPMD
+            Map<String, String> cachedImageMap = new Map<String, String>();
+            if (String.isNotBlank(reqData.Signature_Data__c)) {
+                Map<String, Object> cachedData = (Map<String, Object>) JSON.deserializeUntyped(reqData.Signature_Data__c);
+                Object imgMapObj = cachedData.get('imageMap');
+                if (imgMapObj instanceof Map<String, Object>) {
+                    for (String k : ((Map<String, Object>) imgMapObj).keySet()) {
+                        cachedImageMap.put(k, (String) ((Map<String, Object>) imgMapObj).get(k));
+                    }
+                }
+            }
+
+            // Merge and stamp each document
+            List<String> htmlParts = new List<String>();
+            for (Integer docIdx = 0; docIdx < templateIds.size(); docIdx++) {
+                Id tid = templateIds[docIdx];
+                Map<String, Object> mergeData = DocGenService.mergeTemplateForSignature(tid, recordId);
+                String documentXml = (String) mergeData.get('documentXml');
+                String relsXml = (String) mergeData.get('relsXml');
+                String contentTypesXml = (String) mergeData.get('contentTypesXml');
+                Map<String, String> pdfImageMap = (Map<String, String>) mergeData.get('pdfImageMap');
+                pdfImageMap.putAll(cachedImageMap);
+
+                // Filter placements for this document
+                List<DocGen_Signature_Placement__c> docPlacements = new List<DocGen_Signature_Placement__c>();
+                for (DocGen_Signature_Placement__c p : allPlacements) {
+                    if (p.Document_Index__c == docIdx) docPlacements.add(p);
+                }
+
+                StampResult stamped = stampSignaturesInXml(documentXml, relsXml, contentTypesXml, signerImages, docPlacements);
+                String docHtml = DocGenHtmlRenderer.convertToHtml(stamped.documentXml, pdfImageMap);
+
+                if (docIdx > 0) {
+                    htmlParts.add('<div style="page-break-before:always"></div>');
+                }
+                htmlParts.add(docHtml);
+            }
+
+            String fullHtml = String.join(htmlParts, '');
+
+            // Append verification block
+            /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
+            List<DocGen_Signer__c> fullSigners = [
+                SELECT Signer_Name__c, Signer_Email__c, Role_Name__c, PIN_Verified_At__c
+                FROM DocGen_Signer__c
+                WHERE Signature_Request__c = :reqId AND Status__c = 'Signed'
+                WITH SYSTEM_MODE ORDER BY Sort_Order__c ASC
+            ]; // NOPMD
+            String verifyBlock = buildVerificationBlockHtml(reqId, fullSigners);
+            fullHtml = fullHtml.replace('</body>', verifyBlock + '</body>');
+
+            return Blob.toPdf(fullHtml);
         }
     }
 }

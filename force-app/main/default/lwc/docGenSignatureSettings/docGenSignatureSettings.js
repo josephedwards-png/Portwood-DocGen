@@ -1,8 +1,10 @@
 import { LightningElement, track, wire } from 'lwc';
-import getSettings from '@salesforce/apex/DocGenSetupController.getSettings';
+import getSettingsFresh from '@salesforce/apex/DocGenSetupController.getSettingsFresh';
 import saveSettings from '@salesforce/apex/DocGenSetupController.saveSettings';
 import saveSignatureSettings from '@salesforce/apex/DocGenSetupController.saveSignatureSettings';
 import getOrgWideEmailAddresses from '@salesforce/apex/DocGenSetupController.getOrgWideEmailAddresses';
+import validateSignatureSetup from '@salesforce/apex/DocGenSetupController.validateSignatureSetup';
+import saveReminderSettings from '@salesforce/apex/DocGenSetupController.saveReminderSettings';
 
 export default class DocGenSignatureSettings extends LightningElement {
     @track isLoaded = false;
@@ -20,9 +22,22 @@ export default class DocGenSignatureSettings extends LightningElement {
     @track owaId = '';
     @track owaOptions = [];
 
-    @wire(getSettings)
-    wiredSettings({ error, data }) {
-        if (data) {
+    // Reminders
+    @track reminderEnabled = false;
+    @track reminderHours = 24;
+
+    // Setup checks
+    @track setupChecks = [];
+    @track setupChecksLoaded = false;
+
+    connectedCallback() {
+        this._loadSettings();
+        this._loadSetupChecks();
+    }
+
+    async _loadSettings() {
+        try {
+            const data = await getSettingsFresh();
             this.siteUrl = data.Experience_Site_Url__c || '';
             this.companyName = data.Company_Name__c || '';
             this.brandColor = data.Signature_Email_Brand_Color__c || '#0176D3';
@@ -31,10 +46,22 @@ export default class DocGenSignatureSettings extends LightningElement {
             this.emailMessage = data.Signature_Email_Message__c || '';
             this.footerText = data.Signature_Email_Footer_Text__c || '';
             this.owaId = data.Signature_OWA_Id__c || '';
-            this.isLoaded = true;
-        } else if (error) {
-            this.isLoaded = true;
+            this.reminderEnabled = data.Signature_Reminder_Enabled__c === true;
+            this.reminderHours = data.Signature_Reminder_Hours__c || 24;
+        } catch (_err) {
+            // Settings not yet created — use defaults
         }
+        this.isLoaded = true;
+    }
+
+    async _loadSetupChecks() {
+        this.setupChecksLoaded = false;
+        try {
+            this.setupChecks = await validateSignatureSetup();
+        } catch (_err) {
+            this.setupChecks = [];
+        }
+        this.setupChecksLoaded = true;
     }
 
     @wire(getOrgWideEmailAddresses)
@@ -52,6 +79,16 @@ export default class DocGenSignatureSettings extends LightningElement {
     handleEmailSubjectChange(e) { this.emailSubject = e.target.value; }
     handleEmailMessageChange(e) { this.emailMessage = e.target.value; }
     handleFooterTextChange(e) { this.footerText = e.target.value; }
+    handleReminderEnabledChange(e) { this.reminderEnabled = e.target.checked; }
+    handleReminderHoursChange(e) { this.reminderHours = e.target.value; }
+
+    handleRefreshChecks() {
+        this._loadSetupChecks();
+    }
+
+    get allChecksPassed() {
+        return this.setupChecks.length > 0 && this.setupChecks.every(c => c.passed);
+    }
 
     get saveLabel() {
         return this.isSaving ? 'Saving...' : 'Save Settings';
@@ -102,8 +139,15 @@ export default class DocGenSignatureSettings extends LightningElement {
                 companyName: this.companyName,
                 owaId: this.owaId
             });
+            // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
+            await saveReminderSettings({
+                enabled: this.reminderEnabled,
+                hours: parseInt(this.reminderHours, 10) || 24
+            });
             this.saveSuccess = true;
-            this.saveMessage = 'Settings saved successfully.';
+            this.saveMessage = 'Settings saved successfully.' + (this.reminderEnabled ? ' Reminders scheduled hourly.' : '');
+            // Re-validate setup after save
+            this._loadSetupChecks();
         } catch (err) {
             this.saveSuccess = false;
             this.saveMessage = err.body ? err.body.message : 'Failed to save settings.';

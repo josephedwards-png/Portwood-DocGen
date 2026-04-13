@@ -22,27 +22,76 @@ public with sharing class DocGenSignatureSenderController {
     }
 
     /**
+     * Data class for a parsed signature placement from template tags.
+     */
+    public class PlacementInfo implements Comparable {
+        @AuraEnabled public String role;
+        @AuraEnabled public Integer sequence;
+        @AuraEnabled public String placementType; // Full, Initials, Date, DatePick
+        @AuraEnabled public String tagText;       // Original tag for reference
+
+        public PlacementInfo(String role, Integer sequence, String placementType, String tagText) {
+            this.role = role;
+            this.sequence = sequence;
+            this.placementType = placementType;
+            this.tagText = tagText;
+        }
+
+        public Integer compareTo(Object other) {
+            PlacementInfo o = (PlacementInfo) other;
+            return this.sequence - o.sequence;
+        }
+    }
+
+    /**
      * Scans a DocGen template's pre-decomposed XML for {@Signature_XXX} placeholders.
-     * No ZIP decompression needed — reads from stored XML ContentVersions.
+     * Returns deduplicated role names (backward-compatible).
      */
     @AuraEnabled
     public static List<String> getTemplateSignatureRoles(Id templateId) {
+        List<PlacementInfo> placements = getTemplateSignaturePlacements(templateId);
+        List<String> roles = new List<String>();
+        for (PlacementInfo p : placements) {
+            if (!roles.contains(p.role)) {
+                roles.add(p.role);
+            }
+        }
+        return roles;
+    }
+
+    /**
+     * Scans a DocGen template for all v3 signature placements.
+     * Supports both v2 ({@Signature_Role}) and v3 ({@Signature_Role:Order:Type}) syntax.
+     * Returns ordered list of PlacementInfo with role, sequence, type, and original tag.
+     */
+    @AuraEnabled
+    public static List<PlacementInfo> getTemplateSignaturePlacements(Id templateId) {
+        String plainText = extractTemplatePlainText(templateId);
+        if (plainText == null) return new List<PlacementInfo>();
+        return parseSignaturePlacements(plainText);
+    }
+
+    /**
+     * Extracts concatenated plain text from a template's pre-decomposed document.xml.
+     * Reads from stored XML ContentVersions — no ZIP decompression needed.
+     */
+    private static String extractTemplatePlainText(Id templateId) {
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template_Version__c> activeVersions = [
             SELECT Id FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId AND Is_Active__c = true
             WITH SYSTEM_MODE LIMIT 1
         ];
-        if (activeVersions.isEmpty()) return new List<String>();
+        if (activeVersions.isEmpty()) return null;
 
         String xmlPrefix = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_';
+        /* code-analyzer-suppress ApexFlsViolation */
         List<ContentVersion> xmlCvs = [
             SELECT Title, VersionData FROM ContentVersion
             WHERE Title LIKE :(xmlPrefix + '%')
             WITH SYSTEM_MODE
         ];
 
-        // Find the document.xml entry
         String documentXml = null;
         for (ContentVersion cv : xmlCvs) {
             String key = cv.Title.substring(xmlPrefix.length());
@@ -52,7 +101,7 @@ public with sharing class DocGenSignatureSenderController {
                 break;
             }
         }
-        if (documentXml == null) return new List<String>();
+        if (documentXml == null) return null;
 
         // Extract text from <w:t> elements
         String plainText = '';
@@ -61,23 +110,116 @@ public with sharing class DocGenSignatureSenderController {
         while (wtMatch.find()) {
             plainText += wtMatch.group(1);
         }
+        return plainText;
+    }
 
-        // Find {@Signature_RoleName} placeholders
-        List<String> roles = new List<String>();
-        Pattern sigPat = Pattern.compile('\\{@Signature_([^}]+)\\}');
+    /**
+     * Parses signature placement tags from plain text.
+     * v2: {@Signature_Role} → role="Role", sequence=1, type="Full"
+     * v3: {@Signature_Role:Order:Type} → role="Role", sequence=Order, type=Type
+     * Generic: {@Signature} → role="Signer", sequence=1, type="Full"
+     */
+    @TestVisible
+    private static List<PlacementInfo> parseSignaturePlacements(String plainText) {
+        List<PlacementInfo> placements = new List<PlacementInfo>();
+
+        // v3 regex: captures role, optional :order, optional :type
+        Pattern sigPat = Pattern.compile('\\{@Signature_([^:}]+)(?::(\\d+))?(?::([^}]+))?\\}');
         Matcher sigMatch = sigPat.matcher(plainText);
         while (sigMatch.find()) {
             String roleName = sigMatch.group(1).replaceAll('_', ' ');
-            if (!roles.contains(roleName)) {
-                roles.add(roleName);
+            Integer seq = sigMatch.group(2) != null ? Integer.valueOf(sigMatch.group(2)) : 1;
+            String pType = sigMatch.group(3) != null ? sigMatch.group(3) : 'Full';
+
+            // Normalize type
+            if (pType != 'Full' && pType != 'Initials' && pType != 'Date' && pType != 'DatePick') {
+                pType = 'Full';
             }
+
+            placements.add(new PlacementInfo(roleName, seq, pType, sigMatch.group(0)));
         }
 
-        if (roles.isEmpty() && plainText.contains('{@Signature}')) {
-            roles.add('Signer');
+        // Fallback: generic {@Signature} tag (no role)
+        if (placements.isEmpty() && plainText.contains('{@Signature}')) {
+            placements.add(new PlacementInfo('Signer', 1, 'Full', '{@Signature}'));
         }
 
-        return roles;
+        // Sort by sequence order
+        placements.sort();
+
+        return placements;
+    }
+
+    /**
+     * Replaces {@Signature_*} tags in preview HTML with interactive styled spans.
+     * Each span carries data attributes for the guided signing JS to find and manipulate.
+     * Inline styles ensure the highlights render in both browser preview and Blob.toPdf() unsigned PDF.
+     */
+    @TestVisible
+    private static String injectPlacementSpans(String html) {
+        if (String.isBlank(html)) return html;
+
+        // Match v3 tags: {@Signature_Role:Order:Type} and v2: {@Signature_Role}
+        Pattern sigPat = Pattern.compile('\\{@Signature_([^:}]+)(?::(\\d+))?(?::([^}]+))?\\}');
+        Matcher sigMatch = sigPat.matcher(html);
+
+        // Track per-role occurrence count for unique span IDs
+        Map<String, Integer> roleCounters = new Map<String, Integer>();
+        String result = html;
+
+        // Process matches in reverse order to preserve string positions
+        List<Integer[]> matchPositions = new List<Integer[]>();
+        List<String[]> matchData = new List<String[]>();
+
+        // Reset matcher to scan all matches
+        sigMatch.reset();
+        while (sigMatch.find()) {
+            matchPositions.add(new Integer[]{ sigMatch.start(), sigMatch.end() });
+            String role = sigMatch.group(1).replaceAll('_', ' ');
+            String order = sigMatch.group(2) != null ? sigMatch.group(2) : '1';
+            String pType = sigMatch.group(3) != null ? sigMatch.group(3) : 'Full';
+            matchData.add(new String[]{ role, order, pType, sigMatch.group(0) });
+        }
+
+        // Replace in reverse order so positions stay valid
+        for (Integer i = matchPositions.size() - 1; i >= 0; i--) {
+            Integer startPos = matchPositions[i][0];
+            Integer endPos = matchPositions[i][1];
+            String role = matchData[i][0];
+            String order = matchData[i][1];
+            String pType = matchData[i][2];
+            String originalTag = matchData[i][3];
+
+            String label;
+            if (pType == 'Full') label = 'SIGN HERE';
+            else if (pType == 'Initials') label = 'INITIAL HERE';
+            else if (pType == 'Date' || pType == 'DatePick') label = 'DATE';
+            else label = 'SIGN HERE';
+
+            String span = '<span class="docgen-sig"'
+                + ' data-role="' + role.escapeHtml4() + '"'
+                + ' data-order="' + order + '"'
+                + ' data-type="' + pType + '"'
+                + ' data-tag="' + originalTag.escapeHtml4() + '"'
+                + ' style="display:inline-block;background:#fff8c5;border:2px dashed #f59e0b;'
+                + 'padding:2px 10px;border-radius:4px;font-weight:bold;color:#92400e;font-size:0.85em;">'
+                + label + ' — ' + role.escapeHtml4()
+                + '</span>';
+
+            result = result.substring(0, startPos) + span + result.substring(endPos);
+        }
+
+        // Also handle bare {@Signature} tag
+        if (result.contains('{@Signature}')) {
+            String span = '<span class="docgen-sig"'
+                + ' data-role="Signer" data-order="1" data-type="Full" data-tag="{@Signature}"'
+                + ' style="display:inline-block;background:#fff8c5;border:2px dashed #f59e0b;'
+                + 'padding:2px 10px;border-radius:4px;font-weight:bold;color:#92400e;font-size:0.85em;">'
+                + 'SIGN HERE — Signer</span>';
+            result = result.replace('{@Signature}', span);
+        }
+
+        return result;
     }
 
     /**
@@ -88,6 +230,13 @@ public with sharing class DocGenSignatureSenderController {
     // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
     // CxSAST: Apex_CRUD_ContentDistribution — ContentDistribution created for signature preview images
     public static List<SignerResult> createTemplateSignerRequest(Id templateId, String relatedRecordId, String signersJson) {
+        return createTemplateSignerRequestWithOrder(templateId, relatedRecordId, signersJson, 'Parallel');
+    }
+
+    @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
+    // CxSAST: Apex_CRUD_ContentDistribution — ContentDistribution created for signature preview images
+    public static List<SignerResult> createTemplateSignerRequestWithOrder(Id templateId, String relatedRecordId, String signersJson, String signingOrder) {
         // Validate template exists
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template__c> templates = [SELECT Id, Name FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
@@ -110,6 +259,7 @@ public with sharing class DocGenSignatureSenderController {
         req.Template__c = templateId;
         req.Related_Record_Id__c = relatedRecordId;
         req.Status__c = 'Sent';
+        req.Signing_Order__c = String.isNotBlank(signingOrder) ? signingOrder : 'Parallel';
         // Package-internal object — CRUD controlled by DocGen permission sets
         /* code-analyzer-suppress ApexFlsViolation */
         insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
@@ -153,6 +303,9 @@ public with sharing class DocGenSignatureSenderController {
             String docXml = (String) mergeData.get('documentXml');
             String previewHtml = DocGenHtmlRenderer.convertToHtml(docXml, previewImageMap);
 
+            // Inject interactive placement spans for the guided signing UI
+            previewHtml = injectPlacementSpans(previewHtml);
+
             // Store image map (for Queueable) + preview HTML (for guest VF page)
             Map<String, Object> cachedData = new Map<String, Object>{
                 'imageMap' => pdfImageMap,
@@ -170,7 +323,182 @@ public with sharing class DocGenSignatureSenderController {
         return createSignersAndNotify(req.Id, templateId, templates[0].Name, signerInputs);
     }
 
-    @AuraEnabled(cacheable=true)
+    /**
+     * Creates a multi-template packet signature request.
+     * All templates are merged, preview HTML is concatenated with page breaks,
+     * and placements are created across documents with Document_Index__c.
+     */
+    @AuraEnabled
+    // CxSAST: Apex_CRUD_Violation — package-internal custom objects; CRUD controlled by DocGen permission sets
+    public static List<SignerResult> createPacketSignerRequest(String templateIdsJson, String relatedRecordId, String signersJson, String signingOrder) {
+        List<Object> rawTemplateIds = (List<Object>) JSON.deserializeUntyped(templateIdsJson);
+        List<Id> templateIds = new List<Id>();
+        for (Object t : rawTemplateIds) templateIds.add((Id) t);
+
+        if (templateIds.isEmpty()) {
+            throw new AuraHandledException('At least one template is required.');
+        }
+
+        // Single template — delegate to existing method
+        if (templateIds.size() == 1) {
+            return createTemplateSignerRequestWithOrder(templateIds[0], relatedRecordId, signersJson, signingOrder);
+        }
+
+        // Validate all templates exist
+        /* code-analyzer-suppress ApexFlsViolation */
+        Map<Id, DocGen_Template__c> templateMap = new Map<Id, DocGen_Template__c>([
+            SELECT Id, Name FROM DocGen_Template__c WHERE Id IN :templateIds WITH SYSTEM_MODE
+        ]); // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        for (Id tid : templateIds) {
+            if (!templateMap.containsKey(tid)) {
+                throw new AuraHandledException('Template not found: ' + tid);
+            }
+        }
+
+        // Parse signers
+        List<Object> rawInputs = (List<Object>) JSON.deserializeUntyped(signersJson);
+        List<Map<String, Object>> signerInputs = new List<Map<String, Object>>();
+        for (Object item : rawInputs) {
+            signerInputs.add((Map<String, Object>) item);
+        }
+
+        // Create parent request with multi-template reference
+        // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
+        DocGen_Signature_Request__c req = new DocGen_Signature_Request__c();
+        req.Template__c = templateIds[0]; // Primary template for backward compat
+        req.Template_Ids__c = JSON.serialize(templateIds);
+        req.Related_Record_Id__c = relatedRecordId;
+        req.Status__c = 'Sent';
+        req.Signing_Order__c = String.isNotBlank(signingOrder) ? signingOrder : 'Parallel';
+        /* code-analyzer-suppress ApexFlsViolation */
+        insert req; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+
+        // Pre-compute merged preview for all templates
+        try {
+            Map<String, String> combinedPdfImageMap = new Map<String, String>();
+            List<String> previewHtmlParts = new List<String>();
+            List<List<PlacementInfo>> allPlacements = new List<List<PlacementInfo>>();
+
+            for (Integer docIdx = 0; docIdx < templateIds.size(); docIdx++) {
+                Id tid = templateIds[docIdx];
+                Map<String, Object> mergeData = DocGenService.mergeTemplateForSignature(tid, relatedRecordId);
+                Map<String, String> pdfImageMap = (Map<String, String>) mergeData.get('pdfImageMap');
+                combinedPdfImageMap.putAll(pdfImageMap);
+
+                // Build preview HTML for this document
+                Map<String, String> previewImageMap = new Map<String, String>();
+                for (String relId : pdfImageMap.keySet()) {
+                    String url = pdfImageMap.get(relId);
+                    if (url != null && url.contains('/version/download/')) {
+                        String cvId = url.substringAfterLast('/');
+                        try {
+                            // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
+                            ContentDistribution dist = new ContentDistribution();
+                            dist.Name = 'sig_preview_' + relId;
+                            dist.ContentVersionId = cvId;
+                            dist.PreferencesAllowViewInBrowser = true;
+                            dist.PreferencesLinkLatestVersion = false;
+                            dist.PreferencesExpires = false;
+                            insert dist; // NOPMD ApexCRUDViolation
+                            dist = [SELECT ContentDownloadUrl FROM ContentDistribution WHERE Id = :dist.Id]; // NOPMD
+                            previewImageMap.put(relId, dist.ContentDownloadUrl);
+                        } catch (Exception e) {
+                            System.debug(LoggingLevel.WARN, 'DocGen: Could not create public link for ' + relId);
+                        }
+                    }
+                }
+
+                String docXml = (String) mergeData.get('documentXml');
+                String docHtml = DocGenHtmlRenderer.convertToHtml(docXml, previewImageMap);
+                docHtml = injectPlacementSpans(docHtml);
+
+                // Add document title header
+                String docTitle = templateMap.get(tid).Name;
+                String titleHtml = '<div style="background:#f8fafc;border:1px solid #e5e5e5;border-radius:6px;padding:12px 16px;margin-bottom:16px;text-align:center;">'
+                    + '<strong style="font-size:14px;color:#3e3e3c;">Document ' + (docIdx + 1) + ' of ' + templateIds.size()
+                    + ': ' + docTitle.escapeHtml4() + '</strong></div>';
+
+                if (docIdx > 0) {
+                    previewHtmlParts.add('<div style="page-break-before:always"></div>');
+                }
+                previewHtmlParts.add(titleHtml + docHtml);
+
+                // Collect placements for this document
+                allPlacements.add(getTemplateSignaturePlacements(tid));
+            }
+
+            // Store combined data
+            Map<String, Object> cachedData = new Map<String, Object>{
+                'imageMap' => combinedPdfImageMap,
+                'previewHtml' => String.join(previewHtmlParts, '')
+            };
+            req.Signature_Data__c = JSON.serialize(cachedData);
+            /* code-analyzer-suppress ApexFlsViolation */
+            update req; // NOPMD ApexCRUDViolation
+
+            // Create signers first
+            String documentTitle = templateMap.get(templateIds[0]).Name;
+            if (templateIds.size() > 1) {
+                documentTitle += ' (+' + (templateIds.size() - 1) + ' more)';
+            }
+            List<SignerResult> results = createSignersAndNotifyWithoutPlacements(req.Id, templateIds[0], documentTitle, signerInputs);
+
+            // Now create placements per document
+            // Re-query signer records to get IDs
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Signer__c> signerRecords = [
+                SELECT Id, Role_Name__c FROM DocGen_Signer__c
+                WHERE Signature_Request__c = :req.Id WITH SYSTEM_MODE ORDER BY Sort_Order__c ASC
+            ]; // NOPMD
+
+            Map<String, DocGen_Signer__c> roleSignerMap = new Map<String, DocGen_Signer__c>();
+            for (Integer i = 0; i < signerRecords.size(); i++) {
+                String roleName = (String) signerInputs[i].get('roleName');
+                if (String.isNotBlank(roleName)) {
+                    roleSignerMap.put(roleName, signerRecords[i]);
+                }
+            }
+
+            List<DocGen_Signature_Placement__c> placementRecords = new List<DocGen_Signature_Placement__c>();
+            for (Integer docIdx = 0; docIdx < allPlacements.size(); docIdx++) {
+                for (PlacementInfo p : allPlacements[docIdx]) {
+                    DocGen_Signer__c signer = roleSignerMap.get(p.role);
+                    if (signer == null) continue;
+
+                    DocGen_Signature_Placement__c plc = new DocGen_Signature_Placement__c();
+                    plc.Signer__c = signer.Id;
+                    plc.Signature_Request__c = req.Id;
+                    plc.Document_Index__c = docIdx;
+                    plc.Sequence_Order__c = p.sequence;
+                    plc.Placement_Type__c = p.placementType;
+                    plc.Status__c = 'Pending';
+                    plc.Tag_Text__c = p.tagText;
+                    placementRecords.add(plc);
+                }
+            }
+
+            if (!placementRecords.isEmpty()) {
+                /* code-analyzer-suppress ApexFlsViolation */
+                insert placementRecords; // NOPMD
+            }
+
+            return results;
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'DocGen: Packet request creation failed: ' + e.getMessage());
+            throw new AuraHandledException('Failed to create packet request: ' + e.getMessage());
+        }
+    }
+
+    /**
+     * Creates signers and sends emails WITHOUT creating placements.
+     * Used by packet flow which creates placements separately per document.
+     */
+    private static List<SignerResult> createSignersAndNotifyWithoutPlacements(Id requestId, Id templateId, String documentTitle, List<Map<String, Object>> signerInputs) {
+        // Temporarily null the templateId to skip placement creation in createSignersAndNotify
+        return createSignersAndNotify(requestId, null, documentTitle, signerInputs, true);
+    }
+
+    @AuraEnabled
     public static List<ContentVersion> getRelatedDocuments(Id recordId) {
         List<ContentDocumentLink> links = [SELECT ContentDocumentId FROM ContentDocumentLink WHERE LinkedEntityId = :recordId WITH USER_MODE];
         Set<Id> docIds = new Set<Id>();
@@ -425,6 +753,46 @@ public with sharing class DocGenSignatureSenderController {
      * Shared logic: creates DocGen_Signer__c records and sends notification emails.
      * Used by both createMultiSignerRequest (DOCX) and createTemplateSignerRequest (template).
      */
+    /**
+     * Creates DocGen_Signature_Placement__c records for each signer based on template tags.
+     * Maps v3 tags ({@Signature_Role:Order:Type}) to signer records by role name.
+     */
+    private static void createPlacementsForSigners(Id requestId, Id templateId, List<DocGen_Signer__c> signerRecords, List<Map<String, Object>> signerInputs) {
+        List<PlacementInfo> placements = getTemplateSignaturePlacements(templateId);
+        if (placements.isEmpty()) return;
+
+        // Build role → signer record map
+        Map<String, DocGen_Signer__c> roleSignerMap = new Map<String, DocGen_Signer__c>();
+        for (Integer i = 0; i < signerRecords.size(); i++) {
+            String roleName = (String) signerInputs[i].get('roleName');
+            if (String.isNotBlank(roleName)) {
+                roleSignerMap.put(roleName, signerRecords[i]);
+            }
+        }
+
+        List<DocGen_Signature_Placement__c> placementRecords = new List<DocGen_Signature_Placement__c>();
+        for (PlacementInfo p : placements) {
+            DocGen_Signer__c signer = roleSignerMap.get(p.role);
+            if (signer == null) continue; // No signer assigned for this role
+
+            DocGen_Signature_Placement__c plc = new DocGen_Signature_Placement__c();
+            // CxSAST: FLS enforced by DocGen permission sets; package-internal custom objects
+            plc.Signer__c = signer.Id;
+            plc.Signature_Request__c = requestId;
+            plc.Document_Index__c = 0;
+            plc.Sequence_Order__c = p.sequence;
+            plc.Placement_Type__c = p.placementType;
+            plc.Status__c = 'Pending';
+            plc.Tag_Text__c = p.tagText;
+            placementRecords.add(plc);
+        }
+
+        if (!placementRecords.isEmpty()) {
+            /* code-analyzer-suppress ApexFlsViolation */
+            insert placementRecords; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
+        }
+    }
+
     private static List<SignerResult> createSignersAndNotify(Id requestId, Id templateId, String documentTitle, List<Map<String, Object>> signerInputs) {
         return createSignersAndNotify(requestId, templateId, documentTitle, signerInputs, true);
     }
@@ -482,10 +850,31 @@ public with sharing class DocGenSignatureSenderController {
         /* code-analyzer-suppress ApexFlsViolation */
         insert signerRecords; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 
+        // Create signature placements from template tags (v3 tag support)
+        if (templateId != null) {
+            createPlacementsForSigners(requestId, templateId, signerRecords, signerInputs);
+        }
+
         // Send branded signature request emails (unless caller opts out, e.g. Flow sending its own emails)
         if (sendEmails) {
+            // Check signing order — Sequential sends only to first signer
+            Boolean isSequential = false;
+            try {
+                /* code-analyzer-suppress ApexFlsViolation */
+                DocGen_Signature_Request__c reqCheck = [
+                    SELECT Signing_Order__c FROM DocGen_Signature_Request__c WHERE Id = :requestId WITH SYSTEM_MODE LIMIT 1
+                ]; // NOPMD
+                isSequential = reqCheck.Signing_Order__c == 'Sequential';
+            } catch (Exception e) {
+                // Default to parallel
+            }
+
             List<DocGenSignatureEmailService.SignerEmail> emailList = new List<DocGenSignatureEmailService.SignerEmail>();
-            for (SignerResult sr : results) {
+            for (Integer i = 0; i < results.size(); i++) {
+                // Sequential: only send to first signer (Sort_Order 1)
+                if (isSequential && i > 0) break;
+
+                SignerResult sr = results[i];
                 Id cId = null;
                 for (Map<String, Object> input : signerInputs) {
                     if (sr.signerEmail == (String) input.get('signerEmail') && String.isNotBlank((String) input.get('contactId'))) {
@@ -704,7 +1093,26 @@ public with sharing class DocGenSignatureSenderController {
         return !cvs.isEmpty() ? cvs[0].Title : 'Document';
     }
 
-    private static String getSigningPagePath() {
+    /**
+     * Generates a preview of the merged document HTML for the sender to review before sending.
+     * Merges the template with record data, converts to HTML, and injects placement spans.
+     * Does NOT create a signature request — purely a read-only preview.
+     */
+    @AuraEnabled
+    public static String getDocumentPreviewHtml(Id templateId, String relatedRecordId) {
+        try {
+            Map<String, Object> mergeData = DocGenService.mergeTemplateForSignature(templateId, relatedRecordId);
+            String docXml = (String) mergeData.get('documentXml');
+            Map<String, String> pdfImageMap = (Map<String, String>) mergeData.get('pdfImageMap');
+            String html = DocGenHtmlRenderer.convertToHtml(docXml, pdfImageMap);
+            return injectPlacementSpans(html);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'DocGen: Preview generation failed: ' + e.getMessage());
+            return null;
+        }
+    }
+
+    public static String getSigningPagePath() {
         // In managed packages, VF pages need the namespace prefix in subscriber orgs
         String ns = DocGenSignatureSenderController.class.getName().substringBefore('.');
         if (String.isNotBlank(ns) && ns != 'DocGenSignatureSenderController') {
@@ -713,7 +1121,7 @@ public with sharing class DocGenSignatureSenderController {
         return '/apex/DocGenSignature';
     }
 
-    private static String getSiteBaseUrl() {
+    public static String getSiteBaseUrl() {
         DocGen_Settings__c settings = DocGen_Settings__c.getOrgDefaults();
         String siteUrl = settings.Experience_Site_Url__c;
 

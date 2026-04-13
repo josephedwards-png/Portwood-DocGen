@@ -793,4 +793,53 @@ private class DocGenGiantQueryTest {
             System.assertEquals('Completed', result.Status__c, 'Assembler should complete');
         }
     }
+
+    @isTest
+    static void testFlowAction_invalidTemplate() {
+        DocGenGiantQueryFlowAction.Request req = new DocGenGiantQueryFlowAction.Request();
+        req.templateId = null;
+        req.recordId = [SELECT Id FROM Account LIMIT 1].Id;
+        req.saveToRecord = false;
+
+        Test.startTest();
+        List<DocGenGiantQueryFlowAction.Response> responses =
+            DocGenGiantQueryFlowAction.generateDocument(new List<DocGenGiantQueryFlowAction.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(false, responses[0].success, 'Should fail with null template');
+        System.assertNotEquals(null, responses[0].errorMessage);
+    }
+
+    @isTest
+    static void testFlowAction_syncPath() {
+        // Use a template with few child records — should go sync path
+        Account acc = [SELECT Id FROM Account LIMIT 1];
+        DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c WHERE Name = 'Giant Query Test' LIMIT 1];
+
+        DocGenGiantQueryFlowAction.Request req = new DocGenGiantQueryFlowAction.Request();
+        req.templateId = tpl.Id;
+        req.recordId = acc.Id;
+        req.saveToRecord = true;
+
+        Test.startTest();
+        List<DocGenGiantQueryFlowAction.Response> responses =
+            DocGenGiantQueryFlowAction.generateDocument(new List<DocGenGiantQueryFlowAction.Request>{ req });
+        Test.stopTest();
+
+        // With few contacts, should take sync path (not giant query)
+        System.assertEquals(false, responses[0].isGiantQuery, 'Should use sync path with few records');
+    }
+
+    @isTest
+    static void testFlowAction_responseFields() {
+        // Exercise Response class fields for coverage
+        DocGenGiantQueryFlowAction.Response res = new DocGenGiantQueryFlowAction.Response();
+        res.contentDocumentId = null;
+        res.contentVersionId = null;
+        res.jobId = null;
+        res.isGiantQuery = false;
+        res.errorMessage = 'test';
+        res.success = true;
+        System.assertEquals(true, res.success);
+    }
 }

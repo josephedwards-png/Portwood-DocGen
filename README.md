@@ -4,11 +4,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.42.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.43.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-846%2F846_passing-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-922%2F922_passing-brightgreen)](#code-quality)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0_Critical%2C_0_High-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
 
@@ -17,10 +17,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006UkpxAAC --wait 10 --target-org <your-org>
+sf package install --package 04tal000006hLTxAAM --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UkpxAAC) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006UkpxAAC)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hLTxAAM) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hLTxAAM)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -156,14 +156,39 @@ Records with **2,000 to 50,000+ child records** are detected automatically. Same
 
 ### E-Signatures
 
-Collect legally valid electronic signatures directly from DocGen — no third-party tools required. Built-in Simple Electronic Signature (SES) support that's valid under the US ESIGN Act and UETA.
+Collect legally valid electronic signatures directly from DocGen — no third-party tools required. Built-in Simple Electronic Signature (SES) support that's valid under the US ESIGN Act and UETA. Guided step-by-step signing, initials, date stamps, document packets, sequential signing, decline flow, and sender notifications — all 100% native.
+
+**Signature tag syntax:** `{@Signature_Role:Order:Type}`
+
+| Type | What It Does | Example |
+|---|---|---|
+| `Full` | Signer types their full legal name | `{@Signature_Buyer:1:Full}` |
+| `Initials` | Signer types their initials | `{@Signature_Buyer:2:Initials}` |
+| `Date` | Auto-filled server timestamp | `{@Signature_Buyer:3:Date}` |
+| `DatePick` | Signer selects a date | `{@Signature_Buyer:4:DatePick}` |
+
+Backward compatible: `{@Signature_Buyer}` still works (treated as `:1:Full`).
 
 **How it works:**
 
-1. Add `{@Signature_Buyer}` and `{@Signature_Seller}` placeholders to your Word template
-2. Create a signature request from any record — each signer gets a branded email with a secure link
-3. Signers verify their email with a 6-digit PIN, review the document, type their name, and check the consent box
-4. After all signers complete, DocGen generates the signed PDF with an Electronic Signature Certificate
+1. Add signature tags to your Word template — DocGen auto-detects roles and placement types
+2. Select template(s) from the Send For Signature tab — preview the merged document before sending
+3. Each signer receives a branded email with a secure link
+4. Signers verify their email with a 6-digit PIN, then walk through each placement step by step — an arrow points to where they need to sign, initial, or add a date
+5. The document updates live as each placement is confirmed — signers can leave and resume later
+6. After all signers complete, DocGen generates a signed PDF with an Electronic Signature Certificate
+
+**Key features:**
+
+- **Guided signing** — step-by-step walk-through with live document updates and arrow indicators
+- **Document packets** — send multiple templates as one signing session (e.g., NDA + Contract + Addendum)
+- **Sequential signing** — signers go one at a time in order (next signer notified after previous completes)
+- **Decline flow** — signers can decline with a reason; sender is notified immediately
+- **Sender notifications** — email alerts when each signer completes, when all are done, or when someone declines
+- **Sender preview** — see the fully merged document with highlighted signature placements before sending
+- **Resume support** — per-placement persistence; signers pick up exactly where they left off
+- **Automated reminders** — configurable reminder emails for signers who haven't responded
+- **Setup validation** — automated checklist verifies site, permissions, OWA, and email deliverability
 
 **What's captured for every signature:**
 
@@ -171,14 +196,14 @@ Collect legally valid electronic signatures directly from DocGen — no third-pa
 |---|---|
 | Signer identity | Email PIN verification (SHA-256 hashed, 10-min expiry, 3 attempts max) |
 | Consent | Explicit checkbox — timestamp recorded |
-| IP address | Server-side capture via request headers |
+| IP address | Server-side capture via request headers, shown on PDF certificate |
 | User agent | Browser fingerprint |
 | Document integrity | SHA-256 hash of the final PDF |
 | Tamper evidence | Field history tracking on all audit fields |
 
-**Verification:** Every signed PDF includes a certificate block with signer details and a verification URL. The verify page lets anyone upload a PDF to check its hash against the audit record — the file never leaves the browser.
+**Verification:** Every signed PDF includes a certificate page with signer details (name, role, email, IP address, timestamps) and a verification URL. The verify page lets anyone upload a PDF to check its hash against the audit record — the file never leaves the browser.
 
-**Admin setup:** Configure a Salesforce Site, assign the Guest Signature permission set, set an Org-Wide Email Address, and customize email branding — all from the Signatures tab in the Command Hub. See the [User Guide](https://portwoodglobalsolutions.com/DocGenGuide#sig-admin) for step-by-step instructions.
+**Admin setup:** Configure a Salesforce Site, assign the Guest Signature permission set, set an Org-Wide Email Address, and customize email branding — all from the Signatures tab in the Command Hub. An automated setup checklist shows green/red status for each requirement. See the Learning Center for step-by-step instructions.
 
 ### Query Builder
 

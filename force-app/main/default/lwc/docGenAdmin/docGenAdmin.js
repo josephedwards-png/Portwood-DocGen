@@ -1054,6 +1054,9 @@ const VERSION_COLUMNS = [
         fields[BASE_OBJECT_FIELD.fieldApiName] = this.newTemplateObject;
         fields[QUERY_CONFIG_FIELD.fieldApiName] = this._sanitizeQueryConfig(this.newTemplateQuery);
         fields[DESC_FIELD.fieldApiName] = this.newTemplateDesc;
+        if (this.newTemplateSampleRecordId) {
+            fields[TEST_RECORD_FIELD.fieldApiName] = this.newTemplateSampleRecordId;
+        }
 
         try {
             const record = await createRecord({ apiName: DOCGEN_TEMPLATE_OBJECT.objectApiName, fields });
@@ -1070,7 +1073,7 @@ const VERSION_COLUMNS = [
                 [F.BaseObject]: this.newTemplateObject,
                 [F.Desc]: this.newTemplateDesc,
                 [F.QueryConfig]: this.newTemplateQuery,
-                [F.TestRecordId]: null,
+                [F.TestRecordId]: this.newTemplateSampleRecordId || null,
                 [F.DocTitleFormat]: null,
                 ContentDocumentLinks: []
             };

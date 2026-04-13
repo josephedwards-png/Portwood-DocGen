@@ -176,6 +176,76 @@ try {
     else { fail++; System.debug('GET PENDING REQUESTS: FAIL — null'); }
 } catch (Exception e) { fail++; System.debug('GET PENDING REQUESTS: FAIL — ' + e.getMessage()); }
 
+// ===== Placement CRUD =====
+try {
+    DocGen_Signature_Placement__c plc = new DocGen_Signature_Placement__c(
+        Signer__c=signerId, Signature_Request__c=sigReqId,
+        Document_Index__c=0, Sequence_Order__c=1,
+        Placement_Type__c='Full', Status__c='Pending',
+        Tag_Text__c='{@Signature_Signer:1:Full}'
+    );
+    insert plc;
+    if (plc.Id != null) { pass++; System.debug('PLACEMENT CREATED: PASS — ' + plc.Id); }
+    else { fail++; System.debug('PLACEMENT CREATED: FAIL'); }
+
+    plc.Signed_Value__c = 'Alice Johnson';
+    plc.Status__c = 'Signed';
+    plc.Signed_At__c = System.now();
+    update plc;
+    DocGen_Signature_Placement__c plc2 = [SELECT Status__c, Signed_Value__c FROM DocGen_Signature_Placement__c WHERE Id = :plc.Id];
+    if (plc2.Status__c == 'Signed' && plc2.Signed_Value__c == 'Alice Johnson') {
+        pass++; System.debug('PLACEMENT UPDATE: PASS');
+    } else {
+        fail++; System.debug('PLACEMENT UPDATE: FAIL — status: ' + plc2.Status__c + ', value: ' + plc2.Signed_Value__c);
+    }
+
+    // Test Initials placement
+    DocGen_Signature_Placement__c plcInit = new DocGen_Signature_Placement__c(
+        Signer__c=signerId, Signature_Request__c=sigReqId,
+        Document_Index__c=0, Sequence_Order__c=2,
+        Placement_Type__c='Initials', Status__c='Signed',
+        Signed_Value__c='A.J.', Signed_At__c=System.now(),
+        Tag_Text__c='{@Signature_Signer:2:Initials}'
+    );
+    insert plcInit;
+    if (plcInit.Id != null) { pass++; System.debug('INITIALS PLACEMENT: PASS'); }
+    else { fail++; System.debug('INITIALS PLACEMENT: FAIL'); }
+
+    // Test Date placement
+    DocGen_Signature_Placement__c plcDate = new DocGen_Signature_Placement__c(
+        Signer__c=signerId, Signature_Request__c=sigReqId,
+        Document_Index__c=0, Sequence_Order__c=3,
+        Placement_Type__c='Date', Status__c='Signed',
+        Signed_At__c=System.now(),
+        Tag_Text__c='{@Signature_Signer:3:Date}'
+    );
+    insert plcDate;
+    if (plcDate.Id != null) { pass++; System.debug('DATE PLACEMENT: PASS'); }
+    else { fail++; System.debug('DATE PLACEMENT: FAIL'); }
+
+    // Cleanup
+    delete [SELECT Id FROM DocGen_Signature_Placement__c WHERE Signature_Request__c = :sigReqId];
+} catch (Exception e) { fail++; System.debug('PLACEMENT CRUD: FAIL — ' + e.getMessage()); }
+
+// ===== V3 Tag Parser =====
+try {
+    List<DocGenSignatureSenderController.PlacementInfo> placements =
+        DocGenSignatureSenderController.getTemplateSignaturePlacements(tmplId);
+    // Template may not have @Signature tags — just verify method works
+    if (placements != null) { pass++; System.debug('V3 TAG PARSER: PASS — ' + placements.size() + ' placements'); }
+    else { fail++; System.debug('V3 TAG PARSER: FAIL — null'); }
+} catch (Exception e) { fail++; System.debug('V3 TAG PARSER: FAIL — ' + e.getMessage()); }
+
+// ===== Setup Validation =====
+try {
+    List<Map<String, Object>> checks = DocGenSetupController.validateSignatureSetup();
+    if (checks != null && checks.size() >= 3) {
+        pass++; System.debug('SETUP VALIDATION: PASS — ' + checks.size() + ' checks');
+    } else {
+        fail++; System.debug('SETUP VALIDATION: FAIL — expected >= 3 checks, got: ' + (checks != null ? checks.size() : 0));
+    }
+} catch (Exception e) { fail++; System.debug('SETUP VALIDATION: FAIL — ' + e.getMessage()); }
+
 System.debug('========================================');
 System.debug('E2E-06 SIGNATURES — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

@@ -1,16 +1,16 @@
 import { LightningElement, api, wire, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import getRelatedDocuments from '@salesforce/apex/DocGenSignatureSenderController.getRelatedDocuments';
 import getSignerRolePicklistValues from '@salesforce/apex/DocGenSignatureSenderController.getSignerRolePicklistValues';
-import createMultiSignerRequest from '@salesforce/apex/DocGenSignatureSenderController.createMultiSignerRequest';
-import createTemplateSignerRequest from '@salesforce/apex/DocGenSignatureSenderController.createTemplateSignerRequest';
+import createTemplateSignerRequest from '@salesforce/apex/DocGenSignatureSenderController.createTemplateSignerRequestWithOrder';
+import createPacketSignerRequest from '@salesforce/apex/DocGenSignatureSenderController.createPacketSignerRequest';
 import getContactInfo from '@salesforce/apex/DocGenSignatureSenderController.getContactInfo';
 import getPendingSignatureRequests from '@salesforce/apex/DocGenSignatureSenderController.getPendingSignatureRequests';
-import getDocumentSignatureRoles from '@salesforce/apex/DocGenSignatureSenderController.getDocumentSignatureRoles';
 import getDocGenTemplates from '@salesforce/apex/DocGenSignatureSenderController.getDocGenTemplates';
-import getTemplateSignatureRoles from '@salesforce/apex/DocGenSignatureSenderController.getTemplateSignatureRoles';
+import getTemplateSignaturePlacements from '@salesforce/apex/DocGenSignatureSenderController.getTemplateSignaturePlacements';
+import getDocumentPreviewHtml from '@salesforce/apex/DocGenSignatureSenderController.getDocumentPreviewHtml';
 
 let signerIdCounter = 0;
+let templateIdCounter = 0;
 
 export default class DocGenSignatureSender extends LightningElement {
     @api recordId;
@@ -18,25 +18,20 @@ export default class DocGenSignatureSender extends LightningElement {
     @track isLoading = true;
     @track error;
 
-    // Source mode: 'template' (default) or 'document' (legacy)
-    @track sourceMode = 'template';
-
-    // DocGen template selection (primary)
+    // All available templates
     @track docGenTemplateOptions = [];
-    @track selectedDocGenTemplateId = '';
 
-    // Document selection (legacy fallback)
-    @track documentOptions = [];
-    @track selectedDocId = '';
+    // Selected templates (packet support)
+    @track selectedTemplates = []; // [{id, templateId, name, placements, placementSummary, docNumber}]
 
     // Role picklist
     @track roleOptions = [];
 
-    // Signature role templates (saved presets)
-    @track templateOptions = [];
-    @track selectedTemplateId = '';
-    @track showTemplateModal = false;
-    @track newTemplateName = '';
+    // Aggregated placements from all selected templates
+    @track detectedPlacements = [];
+
+    // Signing order
+    @track signingOrder = 'Parallel';
 
     // Signers
     @track signers = [];
@@ -44,27 +39,14 @@ export default class DocGenSignatureSender extends LightningElement {
     // Results
     @track signerResults;
 
+    // Preview modal
+    @track showPreviewModal = false;
+    @track previewHtml = '';
+    @track previewLoading = false;
+
     // Previous requests
     @track previousRequests = [];
     @track showPreviousRequests = false;
-
-    @wire(getRelatedDocuments, { recordId: '$recordId' })
-    wiredDocs({ error, data }) {
-        if (data) {
-            this.documentOptions = data.map(doc => ({
-                label: `${doc.Title}.${doc.FileExtension}`,
-                value: doc.ContentDocumentId
-            }));
-            if (this.documentOptions.length > 0 && !this.selectedDocId) {
-                this.selectedDocId = this.documentOptions[0].value;
-            }
-            this.error = undefined;
-        } else if (error) {
-            this.error = 'Error loading documents: ' + (error.body ? error.body.message : error.message);
-            this.documentOptions = [];
-        }
-        this._checkInitialLoad();
-    }
 
     @wire(getSignerRolePicklistValues)
     wiredRoles({ error, data }) {
@@ -74,11 +56,10 @@ export default class DocGenSignatureSender extends LightningElement {
                 value: entry.value
             }));
         } else if (error) {
+            // Role picklist unavailable
         }
         this._checkInitialLoad();
     }
-
-    // Signature role templates removed in v2 — roles are now auto-scanned from DocGen templates
 
     @wire(getDocGenTemplates)
     wiredDocGenTemplates({ error, data }) {
@@ -87,9 +68,6 @@ export default class DocGenSignatureSender extends LightningElement {
                 label: t.Name,
                 value: t.Id
             }));
-            if (this.docGenTemplateOptions.length > 0 && !this.selectedDocGenTemplateId) {
-                this.selectedDocGenTemplateId = this.docGenTemplateOptions[0].value;
-            }
         } else if (error) {
             this.docGenTemplateOptions = [];
         }
@@ -99,21 +77,9 @@ export default class DocGenSignatureSender extends LightningElement {
     _wireCallsReturned = 0;
     _checkInitialLoad() {
         this._wireCallsReturned++;
-        if (this._wireCallsReturned >= 4) {
+        if (this._wireCallsReturned >= 2) {
             this.isLoading = false;
-            if (this.sourceMode === 'template' && this.selectedDocGenTemplateId) {
-                this._scanTemplateForRoles().then(() => {
-                    if (this.signers.length === 0) {
-                        this.handleAddSigner();
-                    }
-                });
-            } else if (this.sourceMode === 'document' && this.selectedDocId) {
-                this._scanDocumentForRoles().then(() => {
-                    if (this.signers.length === 0) {
-                        this.handleAddSigner();
-                    }
-                });
-            } else if (this.signers.length === 0) {
+            if (this.signers.length === 0) {
                 this.handleAddSigner();
             }
         }
@@ -121,26 +87,16 @@ export default class DocGenSignatureSender extends LightningElement {
 
     // --- Computed Properties ---
 
-    get isTemplateMode() {
-        return this.sourceMode === 'template';
+    get hasSelectedTemplates() {
+        return this.selectedTemplates.length > 0;
     }
 
-    get isDocumentMode() {
-        return this.sourceMode === 'document';
-    }
-
-    get sourceModeOptions() {
-        return [
-            { label: 'DocGen Template', value: 'template' },
-            { label: 'Existing Document', value: 'document' }
-        ];
+    get isPacketMode() {
+        return this.selectedTemplates.length > 1;
     }
 
     get isGenerateDisabled() {
-        const hasSource = this.sourceMode === 'template'
-            ? !!this.selectedDocGenTemplateId
-            : !!this.selectedDocId;
-        if (!hasSource || this.signers.length === 0) return true;
+        if (this.selectedTemplates.length === 0 || this.signers.length === 0) return true;
         return this.signers.some(s => !s.signerName || !s.signerEmail || !s.roleName);
     }
 
@@ -156,79 +112,214 @@ export default class DocGenSignatureSender extends LightningElement {
         return this.previousRequests.length > 0;
     }
 
-    get isSaveTemplateDisabled() {
-        return this.signers.length === 0 || this.signers.every(s => !s.roleName);
+    get hasDetectedPlacements() {
+        return this.detectedPlacements.length > 0;
     }
 
-    get isTemplateSaveDisabled() {
-        return !this.newTemplateName || this.newTemplateName.trim().length === 0;
+    get availableTemplateOptions() {
+        // Filter out already-selected templates
+        const selectedIds = new Set(this.selectedTemplates.map(t => t.templateId));
+        return this.docGenTemplateOptions.filter(t => !selectedIds.has(t.value));
     }
 
-    // --- Source Mode ---
-
-    handleSourceModeChange(event) {
-        this.sourceMode = event.detail.value;
-        this.signerResults = undefined;
-        this.signers = [];
-        this.handleAddSigner();
+    /**
+     * Builds a summary of placements per role across all templates.
+     */
+    get placementSummaryByRole() {
+        if (!this.detectedPlacements || this.detectedPlacements.length === 0) return [];
+        const roleMap = {};
+        for (const p of this.detectedPlacements) {
+            if (!roleMap[p.role]) roleMap[p.role] = { Full: 0, Initials: 0, Date: 0, DatePick: 0 };
+            roleMap[p.role][p.placementType] = (roleMap[p.role][p.placementType] || 0) + 1;
+        }
+        const result = [];
+        for (const role of Object.keys(roleMap)) {
+            const c = roleMap[role];
+            const parts = [];
+            if (c.Full > 0) parts.push(c.Full + ' signature' + (c.Full > 1 ? 's' : ''));
+            if (c.Initials > 0) parts.push(c.Initials + ' initial' + (c.Initials > 1 ? 's' : ''));
+            if (c.Date > 0) parts.push(c.Date + ' date' + (c.Date > 1 ? 's' : ''));
+            if (c.DatePick > 0) parts.push(c.DatePick + ' date picker' + (c.DatePick > 1 ? 's' : ''));
+            result.push({ role, summary: parts.join(', ') || '1 signature' });
+        }
+        return result;
     }
 
-    // --- DocGen Template Handlers ---
-
-    async handleDocGenTemplateChange(event) {
-        this.selectedDocGenTemplateId = event.detail.value;
-        this.signerResults = undefined;
-        await this._scanTemplateForRoles();
+    get generateButtonLabel() {
+        return this.isPacketMode ? 'Generate Packet Signature Links' : 'Generate Signature Links';
     }
 
-    async _scanTemplateForRoles() {
-        if (!this.selectedDocGenTemplateId) return;
+    get signingOrderOptions() {
+        return [
+            { label: 'All at once (parallel)', value: 'Parallel' },
+            { label: 'One at a time (sequential)', value: 'Sequential' }
+        ];
+    }
+
+    handleSigningOrderChange(event) {
+        this.signingOrder = event.detail.value;
+    }
+
+    // --- Template Selection ---
+
+    async handleTemplateSelected(event) {
+        const templateId = event.detail.value;
+        if (!templateId) return;
+
+        const opt = this.docGenTemplateOptions.find(t => t.value === templateId);
+        if (!opt) return;
+
+        // Scan template for placements
+        let placements = [];
         try {
-            const roles = await getTemplateSignatureRoles({ templateId: this.selectedDocGenTemplateId });
-            if (roles && roles.length > 0) {
-                this.signers = roles.map(roleName => ({
+            placements = await getTemplateSignaturePlacements({ templateId });
+        } catch (_err) {
+            // Template may not have signature tags
+        }
+
+        // Build placement summary string
+        const counts = { Full: 0, Initials: 0, Date: 0, DatePick: 0 };
+        for (const p of (placements || [])) {
+            counts[p.placementType] = (counts[p.placementType] || 0) + 1;
+        }
+        const parts = [];
+        if (counts.Full > 0) parts.push(counts.Full + ' signature' + (counts.Full > 1 ? 's' : ''));
+        if (counts.Initials > 0) parts.push(counts.Initials + ' initial' + (counts.Initials > 1 ? 's' : ''));
+        if (counts.Date > 0) parts.push(counts.Date + ' date' + (counts.Date > 1 ? 's' : ''));
+        if (counts.DatePick > 0) parts.push(counts.DatePick + ' date picker' + (counts.DatePick > 1 ? 's' : ''));
+        const placementSummary = parts.length > 0 ? parts.join(', ') : 'No signature placements detected';
+
+        this.selectedTemplates = [
+            ...this.selectedTemplates,
+            {
+                id: ++templateIdCounter,
+                templateId,
+                name: opt.label,
+                placements: placements || [],
+                placementSummary,
+                docNumber: this.selectedTemplates.length + 1
+            }
+        ];
+
+        this._refreshAggregatedPlacements();
+    }
+
+    handleRemoveTemplate(event) {
+        const idx = parseInt(event.currentTarget.dataset.index, 10);
+        this.selectedTemplates = this.selectedTemplates.filter((_, i) => i !== idx);
+        this._refreshAggregatedPlacements();
+    }
+
+    handleMoveTemplateUp(event) {
+        const idx = parseInt(event.currentTarget.dataset.index, 10);
+        if (idx <= 0) return;
+        const arr = [...this.selectedTemplates];
+        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+        this.selectedTemplates = arr;
+    }
+
+    handleMoveTemplateDown(event) {
+        const idx = parseInt(event.currentTarget.dataset.index, 10);
+        if (idx >= this.selectedTemplates.length - 1) return;
+        const arr = [...this.selectedTemplates];
+        [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+        this.selectedTemplates = arr;
+    }
+
+    _refreshAggregatedPlacements() {
+        // Renumber documents
+        this.selectedTemplates = this.selectedTemplates.map((t, i) => ({
+            ...t,
+            docNumber: i + 1
+        }));
+
+        // Merge all template placements and auto-populate signers
+        const all = [];
+        for (const t of this.selectedTemplates) {
+            for (const p of t.placements) {
+                all.push(p);
+            }
+        }
+        this.detectedPlacements = all;
+
+        // Extract unique roles
+        const uniqueRoles = [];
+        for (const p of all) {
+            if (!uniqueRoles.includes(p.role)) uniqueRoles.push(p.role);
+        }
+
+        if (uniqueRoles.length > 0) {
+            // Preserve existing signer data for roles that already have entries
+            const existingByRole = {};
+            for (const s of this.signers) {
+                if (s.roleName) existingByRole[s.roleName] = s;
+            }
+
+            this.signers = uniqueRoles.map(roleName => {
+                if (existingByRole[roleName]) return existingByRole[roleName];
+                return {
                     id: ++signerIdCounter,
-                    roleName: roleName,
+                    roleName,
                     contactId: '',
                     signerName: '',
                     signerEmail: ''
-                }));
-            }
-        } catch (_err) {
-            // Silently fail — user can still add signers manually
+                };
+            });
         }
     }
 
-    // --- Document Handlers (Legacy) ---
+    // --- Preview Modal ---
 
-    async handleDocChange(event) {
-        this.selectedDocId = event.detail.value;
-        this.signerResults = undefined;
-        await this._scanDocumentForRoles();
-    }
+    async handleShowPreview() {
+        this.showPreviewModal = true;
+        this.previewLoading = true;
+        this.previewHtml = '';
 
-    async _scanDocumentForRoles() {
-        if (!this.selectedDocId) return;
         try {
-            const roles = await getDocumentSignatureRoles({ contentDocumentId: this.selectedDocId });
-            if (roles && roles.length > 0) {
-                this.signers = roles.map(roleName => ({
-                    id: ++signerIdCounter,
-                    roleName: roleName,
-                    contactId: '',
-                    signerName: '',
-                    signerEmail: ''
-                }));
+            // Generate preview for each template and concatenate
+            const htmlParts = [];
+            for (let i = 0; i < this.selectedTemplates.length; i++) {
+                const tmpl = this.selectedTemplates[i];
+                if (this.selectedTemplates.length > 1) {
+                    htmlParts.push('<div style="background:#f8fafc;border:1px solid #e5e5e5;border-radius:6px;padding:12px 16px;margin:16px 0;text-align:center;"><strong>Document ' + (i + 1) + ' of ' + this.selectedTemplates.length + ': ' + tmpl.name + '</strong></div>');
+                }
+                const html = await getDocumentPreviewHtml({
+                    templateId: tmpl.templateId,
+                    relatedRecordId: this.recordId
+                });
+                if (html) {
+                    htmlParts.push(html);
+                } else {
+                    htmlParts.push('<p style="color:#706e6b;text-align:center;padding:2rem;">Preview unavailable for ' + tmpl.name + '</p>');
+                }
             }
-        } catch (_err) {
-            // Silently fail — user can still add signers manually
+            this.previewHtml = htmlParts.join('');
+        } catch (err) {
+            this.previewHtml = '<p style="color:#ea001e;text-align:center;padding:2rem;">Failed to generate preview: ' + (err.body ? err.body.message : err.message) + '</p>';
         }
+        this.previewLoading = false;
+
+        // Inject server-rendered HTML into the preview container after render.
+        // The HTML is generated server-side by DocGenHtmlRenderer from merged template XML —
+        // all user content is escaped in Apex. This is safe and required for document preview.
+        // eslint-disable-next-line @lwc/lwc/no-async-operation
+        setTimeout(() => {
+            const container = this.template.querySelector('.preview-document-container');
+            if (container && this.previewHtml) {
+                // eslint-disable-next-line @lwc/lwc/no-inner-html
+                container.innerHTML = this.previewHtml;
+            }
+        }, 100);
     }
 
-    // --- Template Handlers ---
+    handleClosePreview() {
+        this.showPreviewModal = false;
+        this.previewHtml = '';
+    }
 
-    handleTemplateChange(event) {
-        this.selectedTemplateId = event.detail.value;
+    handleSendFromPreview() {
+        this.showPreviewModal = false;
+        this.handleGenerate();
     }
 
     // --- Signer Row Handlers ---
@@ -236,13 +327,7 @@ export default class DocGenSignatureSender extends LightningElement {
     handleAddSigner() {
         this.signers = [
             ...this.signers,
-            {
-                id: ++signerIdCounter,
-                roleName: '',
-                contactId: '',
-                signerName: '',
-                signerEmail: ''
-            }
+            { id: ++signerIdCounter, roleName: '', contactId: '', signerName: '', signerEmail: '' }
         ];
     }
 
@@ -261,29 +346,21 @@ export default class DocGenSignatureSender extends LightningElement {
     async handleContactChange(event) {
         const index = parseInt(event.currentTarget.dataset.index, 10);
         const contactId = event.detail.recordId;
-
         if (!contactId) {
             this.signers = this.signers.map((s, i) =>
                 i === index ? { ...s, contactId: '', signerName: '', signerEmail: '' } : s
             );
             return;
         }
-
         this.signers = this.signers.map((s, i) =>
-            i === index ? { ...s, contactId: contactId } : s
+            i === index ? { ...s, contactId } : s
         );
-
         try {
-            const info = await getContactInfo({ contactId: contactId });
+            const info = await getContactInfo({ contactId });
             this.signers = this.signers.map((s, i) =>
-                i === index ? {
-                    ...s,
-                    signerName: info.name || s.signerName,
-                    signerEmail: info.email || s.signerEmail
-                } : s
+                i === index ? { ...s, signerName: info.name || s.signerName, signerEmail: info.email || s.signerEmail } : s
             );
-        } catch (_err) {
-        }
+        } catch (_err) { /* user can type manually */ }
     }
 
     handleNameChange(event) {
@@ -314,26 +391,27 @@ export default class DocGenSignatureSender extends LightningElement {
             }));
             const signersJson = JSON.stringify(signersPayload);
 
-            if (this.sourceMode === 'template') {
+            if (this.selectedTemplates.length === 1) {
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 this.signerResults = await createTemplateSignerRequest({
-                    templateId: this.selectedDocGenTemplateId,
+                    templateId: this.selectedTemplates[0].templateId,
                     relatedRecordId: this.recordId,
-                    signersJson: signersJson
+                    signersJson,
+                    signingOrder: this.signingOrder
                 });
             } else {
+                const templateIds = this.selectedTemplates.map(t => t.templateId);
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
-                this.signerResults = await createMultiSignerRequest({
-                    contentDocumentId: this.selectedDocId,
+                this.signerResults = await createPacketSignerRequest({
+                    templateIdsJson: JSON.stringify(templateIds),
                     relatedRecordId: this.recordId,
-                    signersJson: signersJson
+                    signersJson,
+                    signingOrder: this.signingOrder
                 });
             }
 
             this.showToast('Success', 'Signature links generated for ' + this.signerResults.length + ' signer(s).', 'success');
-            if (this.showPreviousRequests) {
-                this.loadPreviousRequests();
-            }
+            if (this.showPreviousRequests) this.loadPreviousRequests();
         } catch (err) {
             this.error = 'Error generating links: ' + (err.body ? err.body.message : err.message);
         } finally {
@@ -371,16 +449,12 @@ export default class DocGenSignatureSender extends LightningElement {
     }
 
     handleCopyPreviousUrl(event) {
-        const url = event.currentTarget.dataset.url;
-        this._copyToClipboard(url);
+        this._copyToClipboard(event.currentTarget.dataset.url);
         this.showToast('Copied', 'Link copied to clipboard.', 'success');
     }
 
-    // --- Copy Handlers ---
-
     handleCopyUrl(event) {
-        const url = event.currentTarget.dataset.url;
-        this._copyToClipboard(url);
+        this._copyToClipboard(event.currentTarget.dataset.url);
         this.showToast('Copied', 'Link copied to clipboard.', 'success');
     }
 
@@ -396,22 +470,17 @@ export default class DocGenSignatureSender extends LightningElement {
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(text);
         } else {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-                document.execCommand('copy');
-            } catch (_err) {
-            }
-            document.body.removeChild(textArea);
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); } catch (_e) { /* fallback failed */ }
+            document.body.removeChild(ta);
         }
     }
-
-    // --- Utilities ---
 
     showToast(title, message, variant) {
         this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
