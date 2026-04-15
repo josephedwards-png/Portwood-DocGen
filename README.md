@@ -4,11 +4,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.46.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.47.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-928%2F928_passing-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-937%2F937_passing-brightgreen)](#code-quality)
 [![Coverage](https://img.shields.io/badge/Coverage-75%25-brightgreen)](#code-quality)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0_Critical%2C_0_High-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
@@ -410,12 +410,12 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.46.0 | **Latest (Released)** | `04tal000006hQ73AAE` |
+| v1.47.0 | **Latest (Released)** | `04tal000006hQwfAAE` |
+| v1.46.0 | Previous | `04tal000006hQ73AAE` |
 | v1.45.0 | Previous (tester rollout) | `04tal000006hOZtAAM` |
 | v1.43.0 | Previous | `04tal000006hLTxAAM` |
 | v1.42.0 | Previous | `04tal000006UkpxAAC` |
 | v1.41.0 | Previous | `04tal000006UiubAAC` |
-| v1.40.0 | Previous | `04tal000006UhyXAAS` |
 
 See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 

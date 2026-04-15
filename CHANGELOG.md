@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.47.0 — Runner UX: per-record templates, category filter, output format override, audience visibility
+
+Promoted package: `04tal000006hQwfAAE` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hQwfAAE)
+Upgrade-safety validator: passed. v1.43.x+ subscribers can install directly.
+
+Closes GitHub issue [#25](https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues/25).
+
+### Per-record templates
+- New `Specific_Record_Ids__c` (LongTextArea) on `DocGen_Template__c` — comma-separated 18-char record Ids. When set, the template only appears for the listed records in the runner, signature sender, bulk picker, and Flow. Empty = template applies to all records of its Base Object (today's behavior).
+
+### Category browsing + explicit sort
+- New Category dropdown in the runner — auto-populates from distinct `Category__c` values, hidden when only one category exists. Template options prefixed with `★` for defaults and `[Category]` when set.
+- New `Sort_Order__c` (Number) on `DocGen_Template__c` — lower numbers appear higher. `Sort_Order__c ASC NULLS LAST, Is_Default__c DESC, Name ASC` is the new universal ORDER.
+
+### Output format override at runtime
+- New "Output As" picker in the runner — Word templates offer PDF + DOCX; PowerPoint templates show PPTX only (picker hidden). `Lock_Output_Format__c` checkbox on the template hides the picker entirely for contractual/compliance use cases.
+- New "Output Format Override" input on the `DocGen: Generate Document` Flow invocable — same validation rules.
+- Enables shipping one logical template (e.g. "Quote") and letting users pick format at runtime instead of cloning "Quote PDF" + "Quote DOCX".
+
+### Audience visibility
+- New `Required_Permission_Sets__c` (LongTextArea) on `DocGen_Template__c` — comma-separated perm set API names (any-of). Empty = visible to all DocGen users. Non-empty = only users assigned at least one of the listed perm sets see the template anywhere. Soft enforcement (UI filter, not native sharing) — adequate for noise reduction; admins tag "Executive Templates" with a perm set and sales reps no longer see executive content in any entry point.
+
+### Admin UX
+- New "Visibility & Sort" section in the template editor (Settings tab) with field-level-help for all four new fields. Fields also exposed on the standard page layout in a "Visibility & Sort (1.47)" section.
+
+### Validation
+- 937 / 937 Apex tests pass (9 new 1.47 tests in `DocGenControllerTests`).
+- 75% org-wide code coverage.
+- Code analyzer: 0 High / 0 Critical.
+- Upgrade-safety validator: passed.
+
+### Backward compatibility
+- All four new fields are nullable / default-falsy — existing templates behave identically.
+- `getTemplatesForObject(objectApiName)` preserved as 1-arg shim (delegates with `recordId=null`).
+- `getDocGenTemplates()` preserved as 0-arg shim.
+- `DocGenService.generateDocument`, `DocGenService.processDocument`, `DocGenController.processAndReturnDocumentWithImages` all gained `outputFormatOverride` overloads; old signatures preserved.
+
+---
+
 ## v1.46.0 — Signature consolidation, image helper, email status visibility
 
 Promoted package: `04tal000006hQ73AAE` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hQ73AAE)
