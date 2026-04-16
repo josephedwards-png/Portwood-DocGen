@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.48.0 — Record Filter (SOQL WHERE) + runner namespace fix
+
+Promoted package: `04tal000006hhhNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hhhNAAQ)
+Upgrade-safety validator: passed. v1.47.x subscribers can install directly.
+
+### Record Filter (power-user SOQL WHERE clause)
+- New `Record_Filter__c` (LongTextArea) on `DocGen_Template__c`. Evaluated against the current record. When set, the template only appears for records matching the clause.
+- Examples: `Type = 'Customer'` · `Industry IN ('Technology','Media','Finance')` · `Annual_Revenue__c > 1000000 AND BillingCountry = 'US'` · `Id IN ('001...', '001...')`.
+- When both `Record_Filter__c` and `Specific_Record_Ids__c` are set, `Record_Filter__c` wins (clearer than ANDing).
+- Evaluation: parameterized SOQL `SELECT Id FROM <base> WHERE Id = :recordId AND (<clause>) LIMIT 1`. Clause sanitized via `DocGenDataRetriever.sanitizeWhereClause` — DML keywords, semicolons, comments, and subqueries are blocked. Results cached per `(baseObject, recordId, clause)` tuple so templates sharing a clause incur only one SOQL per record load. Malformed clause → template hidden (safer default for a noise-reduction feature).
+
+### Admin UX — "Test Against Sample Record" button
+- New `testRecordFilter` @AuraEnabled endpoint returns `{ matched, error }` for a `(baseObject, sampleRecordId, whereClause)` tuple.
+- `docGenAdmin` template editor: Record Filter textarea + Test button inside the Visibility & Sort panel. Green ✓ for match, grey ✗ for no match, red for sanitizer/runtime error. Uses the template's `Test_Record_Id__c` as the sample.
+- Page layout: new "Record Filter (Power Users, 1.48)" single-column section.
+
+### Runner namespace-safety fix (bug introduced in v1.47)
+- `docGenRunner` was accessing template fields via raw property names (`t.Category__c`, `t.Lock_Output_Format__c`). In a namespaced managed-package install the wire returns `portwoodglobal__Category__c` — raw access silently returned `undefined`, so the v1.47 category dropdown stayed hidden and the output-picker lock always read as false.
+- Switched to `@salesforce/schema/...` imports + `t[FIELD.fieldApiName]` resolution, matching the namespace-safe pattern already used in `docGenAdmin`.
+
+### Tests — 7 new unit tests in `DocGenControllerTests`
+- `testRecordFilter_matchesCurrentRecord`
+- `testRecordFilter_hidesNonMatchingRecord`
+- `testRecordFilter_precedenceOverSpecificRecordIds` (contradictory config → `Record_Filter__c` wins)
+- `testRecordFilter_malformedClauseHidesTemplate`
+- `testRecordFilter_emptyFilterFallsBackToIdList` (backward compat)
+- `testTestRecordFilter_sanitizesBlockedKeywords`
+- `testTestRecordFilter_happyPath`
+
+### Validation
+- 944 / 944 Apex tests pass, 75% org-wide coverage
+- Code analyzer: 0 High / 0 Critical, 37 Moderate (same documented false positives)
+- Upgrade-safety validator: passed
+
+### Backward compatibility
+- `Specific_Record_Ids__c` continues to work unchanged for templates that don't set `Record_Filter__c`.
+- All v1.47 API surfaces preserved.
+
+---
+
 ## v1.47.0 — Runner UX: per-record templates, category filter, output format override, audience visibility
 
 Promoted package: `04tal000006hQwfAAE` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hQwfAAE)
