@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.49.0 — Signature PDF table-border + font-color fix + Sign In Person
+
+Promoted package: `04tal000006hlZhAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hlZhAAI)
+Upgrade-safety validator: passed. v1.48.x subscribers can install directly.
+
+Closes GitHub issue [#28](https://github.com/Portwood-Global-Solutions/Portwood-DocGen/issues/28).
+
+### Signature PDF: table borders now render correctly
+Reported by Elijah Veihl — templates with bordered tables rendered correctly via the regular DocGen runner but dropped all cell borders in the signature preview and signed PDF. Three independent issues had to be fixed before borders survived the async queueable render path:
+1. **Renderer statics weren't primed before async `convertToHtml`.** `mergeTemplateForSignature` now primes `DocGenHtmlRenderer.stylesXml` + `numberingXml` as a side effect AND returns them in the response map so async callers can re-prime right before rendering.
+2. **Pre-decomposed XML loader blocked by `WITH USER_MODE`.** The signed-PDF queueable runs as Automated Process user which had no FLS access to the package-internal pre-decomposed XML ContentVersions. Added a private `without sharing` inner class (`PreDecompXmlLoader`) to run that one query in system context.
+3. **Automated Process has a hard-coded ContentVersion restriction that `without sharing` can't override.** The sender now pre-extracts two compact style maps at request creation (admin context) and caches them in `Signature_Data__c`. The queueable hydrates them before rendering. The renderer's `resolveTableStyleBorder` + `resolveStyleTextAttributes` check the cached maps before falling back to parsing `stylesXml`.
+
+### Font color / named-style attributes now render
+Pre-existing bug uncovered during #28 testing — the renderer parsed inline `<w:color w:val="...">` on runs but silently dropped color/font/size/bold defined via a named Word style (Heading 1, custom styles, etc.) — affected both the signature path AND the regular DocGen runner.
+
+New `DocGenHtmlRenderer.resolveStyleTextAttributes(styleName)` reads color, fontFamily, fontSize, bold, italic from `<w:style w:styleId="X">`. Called from:
+- `parseRunStyle` — a run's `<w:rStyle>` reference fills in missing attributes; inline `rPr` still overrides.
+- `processParagraph` — a paragraph's `<w:pStyle>` applies color/font as paragraph-level inline CSS so runs without explicit rPr inherit them.
+- Via `styleTextAttrsMap` for async signature queueable fallback (same caching pattern as the borders map).
+
+### Sign In Person (admin action)
+New "Sign In Person" button on each signer row in `docGenSignatureSender`. When an admin confirms they've verified the signer's identity in person, email PIN verification is bypassed:
+- `@AuraEnabled markSignerVerifiedInPerson(signerId)` — perm-gated to `DocGen_Admin`. Sets `PIN_Verified_At__c = System.now()`, writes a `DocGen_Signature_Audit__c` row capturing who bypassed, when, and attestation metadata. Returns the signing URL.
+- LWC opens the signing URL in a new tab after a browser confirm dialog.
+- `SignerResult` gained a `signerId` field so the LWC can target the signer directly.
+
+### Tests — 6 new unit tests in `DocGenSignatureTests`
+- `testExtractTableStyleBorderMap_happyPath` + `testExtractTableStyleBorderMap_blank`
+- `testExtractStyleTextAttributeMap_happyPath`
+- `testResolveStyleTextAttrs_asyncFallback_viaMap`
+- `testMarkSignerVerifiedInPerson_happyPath` + `testMarkSignerVerifiedInPerson_alreadySignedThrows`
+
+### Validation
+- 950 / 950 Apex tests pass, 75% org-wide coverage
+- Code analyzer: 0 High / 0 Critical, 37 Moderate (same documented false positives)
+- Upgrade-safety validator: passed
+
+### Backward compatibility
+- No schema changes. Only additive static maps + Apex methods.
+- All v1.48.0 API surfaces preserved.
+- Re-signing an existing request on v1.49.0 produces correctly-rendered output.
+
+---
+
 ## v1.48.0 — Record Filter (SOQL WHERE) + runner namespace fix
 
 Promoted package: `04tal000006hhhNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hhhNAAQ)
