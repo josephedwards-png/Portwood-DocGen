@@ -458,11 +458,11 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         }
         if (fullMatches.isEmpty()) { return html; }
 
-        // Load giant node config from the template
+        // Load giant node config from the template — we need child object, lookup,
+        // and the WHERE clause so the aggregate SOQL matches the rendered rows exactly.
         String childObj = null;
         String lookupFld = null;
         String whereCls = null;
-        Set<String> allowedFields = new Set<String>();
         try {
             List<DocGen_Template__c> tpls = [
                 SELECT Query_Config__c FROM DocGen_Template__c
@@ -479,8 +479,6 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                     lookupFld = (String) node.get('lookupField');
                     whereCls = (String) node.get('where');
                     if (whereCls == null) { whereCls = (String) node.get('whereClause'); }
-                    List<Object> flds = (List<Object>) node.get('fields');
-                    if (flds != null) { for (Object f : flds) { allowedFields.add(String.valueOf(f)); } }
                     break;
                 }
             }
@@ -490,7 +488,13 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         }
 
         if (String.isBlank(childObj) || String.isBlank(lookupFld)) { return html; }
-        if (Schema.getGlobalDescribe().get(childObj) == null) { return html; }
+        Schema.SObjectType childType = Schema.getGlobalDescribe().get(childObj);
+        if (childType == null) { return html; }
+        // Validate aggregate fields against the child object's schema — this allows
+        // aggregating any queryable field, not just columns declared for rendering.
+        // Regex already restricts field names to [A-Za-z0-9_]+ so SOQL injection is
+        // blocked; Schema existence check is the second line of defense.
+        Map<String, Schema.SObjectField> childFieldMap = childType.getDescribe().fields.getMap();
 
         // Build aggregate SELECT clauses — each unique (fn, field) pair gets one alias
         List<String> selectClauses = new List<String>();
@@ -504,8 +508,8 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
             if (fn == 'COUNT' && String.isBlank(field)) {
                 selectClauses.add('COUNT(Id) ' + alias);
                 pairToAlias.put(pair, alias);
-            } else if (String.isNotBlank(field) && allowedFields.contains(field)) {
-                selectClauses.add(fn + '(' + String.escapeSingleQuotes(field) + ') ' + alias);
+            } else if (String.isNotBlank(field) && childFieldMap.containsKey(field.toLowerCase())) {
+                selectClauses.add(fn + '(' + field + ') ' + alias);
                 pairToAlias.put(pair, alias);
             }
         }

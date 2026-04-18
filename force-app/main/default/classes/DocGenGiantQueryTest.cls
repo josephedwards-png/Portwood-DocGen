@@ -935,6 +935,86 @@ private class DocGenGiantQueryTest {
     }
 
     @IsTest
+    static void testGiantAggregateFormatSuffixes() {
+        // v1.51.0 bug: {COUNT:Rel:number}, {AVG:Rel.Field:currency}, {SUM:Rel.Field:currency}
+        // etc. rendered unresolved because the resolver only accepted fields declared
+        // as rendered columns in the query config.
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            Account acc = [SELECT Id FROM Account WHERE Name = 'Giant Query Test Account' LIMIT 1];
+            DocGen_Template__c tpl = [SELECT Id FROM DocGen_Template__c WHERE Name = 'Giant Query Test' LIMIT 1];
+
+            // Template config declares Contact's FirstName only as a rendered column —
+            // but we aggregate MailingLatitude which is NOT in the column list. That
+            // simulates the real-world pattern "show some columns, aggregate others".
+            String v3Config = JSON.serialize(new Map<String, Object>{
+                'v' => 3,
+                'root' => 'Account',
+                'nodes' => new List<Object>{
+                    new Map<String, Object>{
+                        'id' => 'n0', 'object' => 'Account',
+                        'fields' => new List<String>{ 'Name' },
+                        'parentFields' => new List<String>(),
+                        'parentNode' => null, 'lookupField' => null, 'relationshipName' => null
+                    },
+                    new Map<String, Object>{
+                        'id' => 'n1', 'object' => 'Contact',
+                        'fields' => new List<String>{ 'FirstName' }, // intentionally omits MailingLatitude
+                        'parentFields' => new List<String>(),
+                        'parentNode' => 'n0', 'lookupField' => 'AccountId',
+                        'relationshipName' => 'Contacts'
+                    }
+                }
+            });
+            tpl.Query_Config__c = v3Config;
+            update tpl;
+
+            // Set numeric field so aggregates have something to crunch
+            List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :acc.Id];
+            for (Contact c : contacts) {
+                c.MailingLatitude = 25.0;
+                c.MailingLongitude = 10.0;
+            }
+            update contacts;
+
+            DocGen_Job__c job = new DocGen_Job__c(
+                Template__c = tpl.Id, Status__c = 'Harvesting',
+                Parent_Record_Id__c = String.valueOf(acc.Id)
+            );
+            insert job;
+
+            DocGenGiantQueryAssembler assembler =
+                new DocGenGiantQueryAssembler(job.Id, tpl.Id, acc.Id, 'Contacts');
+
+            String html =
+                'Count: {COUNT:Contacts:number} | ' +
+                'Avg: {AVG:Contacts.MailingLatitude:currency} | ' +
+                'Min: {MIN:Contacts.MailingLatitude:currency} | ' +
+                'Max: {MAX:Contacts.MailingLatitude:currency} | ' +
+                'Sum: {SUM:Contacts.MailingLatitude:currency}';
+
+            Test.startTest();
+            String resolved = assembler.resolveGiantAggregateTags(html);
+            Test.stopTest();
+
+            // No unresolved aggregate tags should remain
+            System.assert(!resolved.contains('{COUNT:'), 'COUNT tag unresolved: ' + resolved);
+            System.assert(!resolved.contains('{AVG:'),   'AVG tag unresolved: '   + resolved);
+            System.assert(!resolved.contains('{MIN:'),   'MIN tag unresolved: '   + resolved);
+            System.assert(!resolved.contains('{MAX:'),   'MAX tag unresolved: '   + resolved);
+            System.assert(!resolved.contains('{SUM:'),   'SUM tag unresolved: '   + resolved);
+
+            // Currency format should produce a $-prefixed string on AVG/MIN/MAX/SUM
+            System.assert(resolved.contains('Avg: $25'),  'AVG should format with $: ' + resolved);
+            System.assert(resolved.contains('Min: $25'),  'MIN should format with $: ' + resolved);
+            System.assert(resolved.contains('Max: $25'),  'MAX should format with $: ' + resolved);
+            System.assert(resolved.contains('Sum: $250'), 'SUM (10×25) should format with $: ' + resolved);
+            // COUNT with :number format — 10 contacts, no decimal
+            System.assert(resolved.contains('Count: 10'), 'COUNT should format as 10: ' + resolved);
+        }
+    }
+
+    @IsTest
     static void testAssemblerParentFieldFormatting() {
         // Parent-level tags on the template wrapper (outside the loop) must honor
         // format specifiers: {AnnualRevenue:currency}, {CloseDate:date}, etc.
