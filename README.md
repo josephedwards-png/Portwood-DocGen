@@ -4,11 +4,11 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.51.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.52.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
-[![Apex Tests](https://img.shields.io/badge/Apex_Tests-963%2F963_passing-brightgreen)](#code-quality)
+[![Apex Tests](https://img.shields.io/badge/Apex_Tests-964%2F964_passing-brightgreen)](#code-quality)
 [![Coverage](https://img.shields.io/badge/Coverage-75%25-brightgreen)](#code-quality)
 [![Security](https://img.shields.io/badge/Code_Analyzer-0_Critical%2C_0_High-brightgreen)](#security)
 [![Website](https://img.shields.io/badge/website-portwoodglobalsolutions.com-blue)](https://portwoodglobalsolutions.com)
@@ -18,10 +18,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006hyThAAI --wait 10 --target-org <your-org>
+sf package install --package 04tal000006hyVJAAY --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyThAAI) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyThAAI)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyVJAAY) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyVJAAY)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -410,14 +410,15 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.51.0 | **Latest (Released)** | `04tal000006hyThAAI` |
+| v1.52.0 | **Latest (Released)** | `04tal000006hyVJAAY` |
+| v1.51.0 | Previous | `04tal000006hyThAAI` |
 | v1.50.0 | Previous | `04tal000006hyNFAAY` |
 | v1.49.0 | Previous | `04tal000006hlZhAAI` |
 | v1.48.0 | Previous | `04tal000006hhhNAAQ` |
 | v1.47.0 | Previous | `04tal000006hQwfAAE` |
 | v1.46.0 | Previous | `04tal000006hQ73AAE` |
 | v1.45.0 | Previous (tester rollout) | `04tal000006hOZtAAM` |
-| v1.43.0 | Previous | `04tal000006hyThAAI` |
+| v1.43.0 | Previous | `04tal000006hyVJAAY` |
 | v1.42.0 | Previous | `04tal000006UkpxAAC` |
 | v1.41.0 | Previous | `04tal000006UiubAAC` |
 

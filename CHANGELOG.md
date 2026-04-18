@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.52.0 — Giant-query aggregate-tag format fix
+
+Promoted package: `04tal000006hyVJAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyVJAAY)
+Upgrade-safety validator: passed. v1.51.x subscribers can install directly.
+
+Aggregate tags with format suffixes — `{COUNT:Rel:number}`, `{SUM:Rel.Field:currency}`, `{AVG:Rel.Field:currency}`, `{MIN:Rel.Field:currency}`, `{MAX:Rel.Field:currency}` — rendered unresolved in v1.50.0–v1.51.0 when the aggregated field was *not* also declared as a rendered column in the template's query config.
+
+This was overly restrictive: most real templates aggregate fields like `UnitPrice`, `TotalPrice`, `Amount` that are *not* shown as rendered columns — they're summary-row totals. The resolver now validates field names against the child object's schema instead of the query config's declared fields. The regex already restricts field names to `[A-Za-z0-9_]+` so SOQL injection remains impossible; schema existence is the second line of defense.
+
+### Validation
+- 964 / 964 Apex tests pass, 75% org-wide coverage
+- 8 / 8 e2e scripts pass (151 assertions)
+- Code analyzer: 0 High severity violations on changed classes
+- New focused unit test `testGiantAggregateFormatSuffixes` covers all five aggregate functions with format suffixes AND the "aggregate field not in rendered columns" scenario that caused the regression
+
+---
+
 ## v1.51.0 — Giant-query parent-tag format fix (currency/date/number)
 
 Promoted package: `04tal000006hyThAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyThAAI)
