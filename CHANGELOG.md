@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.51.0 — Giant-query parent-tag format fix (currency/date/number)
+
+Promoted package: `04tal000006hyThAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyThAAI)
+Upgrade-safety validator: passed. v1.50.x subscribers can install directly.
+
+Parent-level merge tags with format specifiers (`{AnnualRevenue:currency}`, `{CloseDate:date:de_DE}`, etc.) in the HTML wrapper of giant-query PDFs — headers, titles, totals rows — were left unresolved in v1.50.0. The assembler's `resolveParentMergeTags` regex matched bare `{Name}` but not tags with format suffixes, and even where it matched it skipped the formatter.
+
+Fixed by extending the regex to capture an optional format suffix and routing matched tag+value through `DocGenService.processXmlForTest`, so the existing locale/currency/date formatter is reused — full parity with the in-loop row path.
+
+Aggregate tags (`{SUM:...}`, `{COUNT:...}`, etc.) were already correctly formatted in 1.50.0 via a separate resolver and are unaffected.
+
+### Validation
+- 963 / 963 Apex tests pass, 75% org-wide coverage
+- 8 / 8 e2e scripts pass (151 assertions)
+- Code analyzer: 0 High severity violations on changed classes
+- New focused unit test: `testAssemblerParentFieldFormatting` exercises `{AnnualRevenue:currency}` on a real giant-query pipeline
+
+---
+
 ## v1.50.0 — Locale-aware formatting + grand-total aggregates for giant queries
 
 Promoted package: `04tal000006hyNFAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyNFAAY)
