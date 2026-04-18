@@ -418,7 +418,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 | v1.47.0 | Previous | `04tal000006hQwfAAE` |
 | v1.46.0 | Previous | `04tal000006hQ73AAE` |
 | v1.45.0 | Previous (tester rollout) | `04tal000006hOZtAAM` |
-| v1.43.0 | Previous | `04tal000006hyVJAAY` |
+| v1.43.0 | Previous | `04tal000006hLTxAAM` |
 | v1.42.0 | Previous | `04tal000006UkpxAAC` |
 | v1.41.0 | Previous | `04tal000006UiubAAC` |
 
