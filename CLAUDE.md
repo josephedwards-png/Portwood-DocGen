@@ -55,6 +55,20 @@ At PDF generation time, `buildPdfImageMap()` queries for these pre-committed CVs
 - After merge: `buildPdfImageMap()` → `DocGenHtmlRenderer.convertToHtml()` → `Blob.toPdf()` with VF page fallback
 - The Spring '26 Release Update "Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations" is REQUIRED
 
+## Critical: Giant-Query PDF Has THREE Merge-Tag Resolution Paths
+
+`DocGenGiantQueryAssembler` does **not** go through `processXml()`. Tags are resolved in three distinct layers before `Blob.toPdf()`:
+
+1. **Row-level tags (inside the `{#Rel}...{/Rel}` loop)** — rendered per-record by `DocGenService.renderLoopBodyForRecords()` → `processXml()`. Full formatter support (currency, date, locale, aggregates, everything processXml does).
+2. **Parent-level tags (outside the loop — headers, titles, summaries)** — resolved by `DocGenGiantQueryAssembler.resolveParentMergeTags()`. Matches `{Field}`, `{Owner.Name}`, and `{Field:format}` forms. Format-suffix tags are routed back through `DocGenService.processXmlForTest()` with a mini 1-field data map so locale/currency/date formatting is reused (v1.51.0+).
+3. **Aggregate tags (grand totals across the giant relationship)** — `{SUM:Rel.Field}`, `{COUNT:Rel}`, etc. resolved by `DocGenGiantQueryAssembler.resolveGiantAggregateTags()` via a single SOQL aggregate query, governor-safe for 60K+ rows (v1.50.0+). Field validation is against `Schema.getGlobalDescribe()`, NOT the query config's declared columns — aggregate fields don't have to be rendered columns (v1.52.0+).
+
+**When adding a new merge-tag feature**, decide which of the three paths it belongs to and implement it there — adding to `processXml()` alone won't make it work for giant queries. Missing from all three paths = silent pass-through as literal template text in the PDF.
+
+**Special keywords `{Today}` and `{Now}` are NOT implemented anywhere.** They pass through unresolved in every path. Adding them is a future feature, not a regression.
+
+**Never re-parse `Query_Config__c` from new giant-query code paths.** Templates use three config formats (V1 flat, V2 JSON, V3 tree). `JSON.deserializeUntyped` throws on V1 flat strings — any assembler-side code that tries to read config must either (a) detect format first, or (b) receive pre-parsed `childObjectName` / `lookupField` / `whereClause` from the caller. `DocGenGiantQueryBatch` passes these into `DocGenGiantQueryAssembler`'s 7-arg constructor for exactly this reason (v1.53.0+). The old 4-arg constructor keeps a V3-JSON fallback for direct invocations.
+
 ## Client-Side DOCX Assembly (In Progress)
 
 DOCX generation now uses client-side ZIP assembly to avoid Apex heap limits:
