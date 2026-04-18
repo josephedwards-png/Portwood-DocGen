@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.50.0 — Locale-aware formatting + grand-total aggregates for giant queries
+
+Promoted package: `04tal000006hyNFAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyNFAAY)
+Upgrade-safety validator: passed. v1.49.x subscribers can install directly.
+
+### Locale-aware number, currency, and date formatting
+
+Merge-tag formatting now honors the user's Salesforce locale instead of always using US conventions:
+- **Currency** — 35+ ISO currency codes map to their native symbols (`EUR → €`, `JPY → ¥`, `GBP → £`, `INR → ₹`, etc.). Zero-decimal currencies (JPY, KRW, CLP, HUF...) render without decimals automatically.
+- **Locale override** — `{Amount:currency:EUR:de_DE}` forces German grouping/decimal separators (`1.234,56 €`) regardless of the viewing user's locale.
+- **Dates** — new `{Field:date}` and `{Field:date:<locale>}` forms pick the locale's default short-date pattern.
+- Thousands and decimal separators now come from the locale too: French `de_DE`, Swiss `de_CH`, Indian `en_IN` grouping all render correctly.
+
+Backward compatible — existing `{Amount:currency}` and `{Price:#,##0.00}` templates keep working unchanged.
+
+### Grand-total aggregates in giant-query PDFs
+
+Previously `{SUM:Items.Amount}`, `{COUNT:Items}`, `{AVG:Items.Amount}`, `{MIN:…}`, `{MAX:…}` tags only computed against in-memory record lists. For giant queries (60K+ rows processed in batch pages), the full list is never materialized at once, so aggregates returned zero or partial values.
+
+Now resolved via a single SOQL aggregate query inside `DocGenGiantQueryAssembler`, using the same lookup + WHERE clause that drove the row pages. Totals are authoritative regardless of dataset size, governor-safe (aggregates don't hit row limits), and piggyback on the new locale formatter so `{SUM:Lines.Amount:currency:EUR:de_DE}` works at any scale.
+
+### Tests
+- 962 / 962 Apex tests pass, 75% org-wide coverage
+- 8 / 8 e2e scripts pass (129+ assertions)
+- Code analyzer: 0 High severity violations on changed classes
+- 3 new focused unit tests for giant-query aggregate resolution (COUNT, SUM, non-matching-relationship passthrough)
+
+---
+
 ## v1.49.0 — Signature PDF table-border + font-color fix + Sign In Person
 
 Promoted package: `04tal000006hlZhAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hlZhAAI)
