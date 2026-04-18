@@ -18,10 +18,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006hLTxAAM --wait 10 --target-org <your-org>
+sf package install --package 04tal000006hyNFAAY --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hLTxAAM) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hLTxAAM)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyNFAAY) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006hyNFAAY)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -416,7 +416,7 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 | v1.47.0 | Previous | `04tal000006hQwfAAE` |
 | v1.46.0 | Previous | `04tal000006hQ73AAE` |
 | v1.45.0 | Previous (tester rollout) | `04tal000006hOZtAAM` |
-| v1.43.0 | Previous | `04tal000006hLTxAAM` |
+| v1.43.0 | Previous | `04tal000006hyNFAAY` |
 | v1.42.0 | Previous | `04tal000006UkpxAAC` |
 | v1.41.0 | Previous | `04tal000006UiubAAC` |
 
