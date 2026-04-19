@@ -4,7 +4,7 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.54.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.55.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -18,10 +18,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006i0qTAAQ --wait 10 --target-org <your-org>
+sf package install --package 04tal000006i0thAAA --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0qTAAQ) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0qTAAQ)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0thAAA) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0thAAA)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -410,7 +410,8 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.54.0 | **Latest (Released)** | `04tal000006i0qTAAQ` |
+| v1.55.0 | **Latest (Released)** | `04tal000006i0thAAA` |
+| v1.54.0 | Previous | `04tal000006i0qTAAQ` |
 | v1.53.0 | Previous | `04tal000006hyYXAAY` |
 | v1.52.0 | Previous | `04tal000006hyVJAAY` |
 | v1.51.0 | Previous | `04tal000006hyThAAI` |

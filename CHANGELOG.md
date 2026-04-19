@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.55.0 — Try-and-retry heap fallback + PDF-aware estimator
+
+Promoted package: `04tal000006i0thAAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0thAAA)
+Upgrade-safety validator: passed. v1.54.x subscribers can install directly.
+
+v1.54.0's heap estimator underestimated PDF output: 400 line items still blew sync heap because `Blob.toPdf()` holds the entire HTML DOM in heap while rendering (~5-10× raw XML size). Two improvements in 1.55.0:
+
+### 1. Output-format-aware estimator constants
+- **PDF**: 10 KB per row + 1 MB base overhead (accounts for `Blob.toPdf()` DOM parse)
+- **DOCX / Excel / PowerPoint**: 2 KB per row + 200 KB base (server just merges XML, ships base64 to client)
+- PDF giant threshold is now ~260 records; DOCX ~1700 records. Threshold still at 60% of 6 MB sync limit.
+
+### 2. Try-and-retry fallback in the controller
+`processAndReturnDocumentWithOverride` and `generatePdf` now catch **any** heap-related error — including `System.LimitException` thrown from `Blob.toPdf()` itself, which isn't our typed `HeapPressureException`. The controller returns the same `{ heapPressure: true }` signal and the runner LWC auto-retries via the giant-query batch path. When the server can't identify the giant relationship, the runner picks the largest-count child from scout cache.
+
+Net result: customers never see a "heap size too large" error. Worst case, they see a "large dataset — switching modes" toast while the giant path takes over.
+
+Also tightened the in-flight heap check ratio from 75% → 60% so `processXml` bails earlier, leaving more headroom for the still-pending `Blob.toPdf()` call.
+
+### Validation
+- 968 / 968 Apex tests pass, 75% org-wide coverage
+- 8 / 8 e2e scripts pass (151 assertions)
+- Code analyzer: 0 High severity violations
+
+---
+
 ## v1.54.0 — Heap-aware giant-path auto-routing
 
 Promoted package: `04tal000006i0qTAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0qTAAQ)
