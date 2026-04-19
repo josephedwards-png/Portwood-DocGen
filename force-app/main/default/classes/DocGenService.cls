@@ -45,11 +45,12 @@ public with sharing class DocGenService {
     // Heap-pressure routing: check every N loop iterations during sync merge; if
     // we're past HEAP_PRESSURE_RATIO of the limit, throw HeapPressureException so
     // the controller can signal the runner LWC to auto-fallback to the giant path.
-    // 75% leaves headroom for the still-pending HTML conversion + Blob.toPdf() work.
+    // 60% leaves ~2.4MB for the still-pending HTML conversion + Blob.toPdf()
+    // (Flying Saucer DOM parse typically 2-3× the HTML string size).
     @TestVisible
     private static Integer HEAP_CHECK_EVERY_N_ITERS = 50;
     @TestVisible
-    private static Decimal HEAP_PRESSURE_RATIO = 0.75;
+    private static Decimal HEAP_PRESSURE_RATIO = 0.60;
     // @TestVisible hook — tests set this to force checkHeapPressure into the pressure branch
     @TestVisible
     private static Boolean forceHeapPressureForTest = false;

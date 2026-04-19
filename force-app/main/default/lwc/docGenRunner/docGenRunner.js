@@ -545,15 +545,29 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
      */
     async _handledHeapPressure(result) {
         if (!result || !result.heapPressure) { return false; }
-        const rel = result.giantRelationship;
-        if (!rel || !this._scoutCache) {
+        if (!this._scoutCache) {
+            this.error = 'Dataset exceeds sync heap limit — open the Command Hub and generate via the bulk pipeline.';
+            return true;
+        }
+        const { counts, childNodes } = this._scoutCache;
+        // If the server couldn't identify the giant relationship (e.g. Blob.toPdf
+        // heap OOM — thrown from deep in the PDF engine, not our typed exception),
+        // pick the relationship with the most records. It's almost always the one
+        // blowing heap.
+        let rel = result.giantRelationship;
+        if (!rel) {
+            let maxCount = 0;
+            for (const [name, count] of Object.entries(counts || {})) {
+                if (count > maxCount) { maxCount = count; rel = name; }
+            }
+        }
+        if (!rel || !childNodes[rel]) {
             this.error = 'Dataset exceeds sync heap limit — open the Command Hub and generate via the bulk pipeline.';
             return true;
         }
         this.showToast('Info', `Large dataset — switching to giant-query mode for ${rel}.`, 'info');
         this.isGiantQueryMode = true;
         this.outputMode = 'download';
-        const { counts, childNodes } = this._scoutCache;
         await this._assembleGiantQueryPdf(rel, counts, childNodes[rel]);
         return true;
     }

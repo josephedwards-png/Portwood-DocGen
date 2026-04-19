@@ -249,13 +249,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'templateType' => result.get('templateType')
             };
         } catch (HeapPressureException hp) {
-            // Sync merge blew past heap threshold — return a structured signal so the
-            // runner LWC can auto-fallback to the giant-query batch path transparently.
-            return new Map<String, Object>{
-                'heapPressure' => true,
-                'giantRelationship' => hp.relationshipName
-            };
+            return heapPressureSignal(hp.relationshipName);
         } catch (Exception e) {
+            // Try-and-retry: if sync blew heap (even from Blob.toPdf(), which isn't
+            // catchable as HeapPressureException), signal so the runner LWC retries
+            // via giant-query path. Client picks the relationship from scout cache.
+            if (isHeapError(e)) { return heapPressureSignal(null); }
             throw DocGenService.ahe(e, 'Error generating document. Please check the template configuration.');
         }
     }
@@ -648,14 +647,20 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * @param templateId The DocGen_Template__c record ID
      * @return Map of relationship name to child record count
      */
-    // Heap-pressure router constants — tuned from real-world breakage at
-    // ~1000 line-items × 10 fields on sync path (6MB limit). Client uses
-    // useGiantPath flag to route automatically; no hardcoded record threshold.
-    private static final Integer BYTES_PER_FIELD_RENDER = 150;  // tag + value + XML overhead
-    private static final Integer FIXED_ROW_OVERHEAD = 300;      // <w:tr><w:tc> structure
-    private static final Integer PEAK_MULTIPLIER = 3;           // string concat peaks ~3× final
-    private static final Integer SYNC_HEAP_LIMIT = 6000000;     // Apex sync heap governor
-    private static final Decimal SAFE_HEAP_RATIO = 0.6;          // leave 40% for wrapper + Blob.toPdf
+    // Heap-pressure router constants — tuned from real-world breakage.
+    // Output format matters enormously: PDF rendering via Blob.toPdf() parses the
+    // entire HTML into an in-memory DOM, so peak heap is ~5-10× the raw expanded
+    // XML size. DOCX/Excel paths just write XML and ship base64 to the client.
+    private static final Integer SYNC_HEAP_LIMIT = 6000000;   // Apex sync heap governor (6MB)
+    private static final Decimal SAFE_HEAP_RATIO = 0.6;       // leave 40% headroom
+
+    // PDF: Blob.toPdf() holds full DOM + parse tree in heap
+    private static final Integer PDF_BASE_BYTES = 1000000;    // template HTML + styles + parent data
+    private static final Integer PDF_BYTES_PER_ROW = 10000;   // ~10KB per row after DOM/CSS parsing
+
+    // DOCX/Excel/PowerPoint: server merges XML, returns base64 to client
+    private static final Integer DOCX_BASE_BYTES = 200000;
+    private static final Integer DOCX_BYTES_PER_ROW = 2000;
 
     @AuraEnabled
     public static Map<String, Object> scoutChildCounts(Id recordId, Id templateId) {
@@ -670,7 +675,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             return result;
         }
         /* code-analyzer-suppress ApexFlsViolation */
-        List<DocGen_Template__c> templates = [SELECT Query_Config__c, Base_Object_API__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
+        List<DocGen_Template__c> templates = [SELECT Query_Config__c, Base_Object_API__c, Output_Format__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1];
         if (templates.isEmpty() || String.isBlank(templates[0].Query_Config__c)) {
             return result;
         }
@@ -767,27 +772,25 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         result.put('childNodes', childNodes);
 
         // Heap-pressure pre-flight: for each relationship with a known count, estimate
-        // peak sync-path heap. Client uses useGiantPath[rel] to auto-route without a
-        // hardcoded record threshold.
+        // peak sync-path heap. Constants differ by output format because PDF's
+        // Blob.toPdf() holds the whole HTML DOM in heap while rendering.
+        String outputFormat = templates[0].Output_Format__c;
+        Boolean isPdf = 'PDF'.equalsIgnoreCase(outputFormat);
+        Integer baseBytes = isPdf ? PDF_BASE_BYTES : DOCX_BASE_BYTES;
+        Integer bytesPerRow = isPdf ? PDF_BYTES_PER_ROW : DOCX_BYTES_PER_ROW;
+        Integer safeHeapBytes = (Integer) (SYNC_HEAP_LIMIT * SAFE_HEAP_RATIO);
+
         Map<String, Integer> heapEstimates = new Map<String, Integer>();
         Map<String, Boolean> useGiantPath = new Map<String, Boolean>();
         for (String relName : counts.keySet()) {
             Integer rowCount = counts.get(relName);
-            Map<String, Object> node = childNodes.get(relName);
-            Integer fieldsPerRow = 5; // conservative default if metadata unavailable
-            if (node != null) {
-                List<Object> fields = (List<Object>) node.get('fields');
-                List<Object> parentFields = (List<Object>) node.get('parentFields');
-                Integer fc = (fields != null ? fields.size() : 0) + (parentFields != null ? parentFields.size() : 0);
-                if (fc > 0) { fieldsPerRow = fc; }
-            }
-            Integer perRowBytes = fieldsPerRow * BYTES_PER_FIELD_RENDER + FIXED_ROW_OVERHEAD;
-            Integer estimatedPeak = rowCount * perRowBytes * PEAK_MULTIPLIER;
+            Integer estimatedPeak = baseBytes + (rowCount * bytesPerRow);
             heapEstimates.put(relName, estimatedPeak);
-            useGiantPath.put(relName, estimatedPeak > (Integer) (SYNC_HEAP_LIMIT * SAFE_HEAP_RATIO));
+            useGiantPath.put(relName, estimatedPeak > safeHeapBytes);
         }
         result.put('heapEstimates', heapEstimates);
         result.put('useGiantPath', useGiantPath);
+        result.put('outputFormat', outputFormat);
         return result;
     }
 
@@ -1520,13 +1523,33 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 };
             }
         } catch (HeapPressureException hp) {
-            return new Map<String, Object>{
-                'heapPressure' => true,
-                'giantRelationship' => hp.relationshipName
-            };
+            return heapPressureSignal(hp.relationshipName);
         } catch (Exception e) {
+            if (isHeapError(e)) { return heapPressureSignal(null); }
             throw DocGenService.ahe(e, 'Error generating PDF document. Please check the template configuration.');
         }
+    }
+
+    /** Heap-pressure signal helper — uniform shape for runner LWC auto-fallback. */
+    private static Map<String, Object> heapPressureSignal(String relationshipName) {
+        return new Map<String, Object>{
+            'heapPressure' => true,
+            'giantRelationship' => relationshipName
+        };
+    }
+
+    /**
+     * Detects whether an exception came from hitting the Apex heap governor.
+     * Blob.toPdf() internally throws System.LimitException with a heap-related
+     * message when the PDF renderer can't fit the DOM in heap — that's different
+     * from our own HeapPressureException, but we want to retry identically.
+     */
+    private static Boolean isHeapError(Exception e) {
+        String msg = e.getMessage();
+        if (String.isBlank(msg)) { return false; }
+        String lower = msg.toLowerCase();
+        return lower.contains('heap size') || lower.contains('heap limit') ||
+               (e instanceof System.LimitException && lower.contains('heap'));
     }
 
     // --- Schema Methods for Query Builder ---
