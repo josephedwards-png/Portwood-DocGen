@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.56.0 — `{Today}` and `{Now}` built-in tags + Learning Center sync
+
+Promoted package: `04tal000006i1rNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i1rNAAQ)
+Upgrade-safety validator: passed. v1.55.x subscribers can install directly.
+
+Two new built-in merge tags resolve to the current date/datetime without needing a formula field:
+
+```
+{Today}                       2026-04-20 (default ISO format)
+{Today:MM/dd/yyyy}            04/20/2026
+{Today:date}                  Running user's locale default
+{Today:date:de_DE}            20.04.2026 (German)
+{Now}                         2026-04-20 14:30:00
+{Now:yyyy-MM-dd HH:mm}        2026-04-20 14:30
+{Now:date:ja_JP}              2026/04/20 (Now formatted as Japanese date)
+```
+
+All format suffixes from v1.50 locale formatting (`:MM/dd/yyyy`, `:date`, `:date:<locale>`) apply. Case-insensitive. Works in sync, giant-query, bulk, and e-signature stamped documents.
+
+Also shipped:
+- **Learning Center sync** — added a "Built-in Date & Time Tags" subsection under Date & Number Formatting, plus `{Today}` / `{Now}` pills in the Quick Tags gallery.
+- **`UserGuide.md`** added at the project root as the source of truth for feature documentation. All future doc updates (Learning Center, website) flow from this file.
+- **Stale doc fix** — template sharing section in UserGuide.md now correctly describes standard Salesforce sharing (the custom `docGenSharing` LWC was deprecated to stubs long ago; doc was catching up).
+
+### Validation
+- 968 / 968 Apex tests pass, 75% org-wide coverage
+- 8 / 8 e2e scripts pass (156 assertions — 41 syntax assertions in e2e-07, up from 36, with 5 new Today/Now cases)
+- Code analyzer: 0 High severity violations
+
+---
+
 ## v1.55.0 — Try-and-retry heap fallback + PDF-aware estimator
 
 Promoted package: `04tal000006i0thAAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i0thAAA)
