@@ -2,7 +2,7 @@
 
 ## v1.58.0 — `{%Image:N}` record-attached images, textarea newline fix, mobile signing pinch-zoom
 
-Promoted package: **TBD** · Install URL: **TBD**
+Promoted package: `04tal000006lpoPAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lpoPAAQ)
 Supersedes v1.57.0, which failed its install validator because the attempted `docGenTreeBuilder` `isExposed=true → false` change violated the managed-package upgrade rule (once a component is exposed to subscribers, you can't un-expose it in an upgrade). v1.58.0 reverts that specific change — the tree-builder component stays exposed — and ships the rest of v1.57.0 intact. v1.56.x subscribers can install v1.58.0 directly; no one successfully installed v1.57.0, so there is no v1.57 → v1.58 upgrade path to worry about.
 
 The headline feature is a merge tag that makes images intuitive: drag a photo onto any record, write `{%Image:1}` in your template, and it renders. No ContentVersion ID field, no query-builder setup, no lookup. Plus three community bug fixes and a signing UX rework for mobile.
