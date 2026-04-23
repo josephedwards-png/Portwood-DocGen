@@ -1,5 +1,68 @@
 # Changelog
 
+## v1.57.0 — `{%Image:N}` record-attached images, textarea newline fix, mobile signing pinch-zoom
+
+The headline feature is a merge tag that makes images intuitive: drag a photo onto any record, write `{%Image:1}` in your template, and it renders. No ContentVersion ID field, no query-builder setup, no lookup. Plus three community bug fixes and a signing UX rework for mobile.
+
+### New: `{%Image:N}` — record-attached images
+
+`{%Image:N}` renders the Nth oldest image (PNG/JPG/GIF/SVG/WEBP) attached to the current record. Non-image attachments are silently skipped so a PDF contract mixed in with photos won't break rendering.
+
+```
+{%Image:1}                First image attached to the record, natural size
+{%Image:1:200}            Max 200px in either dimension (preserves aspect)
+{%Image:1:200x200}        Explicit 200px × 200px
+{%Image:1:400x}           400px wide, auto height
+{%Image:1:x150}           Auto width, 150px tall
+{%Image:2}, {%Image:3}    Second, third, … attached image
+```
+
+**Inside a loop, the tag scopes to the iterating record's images**, not the parent's — ideal for inspection reports, real estate listings, product catalogs:
+
+```
+{#OpportunityLineItems}
+  | {Product2.Name} | {Quantity} | {%Image:1:100} |
+{/OpportunityLineItems}
+```
+
+Out-of-range indexes (`{%Image:5}` on a record with 2 images) render empty silently, so templates can set up more slots than records will always have.
+
+**Governor-safe at scale:** a pre-scan detects `{%Image:N}` tags in loop bodies and bulk-fetches `ContentDocumentLink` for all iteration records in a single SOQL query, then resolves each iteration from an in-memory cache. 60 line items with photos = 1 CDL query, not 60. Works in `processXml` (row path), in `{#Relationship}` loops, and in the giant-query parent resolver (headers/footers/summaries) for big-volume PDFs.
+
+Both PDF and DOCX output paths supported. PDF uses zero-heap URL references (`/sfc/servlet.shepherd/version/download/...`), DOCX uses the existing client-side ZIP assembly. No new heap limits.
+
+### Fixed: `#32` — textarea newline loses formatting *(contributed by [@raykeating](https://github.com/raykeating))*
+
+Multi-line textarea fields were losing their run formatting (font, size, bold, italic) on everything after the first line. The bug was in `convertMultilineToXml` emitting bare `<w:r>` runs for each `<w:br/>` without carrying the original run's `<w:rPr>` (run properties) block. Ray's fix ([PR #33](https://github.com/Portwood-Global-Solutions/Portwood-DocGen/pull/33)) extracts the currently-open `<w:rPr>` from the output buffer and re-emits it on every line after a break. Formatting is now preserved across every line break in textarea fields, including RTL (`<w:rtl/>`) markers.
+
+### Fixed: `#34` — `DocGenDataProvider` interface must be `global`
+
+The Apex Provider feature (V4 query config) was completely unusable in subscriber orgs: the `DocGenDataProvider` interface was declared `public`, which makes it package-private after install. Subscribers trying to implement `portwoodglobal.DocGenDataProvider` got `Type is not visible`. Changed to `global`, unblocks the feature for all installed orgs.
+
+### Fixed: `#30` — `docGenTreeBuilder` didn't load when dropped on a page
+
+The tree builder is an internal helper for the `docGenAdmin` template wizard — it requires a parent-supplied `@api selectedObject` property that Lightning App Builder can't configure. But its manifest exposed it to App / Record / Home pages anyway, so admins who dragged it onto a page got a permanent "Loading schema…" spinner. Set `isExposed=false`. Admins access tree-building through the template wizard instead.
+
+### Mobile signing UX — pinch-to-zoom instead of forced shrink
+
+Previous versions tried to shrink the merged document to fit a phone viewport — which ruined QR codes, image details, and fine print. v1.57 switches to a natural-width layout with pinch-to-zoom enabled, so signers can inspect full-fidelity content on mobile just like they would a native PDF. The action bar stays pinned to the bottom of the viewport regardless of scroll position or zoom level, with a stronger orange outline + glow on the active placement so signers can find where to sign even when zoomed out. Vertical-only auto-scroll when advancing between placements keeps the document's left edge anchored on phones.
+
+**Recommended mobile orientation:** landscape. A Word document at natural width (~8.5") fits phone screens cleanly in landscape and gives signers room to draw/type. Portrait mode works (pinch-zoom + pan) but landscape is the expected signing posture on mobile — consistent with how most e-sign tools are used in the field.
+
+Also on the signing stack:
+- `docGenSignatureSender` LWC now supports mobile form factors (Small + Large) with responsive column layouts for signer rows, action buttons, and the preview modal.
+
+### Validation
+
+- **27 new Apex unit tests** in `DocGenImageTagTests.cls` — 100% pass, cover all `{%Image:N}` helpers, size parsing, cache behavior, the `#32` fix, and the giant-query parent resolver
+- **e2e-09-images.apex** — new script, 8/8 pass (base-record, in-loop, out-of-range, size variants, no-attachments fallback)
+- **e2e-07-syntax.apex** — 43/43 pass, includes 2 new `#32` assertions (font-size preservation + RTL preservation across line breaks)
+- **Full e2e suite (9 scripts)** — 165 assertions pass end-to-end
+- **Code Analyzer Security + AppExchange** — 0 High / Critical / Serious violations
+- **Learning Center + Website user guide** — both updated with `{%Image:N}` documentation including in-loop examples
+
+---
+
 ## v1.56.0 — `{Today}` and `{Now}` built-in tags + Learning Center sync
 
 Promoted package: `04tal000006i1rNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006i1rNAAQ)

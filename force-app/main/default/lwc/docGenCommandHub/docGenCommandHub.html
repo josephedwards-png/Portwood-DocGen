@@ -647,7 +647,34 @@
 
                                 <section id="images" class="content-section">
                                     <h3 class="section-heading">Dynamic Images</h3>
-                                    <p>Insert images from Salesforce Files into your document. Store a ContentVersion ID (starts with <code>068</code>) in a text field on the record, then reference it with the <code>%</code> prefix:</p>
+
+                                    <h4 style="margin-top:1rem;">Option 1: Record-attached images (easiest)</h4>
+                                    <p>The <code>&#123;%Image:N&#125;</code> tag renders the <strong>Nth oldest image attached to the current record</strong>. No field setup required -- just drag a photo onto the record in Files, and the tag picks it up. Filters to PNG/JPG/GIF/SVG/WEBP automatically (non-image attachments are skipped).</p>
+
+                                    <table class="doc-table">
+                                        <thead>
+                                            <tr><th>What You Type</th><th>What Happens</th><th>Use Case</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td><code>&#123;%Image:1&#125;</code></td><td>First image attached to the record, natural size</td><td>Single photo (headshot, logo)</td></tr>
+                                            <tr><td><code>&#123;%Image:1:200&#125;</code></td><td>Same, max 200px in either dimension (keeps aspect)</td><td>Reasonable default size</td></tr>
+                                            <tr><td><code>&#123;%Image:1:200x200&#125;</code></td><td>Explicit 200px × 200px</td><td>Square thumbnail</td></tr>
+                                            <tr><td><code>&#123;%Image:1:400x&#125;</code></td><td>400px wide, auto height</td><td>Fixed-width banner</td></tr>
+                                            <tr><td><code>&#123;%Image:1:x150&#125;</code></td><td>Auto width, 150px tall</td><td>Fixed-height row</td></tr>
+                                            <tr><td><code>&#123;%Image:2&#125;</code>, <code>&#123;%Image:3&#125;</code>, ...</td><td>Second, third, ... attached image</td><td>Multi-photo templates</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <p><strong>Inside a loop:</strong> <code>&#123;%Image:1&#125;</code> resolves to the iterating record's first image, not the parent's. Works great for inspection reports, product catalogs, or line-item tables with thumbnails:</p>
+
+                                    <pre style="background:#f4f6f9;padding:0.75rem;border-radius:4px;"><code>&#123;#OpportunityLineItems&#125;
+  | &#123;Product2.Name&#125; | &#123;Quantity&#125; | &#123;%Image:1:100&#125; |
+&#123;/OpportunityLineItems&#125;</code></pre>
+
+                                    <p>Out-of-range indexes (<code>&#123;%Image:5&#125;</code> on a record with 2 images) render empty silently, so you can set up templates with more slots than records will always have.</p>
+
+                                    <h4 style="margin-top:1.5rem;">Option 2: Image field (advanced)</h4>
+                                    <p>When you need to choose a specific image that isn't the Nth attachment -- for example, a "Primary Photo" lookup pointing to a specific ContentVersion -- store the ContentVersion ID (starts with <code>068</code>) in a text field and reference it with the <code>%</code> prefix:</p>
 
                                     <table class="doc-table">
                                         <thead>
@@ -663,7 +690,7 @@
                                         </tbody>
                                     </table>
 
-                                    <p>Dynamic images work in both PDF and DOCX output. You can also embed static images directly in your Word template (company logos, watermarks, etc.) -- they render in PDFs automatically without any tags.</p>
+                                    <p>Both options work in PDF and DOCX output. You can also embed static images directly in your Word template (company logos, watermarks, etc.) -- they render in PDFs automatically without any tags.</p>
                                 </section>
 
                                 <section id="barcodes-qr" class="content-section">

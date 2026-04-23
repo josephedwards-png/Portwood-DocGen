@@ -29,7 +29,7 @@
         <recordTriggerType>Create</recordTriggerType>
         <triggerType>RecordAfterSave</triggerType>
     </start>
-    <status>Active</status>
+    <status>Draft</status>
 
     <!-- ACTION CALLS -->
     <actionCalls>

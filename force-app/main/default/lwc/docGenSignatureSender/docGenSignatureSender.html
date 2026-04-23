@@ -84,7 +84,7 @@
                 <template for:each={signers} for:item="signer" for:index="index">
                     <div key={signer.id} class="slds-box slds-theme_shade slds-var-m-bottom_x-small slds-var-p-around_small">
                         <div class="slds-grid slds-gutters_x-small slds-wrap">
-                            <div class="slds-col slds-size_3-of-12">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
                                 <lightning-combobox
                                     name="role"
                                     label="Role"
@@ -95,7 +95,7 @@
                                     required>
                                 </lightning-combobox>
                             </div>
-                            <div class="slds-col slds-size_3-of-12">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
                                 <lightning-record-picker
                                     label="Contact"
                                     placeholder="Search contacts..."
@@ -105,7 +105,7 @@
                                     onchange={handleContactChange}>
                                 </lightning-record-picker>
                             </div>
-                            <div class="slds-col slds-size_2-of-12">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_2-of-12">
                                 <lightning-input
                                     type="text"
                                     label="Name"
@@ -115,7 +115,7 @@
                                     required>
                                 </lightning-input>
                             </div>
-                            <div class="slds-col slds-size_3-of-12">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
                                 <lightning-input
                                     type="email"
                                     label="Email"
@@ -125,7 +125,7 @@
                                     required>
                                 </lightning-input>
                             </div>
-                            <div class="slds-col slds-size_1-of-12 slds-grid slds-grid_vertical-align-end">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-12 slds-grid slds-grid_vertical-align-end">
                                 <lightning-button
                                     icon-name="utility:delete"
                                     label="Remove"
@@ -150,22 +150,24 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="slds-var-m-top_large slds-grid slds-gutters_small">
-                <div class="slds-col">
+            <div class="slds-var-m-top_large slds-grid slds-gutters_small slds-wrap action-row">
+                <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-var-m-bottom_x-small">
                     <lightning-button
                         variant="neutral"
                         label="Preview Before Sending"
                         icon-name="utility:preview"
                         onclick={handleShowPreview}
-                        disabled={isGenerateDisabled}>
+                        disabled={isGenerateDisabled}
+                        class="action-btn">
                     </lightning-button>
                 </div>
-                <div class="slds-col slds-no-flex">
+                <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-medium-text-align_right">
                     <lightning-button
                         variant="brand"
                         label={generateButtonLabel}
                         onclick={handleGenerate}
-                        disabled={isGenerateDisabled}>
+                        disabled={isGenerateDisabled}
+                        class="action-btn">
                     </lightning-button>
                 </div>
             </div>
@@ -183,8 +185,8 @@
             <p class="slds-var-m-bottom_small">Provide each signer with their unique secure link:</p>
             <template for:each={signerResults} for:item="result">
                 <div key={result.signerUrl} class="slds-box slds-theme_shade slds-var-m-bottom_x-small slds-var-p-around_small">
-                    <div class="slds-grid slds-grid_vertical-align-center">
-                        <div class="slds-col slds-grow">
+                    <div class="slds-grid slds-grid_vertical-align-center slds-wrap">
+                        <div class="slds-col slds-grow slds-size_1-of-1 slds-medium-size_8-of-12">
                             <p class="slds-text-body_regular">
                                 <strong>{result.signerName}</strong>
                                 <template if:true={result.roleName}>
@@ -195,17 +197,16 @@
                                 <a href={result.signerUrl} target="_blank">{result.signerUrl}</a>
                             </p>
                         </div>
-                        <div class="slds-col slds-no-flex">
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_4-of-12 slds-medium-text-align_right slds-var-m-top_x-small">
                             <lightning-button icon-name="utility:copy" label="Copy" variant="neutral"
-                                data-url={result.signerUrl} onclick={handleCopyUrl} class="slds-var-m-left_small">
+                                data-url={result.signerUrl} onclick={handleCopyUrl} class="slds-var-m-right_x-small">
                             </lightning-button>
                             <lightning-button icon-name="utility:user" label="Sign In Person" variant="brand-outline"
                                 title="Bypass email PIN verification — use only when the signer's identity is verified in person. Action is recorded in the signature audit log."
                                 data-signer-id={result.signerId}
                                 data-url={result.signerUrl}
                                 data-signer-name={result.signerName}
-                                onclick={handleSignInPerson}
-                                class="slds-var-m-left_x-small">
+                                onclick={handleSignInPerson}>
                             </lightning-button>
                         </div>
                     </div>
@@ -276,7 +277,7 @@
                     <div class="slds-modal__content slds-var-p-around_medium" style="max-height:70vh;overflow-y:auto;">
                         <!-- Signers + Placements Summary -->
                         <div class="slds-grid slds-wrap slds-gutters_small slds-var-m-bottom_medium">
-                            <div class="slds-col slds-size_1-of-2">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
                                 <h3 class="slds-text-title_bold slds-var-m-bottom_x-small">Signers</h3>
                                 <template for:each={signers} for:item="signer">
                                     <div key={signer.id} class="slds-var-p-vertical_xx-small">
@@ -286,7 +287,7 @@
                                     </div>
                                 </template>
                             </div>
-                            <div class="slds-col slds-size_1-of-2">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
                                 <h3 class="slds-text-title_bold slds-var-m-bottom_x-small">Signing Requirements</h3>
                                 <template for:each={placementSummaryByRole} for:item="ps">
                                     <div key={ps.role} class="slds-var-p-vertical_xx-small">

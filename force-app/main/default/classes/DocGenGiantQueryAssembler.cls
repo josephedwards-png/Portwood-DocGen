@@ -446,7 +446,89 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
         } catch (Exception mergeErr) {
             String noop = mergeErr.getMessage(); // NOPMD
         }
+        // Resolve {%Image:N} / {%Image:N:SIZE} tags in the parent HTML (headers/footers/summaries)
+        html = resolveParentImageTags(html);
         return html;
+    }
+
+    /**
+     * Resolves {%Image:N} and {%Image:N:SIZE} tags at the parent level of a giant-query
+     * template — headers, footers, grand-summary rows. Each tag expands to an HTML
+     * <img src="/sfc/servlet.shepherd/version/download/<cvId>"> element referencing
+     * the Nth oldest image attached to this.recordId. Unlike row-level images, this
+     * emits HTML directly (the giant-query path builds HTML, not DOCX XML).
+     *
+     * Size grammar matches {%Image:N} elsewhere:
+     *   "200"     → max dimension, preserves aspect  (style="max-width:200px;max-height:200px")
+     *   "200x200" → explicit width × height
+     *   "200x"    → width only (auto height)
+     *   "x200"    → height only (auto width)
+     */
+    @TestVisible
+    private String resolveParentImageTags(String html) {
+        if (String.isBlank(html) || !html.containsIgnoreCase('{%image:')) return html;
+
+        Pattern p = Pattern.compile('\\{%[Ii]mage:(\\d+)(?::([^}]+))?\\}');
+        Matcher m = p.matcher(html);
+
+        List<String> cachedCvIds = null; // lazy — only query CDL if at least one tag is found
+        String result = '';
+        Integer last = 0;
+        while (m.find()) {
+            Integer n = Integer.valueOf(m.group(1));
+            String sizeToken = m.group(2);
+
+            if (cachedCvIds == null) {
+                cachedCvIds = new List<String>();
+                Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+                /* code-analyzer-suppress ApexFlsViolation */
+                for (ContentDocumentLink cdl : [
+                    SELECT ContentDocument.LatestPublishedVersionId
+                    FROM ContentDocumentLink
+                    WHERE LinkedEntityId = :recordId
+                      AND ContentDocument.FileExtension IN :imageExts
+                    WITH USER_MODE
+                    ORDER BY ContentDocument.CreatedDate ASC, ContentDocument.Id ASC
+                    LIMIT 50
+                ]) {
+                    cachedCvIds.add(String.valueOf(cdl.ContentDocument.LatestPublishedVersionId));
+                }
+            }
+
+            String replacement = '';
+            if (n >= 1 && cachedCvIds.size() >= n) {
+                replacement = buildParentImageHtml(cachedCvIds[n - 1], sizeToken);
+            }
+            result += html.substring(last, m.start()) + replacement;
+            last = m.end();
+        }
+        result += html.substring(last);
+        return result;
+    }
+
+    /**
+     * Builds an HTML <img> element for a ContentVersion ID with optional size token.
+     * Salesforce's Blob.toPdf() (Flying Saucer) resolves the relative /sfc/ URL natively.
+     */
+    private String buildParentImageHtml(String cvId, String sizeToken) {
+        String url = '/sfc/servlet.shepherd/version/download/' + cvId;
+        String style = '';
+        if (String.isNotBlank(sizeToken)) {
+            String t = sizeToken.trim().toLowerCase();
+            if (!t.contains('x')) {
+                if (t.isNumeric()) {
+                    Integer nv = Integer.valueOf(t);
+                    style = 'max-width:' + nv + 'px;max-height:' + nv + 'px;';
+                }
+            } else {
+                Integer xIdx = t.indexOf('x');
+                String w = t.substring(0, xIdx).trim();
+                String h = t.substring(xIdx + 1).trim();
+                if (String.isNotBlank(w) && w.isNumeric()) { style += 'width:' + w + 'px;'; }
+                if (String.isNotBlank(h) && h.isNumeric()) { style += 'height:' + h + 'px;'; }
+            }
+        }
+        return '<img src="' + url + '"' + (String.isBlank(style) ? '' : ' style="' + style + '"') + '/>';
     }
 
     /**

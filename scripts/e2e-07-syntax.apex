@@ -356,6 +356,22 @@ try {
     else { fail++; System.debug('NOW FORMATTED: FAIL — ' + r); }
 } catch (Exception e) { fail++; System.debug('NOW FORMATTED: FAIL — ' + e.getMessage()); }
 
+// ===== Textarea newline preserves run formatting (#32, fix by @raykeating) =====
+try {
+    r = DocGenService.processXmlForTest('<w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:t>{Desc}</w:t></w:r>', new Map<String, Object>{'Desc'=>'Line1\nLine2'});
+    Integer szCount = r.countMatches('<w:sz w:val="28"/>');
+    if (r.contains('w:br') && szCount >= 3 && r.contains('Line1') && r.contains('Line2')) { pass++; System.debug('TEXTAREA NEWLINE FMT: PASS'); }
+    else { fail++; System.debug('TEXTAREA NEWLINE FMT: FAIL — szCount=' + szCount + ' — ' + r); }
+} catch (Exception e) { fail++; System.debug('TEXTAREA NEWLINE FMT: FAIL — ' + e.getMessage()); }
+
+// ===== Textarea newline preserves RTL marker across breaks =====
+try {
+    r = DocGenService.processXmlForTest('<w:r><w:rPr><w:rtl/></w:rPr><w:t>{Desc}</w:t></w:r>', new Map<String, Object>{'Desc'=>'A\nB'});
+    Integer rtlCount = r.countMatches('<w:rtl/>');
+    if (r.contains('w:br') && rtlCount >= 3) { pass++; System.debug('TEXTAREA NEWLINE RTL: PASS'); }
+    else { fail++; System.debug('TEXTAREA NEWLINE RTL: FAIL — rtlCount=' + rtlCount); }
+} catch (Exception e) { fail++; System.debug('TEXTAREA NEWLINE RTL: FAIL — ' + e.getMessage()); }
+
 System.debug('========================================');
 System.debug('E2E-07 SYNTAX — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

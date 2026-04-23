@@ -6,6 +6,12 @@ public with sharing class DocGenService {
     private static String currentTemplateType = 'Word'; // Set before processXml calls
     private static String currentOutputFormat = 'Native'; // Set before processXml — PDF skips blob loading for images
 
+    // Per-transaction cache of record Id → ordered list of attached image CV IDs.
+    // Populated by prefetchImagesForIds() before loops that contain {%Image:N} tags,
+    // so in-loop image resolution is O(1) instead of one SOQL per iteration.
+    @TestVisible
+    private static Map<Id, List<String>> imageCvCache;
+
     // Thread-local storage for pre-loaded record data. When set, mergeTemplate
     // skips DocGenController.generateDocumentData() and uses this data instead. Cleared after each use.
     private static Map<String, Object> preloadedRecordDataOverride;
@@ -1917,6 +1923,17 @@ public with sharing class DocGenService {
                         Map<String, Object> mapVal = (Map<String, Object>) val;
                         if (mapVal.containsKey('records') && mapVal.get('records') instanceof List<Object>) {
                             List<Object> records = (List<Object>) mapVal.get('records');
+                            // Pre-fetch attached images for all iteration records if the loop body uses {%Image:N}
+                            if (loopBodyHasImageTag(trueBranch) && !records.isEmpty()) {
+                                Set<Id> loopIds = new Set<Id>();
+                                for (Object item : records) {
+                                    if (item instanceof Map<String, Object>) {
+                                        Object idVal = ((Map<String, Object>) item).get('Id');
+                                        if (idVal != null) { try { loopIds.add(Id.valueOf(String.valueOf(idVal))); } catch (Exception e) {} }
+                                    }
+                                }
+                                prefetchImagesForIds(loopIds);
+                            }
                             Integer iterCount = 0;
                             for (Object item : records) {
                                 if (item instanceof Map<String, Object>) {
@@ -1931,6 +1948,17 @@ public with sharing class DocGenService {
                     } else if (val instanceof List<Object>) {
                          List<Object> listVal = (List<Object>) val;
                          if (!listVal.isEmpty()) { isTruthy = true; }
+                         // Pre-fetch attached images for all iteration records if the loop body uses {%Image:N}
+                         if (loopBodyHasImageTag(trueBranch) && !listVal.isEmpty()) {
+                             Set<Id> loopIds = new Set<Id>();
+                             for (Object item : listVal) {
+                                 if (item instanceof Map<String, Object>) {
+                                     Object idVal = ((Map<String, Object>) item).get('Id');
+                                     if (idVal != null) { try { loopIds.add(Id.valueOf(String.valueOf(idVal))); } catch (Exception e) {} }
+                                 }
+                             }
+                             prefetchImagesForIds(loopIds);
+                         }
                          Integer iterCount = 0;
                          for (Object item : listVal) {
                               if (item instanceof Map<String, Object>) { sectionResult += processXml(trueBranch, (Map<String, Object>) item); }
@@ -1991,13 +2019,29 @@ public with sharing class DocGenService {
                 output += '{' + rawTag + '}';
                 cursor = tagClose + 1;
             } else if (tagContent.startsWith('%')) {
-                // Image tag: {%FieldName} or {%FieldName:WxH}
+                // Image tag: {%FieldName} or {%FieldName:WxH} or {%Image:N} or {%Image:N:SIZE}
                 // PowerPoint: skip image injection (Word-specific DrawingML corrupts PPTX)
                 if (currentTemplateType == 'PowerPoint') {
                     cursor = tagClose + 1;
                     continue;
                 }
                 String imageTagSpec = tagContent.substring(1).trim();
+
+                // Positional record-attached-image tag: {%Image:N} or {%Image:N:SIZE}
+                // Renders the Nth oldest image (PNG/JPG/GIF/SVG/WEBP) attached to the current record.
+                String imageTagHead = imageTagSpec.contains(':') ? imageTagSpec.substringBefore(':').trim() : imageTagSpec.trim();
+                if ('Image'.equalsIgnoreCase(imageTagHead)) {
+                    ImageRenderSpec indexedSpec = resolveImageByIndexTag(imageTagSpec, data);
+                    if (indexedSpec != null && String.isNotBlank(indexedSpec.fieldValue)) {
+                        String imageXml = buildImageXml(indexedSpec);
+                        if (imageXml != null) {
+                            output += imageXml;
+                        }
+                    }
+                    cursor = tagClose + 1;
+                    continue;
+                }
+
                 ImageRenderSpec imageRenderSpec = parseImageTagSpec(imageTagSpec);
                 Object val = resolveValue(data, imageRenderSpec.imageField);
                 if (val != null) {
@@ -2106,8 +2150,10 @@ public with sharing class DocGenService {
                         if (currentTemplateType == 'PowerPoint') {
                             output += strVal.escapeXml();
                         } else {
-                            // Multiline support: convert newlines to Word line breaks
-                            output += convertMultilineToXml(strVal);
+                            // Carry forward run properties (font, size, bold, etc.) so formatting
+                            // is preserved across line breaks in textarea fields (#32)
+                            String rPr = extractCurrentRunProperties(output);
+                            output += convertMultilineToXml(strVal, rPr);
                         }
                     }
                 }
@@ -2218,8 +2264,9 @@ public with sharing class DocGenService {
     /**
      * Converts a text value with newlines to Word XML with <w:br/> line breaks.
      * Properly closes and reopens <w:r> runs around each break for valid OOXML.
+     * Carries forward run properties (rPr) so formatting is preserved across breaks.
      */
-    private static String convertMultilineToXml(String inputText) {
+    private static String convertMultilineToXml(String inputText, String rPr) {
         if (inputText == null) {
             return '';
         }
@@ -2229,7 +2276,8 @@ public with sharing class DocGenService {
         }
         List<String> lines = normalized.split('\n');
         String result = '';
-        String lineBreakXml = '</w:t></w:r><w:r><w:br/></w:r><w:r><w:t xml:space="preserve">';
+        String rPrXml = String.isNotBlank(rPr) ? rPr : '';
+        String lineBreakXml = '</w:t></w:r><w:r>' + rPrXml + '<w:br/></w:r><w:r>' + rPrXml + '<w:t xml:space="preserve">';
         for (Integer i = 0; i < lines.size(); i++) {
             if (i > 0) {
                 result += lineBreakXml;
@@ -2237,6 +2285,42 @@ public with sharing class DocGenService {
             result += lines[i].escapeXml();
         }
         return result;
+    }
+
+    /**
+     * Extracts the <w:rPr>...</w:rPr> block from the current open <w:r> run in the output.
+     * Returns empty string if no run properties found.
+     */
+    @TestVisible
+    private static String extractCurrentRunProperties(String output) {
+        if (String.isBlank(output)) {
+            return '';
+        }
+        // Find the last <w:r> or <w:r > opening (start of current run)
+        Integer lastRunOpen = output.lastIndexOf('<w:r>');
+        Integer lastRunOpenAttr = output.lastIndexOf('<w:r ');
+        Integer runStart = Math.max(lastRunOpen != null ? lastRunOpen : -1, lastRunOpenAttr != null ? lastRunOpenAttr : -1);
+        if (runStart < 0) {
+            return '';
+        }
+        // If there's a </w:r> after this opening, we're not inside an open run
+        Integer lastRunClose = output.lastIndexOf('</w:r>');
+        if (lastRunClose != null && lastRunClose > runStart) {
+            return '';
+        }
+        // Find <w:rPr>...</w:rPr> within this run
+        Integer rPrStart = output.indexOf('<w:rPr>', runStart);
+        if (rPrStart < 0) {
+            rPrStart = output.indexOf('<w:rPr ', runStart);
+        }
+        if (rPrStart < 0) {
+            return '';
+        }
+        Integer rPrEnd = output.indexOf('</w:rPr>', rPrStart);
+        if (rPrEnd < 0) {
+            return '';
+        }
+        return output.substring(rPrStart, rPrEnd + 8);
     }
 
     private static Object resolveValue(Map<String, Object> data, String path) {
@@ -3357,6 +3441,158 @@ public with sharing class DocGenService {
         } catch (Exception e) {
             // Image injection failed (invalid CV ID, corrupt base64, etc.) — skip this image
             return null;
+        }
+    }
+
+    /**
+     * Resolves a {%Image:N} or {%Image:N:SIZE} tag.
+     * Queries ContentDocumentLink for images attached to the current record,
+     * picks the Nth oldest, and returns an ImageRenderSpec ready for buildImageXml.
+     * Returns null silently if the record has fewer than N images (empty render).
+     *
+     * Size grammar (SIZE segment, optional):
+     *   "200"     → max dimension, preserves aspect
+     *   "200x200" → explicit width × height
+     *   "200x"    → width only, auto height
+     *   "x200"    → auto width, height only
+     */
+    @TestVisible
+    private static ImageRenderSpec resolveImageByIndexTag(String imageTagSpec, Map<String, Object> data) {
+        if (String.isBlank(imageTagSpec)) return null;
+        List<String> parts = imageTagSpec.split(':');
+        if (parts.size() < 2) return null;
+        String indexToken = parts[1].trim();
+        if (!indexToken.isNumeric()) return null;
+        Integer n = Integer.valueOf(indexToken);
+        if (n < 1) return null;
+
+        Object recordIdVal = data != null ? data.get('Id') : null;
+        if (recordIdVal == null) return null;
+        Id recordId;
+        try { recordId = Id.valueOf(String.valueOf(recordIdVal)); } catch (Exception e) { return null; }
+
+        String cvId = resolveImageCvIdByIndex(n, recordId);
+        if (String.isBlank(cvId)) return null;
+
+        ImageRenderSpec spec = new ImageRenderSpec();
+        spec.imageField = 'Image:' + n;
+        spec.fieldValue = cvId;
+
+        if (parts.size() >= 3) {
+            applyImageSizeToken(spec, parts[2].trim());
+        }
+        return spec;
+    }
+
+    /**
+     * Resolves the Nth ContentVersion ID from the per-transaction cache,
+     * or falls back to a single-record SOQL query if the record isn't cached.
+     * Returns null if the record has fewer than N image attachments.
+     */
+    @TestVisible
+    private static String resolveImageCvIdByIndex(Integer n, Id recordId) {
+        if (n == null || n < 1 || recordId == null) return null;
+
+        if (imageCvCache != null && imageCvCache.containsKey(recordId)) {
+            List<String> cached = imageCvCache.get(recordId);
+            if (cached == null || cached.size() < n) return null;
+            return cached[n - 1];
+        }
+
+        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+        List<ContentDocumentLink> cdls = [
+            SELECT ContentDocument.LatestPublishedVersionId
+            FROM ContentDocumentLink
+            WHERE LinkedEntityId = :recordId
+              AND ContentDocument.FileExtension IN :imageExts
+            WITH USER_MODE
+            ORDER BY ContentDocument.CreatedDate ASC, ContentDocument.Id ASC
+            LIMIT 50
+        ];
+        if (cdls.size() < n) return null;
+        return String.valueOf(cdls[n - 1].ContentDocument.LatestPublishedVersionId);
+    }
+
+    /**
+     * Bulk-fetches attached image CVs for a set of record Ids in ONE SOQL query
+     * and caches the results keyed by LinkedEntityId. Called before a loop body
+     * that contains {%Image:N} tags, so per-iteration resolution is O(1).
+     *
+     * ContentDocumentLink polymorphic-IN restriction: all IDs must be the same
+     * sObject type. Callers enforce this by passing iteration IDs from a single
+     * {#Relationship} loop, which always yields one type per loop.
+     */
+    @TestVisible
+    private static void prefetchImagesForIds(Set<Id> recordIds) {
+        if (recordIds == null || recordIds.isEmpty()) return;
+        if (imageCvCache == null) imageCvCache = new Map<Id, List<String>>();
+
+        Set<Id> toFetch = new Set<Id>();
+        for (Id rid : recordIds) {
+            if (rid != null && !imageCvCache.containsKey(rid)) toFetch.add(rid);
+        }
+        if (toFetch.isEmpty()) return;
+
+        // Seed cache with empty lists so records with zero images don't re-query on cache miss
+        for (Id rid : toFetch) {
+            imageCvCache.put(rid, new List<String>());
+        }
+
+        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+        List<ContentDocumentLink> cdls = [
+            SELECT LinkedEntityId, ContentDocument.LatestPublishedVersionId
+            FROM ContentDocumentLink
+            WHERE LinkedEntityId IN :toFetch
+              AND ContentDocument.FileExtension IN :imageExts
+            WITH USER_MODE
+            ORDER BY ContentDocument.CreatedDate ASC, ContentDocument.Id ASC
+        ];
+        for (ContentDocumentLink cdl : cdls) {
+            List<String> bucket = imageCvCache.get(cdl.LinkedEntityId);
+            if (bucket != null) {
+                bucket.add(String.valueOf(cdl.ContentDocument.LatestPublishedVersionId));
+            }
+        }
+    }
+
+    /**
+     * Returns true if the given XML contains a {%Image:...} tag — used to decide
+     * whether to pre-fetch attachments for an upcoming loop body.
+     */
+    @TestVisible
+    private static Boolean loopBodyHasImageTag(String innerXml) {
+        if (String.isBlank(innerXml)) return false;
+        String lower = innerXml.toLowerCase();
+        return lower.contains('{%image:');
+    }
+
+    /**
+     * Applies {%Image:N:SIZE} size token to an ImageRenderSpec.
+     *   single number   → max dimension (preserves aspect)
+     *   WxH             → explicit width × height
+     *   Wx              → width only, auto height
+     *   xH              → auto width, height only
+     */
+    @TestVisible
+    private static void applyImageSizeToken(ImageRenderSpec spec, String sizeToken) {
+        if (spec == null || String.isBlank(sizeToken)) return;
+        String t = sizeToken.trim().toLowerCase();
+        if (!t.contains('x')) {
+            if (t.isNumeric()) {
+                Integer nVal = Integer.valueOf(t);
+                spec.maxWidthPx = nVal;
+                spec.maxHeightPx = nVal;
+            }
+            return;
+        }
+        Integer xIdx = t.indexOf('x');
+        String w = t.substring(0, xIdx).trim();
+        String h = t.substring(xIdx + 1).trim();
+        if (!String.isBlank(w) && w.isNumeric()) {
+            spec.widthPx = Integer.valueOf(w);
+        }
+        if (!String.isBlank(h) && h.isNumeric()) {
+            spec.heightPx = Integer.valueOf(h);
         }
     }
 
