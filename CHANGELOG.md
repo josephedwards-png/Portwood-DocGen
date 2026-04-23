@@ -2,6 +2,9 @@
 
 ## v1.57.0 — `{%Image:N}` record-attached images, textarea newline fix, mobile signing pinch-zoom
 
+Promoted package: `04tal000006lplBAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lplBAAQ)
+Upgrade-safety validator: passed. v1.56.x subscribers can install directly.
+
 The headline feature is a merge tag that makes images intuitive: drag a photo onto any record, write `{%Image:1}` in your template, and it renders. No ContentVersion ID field, no query-builder setup, no lookup. Plus three community bug fixes and a signing UX rework for mobile.
 
 ### New: `{%Image:N}` — record-attached images
