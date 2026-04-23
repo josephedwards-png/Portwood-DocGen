@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.60.0 — Correct image extension filter for `{%Image:N}`
+
+Promoted package: **TBD** · Install URL: **TBD**
+Upgrade-safety validator: passed. v1.59.x subscribers can install directly.
+
+Tightens the extension filter used by `{%Image:N}`, the giant-query parent resolver, and the 30 MB save-to-record pre-flight. v1.59's filter included `webp` (which Salesforce's Flying Saucer PDF engine does not support — Salesforce doesn't include the twelvemonkeys imageio plugin that handles it) and excluded `bmp` + `tif`/`tiff` (both are renderable by the JDK's native ImageIO).
+
+**Before (v1.59.0):** `png`, `jpg`, `jpeg`, `gif`, `svg`, `webp`
+**After (v1.60.0):** `png`, `jpg`, `jpeg`, `gif`, `bmp`, `tif`, `tiff`, `svg`
+
+Effect on subscribers:
+- **BMP / TIFF attachments** on a record are now picked up by `{%Image:N}` and included in the 30 MB save-to-record size calculation.
+- **WebP attachments** are no longer reported as image attachments by DocGen — previously they'd be fetched but render as broken images in the PDF because Flying Saucer can't decode them. The scout's size count is now accurate for what will actually render.
+
+Docs (Learning Center, UserGuide, website guide) updated to list the new extension set.
+
+No other changes in v1.60.0.
+
+---
+
 ## v1.59.0 — Image aspect/rotation preservation, async Save-to-Record, 30 MB pre-flight
 
 Promoted package: `04tal000006lrDVAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lrDVAAY)
@@ -22,7 +42,7 @@ The LWC now routes Save-to-Record through this async path for PDFs. User sees an
 
 ### Pre-flight 30 MB image-size check
 
-Rather than letting Save-to-Record fail silently inside the Queueable when the record has too many/too-large attachments, the LWC now calls `DocGenController.scoutAttachedImageSize(recordId)` before enqueueing. If total PNG/JPG/GIF/SVG/WEBP attachment size exceeds **30 MB**, the user gets a sticky error toast:
+Rather than letting Save-to-Record fail silently inside the Queueable when the record has too many/too-large attachments, the LWC now calls `DocGenController.scoutAttachedImageSize(recordId)` before enqueueing. If total PNG/JPG/GIF/BMP/TIFF/SVG attachment size exceeds **30 MB**, the user gets a sticky error toast:
 
 > _"Cannot Save to Record. This record has 35.2 MB of attached images — above the 30 MB Save-to-Record limit. Use Download instead (no size limit), or remove some images and try again."_
 
@@ -51,7 +71,7 @@ The headline feature is a merge tag that makes images intuitive: drag a photo on
 
 ### New: `{%Image:N}` — record-attached images
 
-`{%Image:N}` renders the Nth oldest image (PNG/JPG/GIF/SVG/WEBP) attached to the current record. Non-image attachments are silently skipped so a PDF contract mixed in with photos won't break rendering.
+`{%Image:N}` renders the Nth oldest image (PNG/JPG/GIF/BMP/TIFF/SVG) attached to the current record. Non-image attachments are silently skipped so a PDF contract mixed in with photos won't break rendering.
 
 ```
 {%Image:1}                First image attached to the record, natural size

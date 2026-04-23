@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.59.0 — Image aspect/rotation, async Save-to-Record, 30MB pre-flight",
-      "versionNumber": "1.59.0.NEXT",
-      "ancestorId": "04tal000006lpoPAAQ",
+      "versionName": "1.60.0 — Correct image extension filter (add BMP/TIFF, drop WebP)",
+      "versionNumber": "1.60.0.NEXT",
+      "ancestorId": "04tal000006lrDVAAY",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",

@@ -480,7 +480,7 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
             if (cachedCvIds == null) {
                 cachedCvIds = new List<String>();
-                Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+                Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
                 /* code-analyzer-suppress ApexFlsViolation */
                 for (ContentDocumentLink cdl : [
                     SELECT ContentDocument.LatestPublishedVersionId

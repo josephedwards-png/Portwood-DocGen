@@ -2028,7 +2028,7 @@ public with sharing class DocGenService {
                 String imageTagSpec = tagContent.substring(1).trim();
 
                 // Positional record-attached-image tag: {%Image:N} or {%Image:N:SIZE}
-                // Renders the Nth oldest image (PNG/JPG/GIF/SVG/WEBP) attached to the current record.
+                // Renders the Nth oldest image (PNG/JPG/GIF/BMP/TIFF/SVG) attached to the current record.
                 String imageTagHead = imageTagSpec.contains(':') ? imageTagSpec.substringBefore(':').trim() : imageTagSpec.trim();
                 if ('Image'.equalsIgnoreCase(imageTagHead)) {
                     ImageRenderSpec indexedSpec = resolveImageByIndexTag(imageTagSpec, data);
@@ -3499,7 +3499,7 @@ public with sharing class DocGenService {
             return cached[n - 1];
         }
 
-        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
         List<ContentDocumentLink> cdls = [
             SELECT ContentDocument.LatestPublishedVersionId
             FROM ContentDocumentLink
@@ -3538,7 +3538,7 @@ public with sharing class DocGenService {
             imageCvCache.put(rid, new List<String>());
         }
 
-        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','svg','webp'};
+        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
         List<ContentDocumentLink> cdls = [
             SELECT LinkedEntityId, ContentDocument.LatestPublishedVersionId
             FROM ContentDocumentLink

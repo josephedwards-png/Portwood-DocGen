@@ -361,7 +361,7 @@ All five functions support any format suffix (`currency`, `number`, `percent`, c
 
 ### 6.6 Images
 
-**Option 1 — record-attached (easiest, v1.58+).** `{%Image:N}` renders the Nth oldest image attached to the current record. No ContentVersion ID field, no query-builder setup — drag a photo onto the record in Files and the tag picks it up. Filters to PNG/JPG/GIF/SVG/WEBP automatically (non-image attachments are skipped).
+**Option 1 — record-attached (easiest, v1.58+).** `{%Image:N}` renders the Nth oldest image attached to the current record. No ContentVersion ID field, no query-builder setup — drag a photo onto the record in Files and the tag picks it up. Filters to PNG/JPG/GIF/BMP/TIFF/SVG automatically (non-image attachments are skipped).
 
 ```
 {%Image:1}                First image attached to the record, natural size

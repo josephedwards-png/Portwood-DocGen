@@ -1510,7 +1510,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
      * user if they're about to exceed the ~30MB ceiling, rather than failing
      * silently inside the Queueable.
      *
-     * Filters to PNG/JPG/GIF/SVG/WEBP so non-image attachments don't inflate the count.
+     * Filters to PNG/JPG/GIF/BMP/TIFF/SVG so non-image attachments don't inflate the count.
      */
     @AuraEnabled(cacheable=true)
     public static Long scoutAttachedImageSize(Id recordId) {
@@ -1520,7 +1520,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 SELECT SUM(ContentDocument.ContentSize) totalSize
                 FROM ContentDocumentLink
                 WHERE LinkedEntityId = :recordId
-                  AND ContentDocument.FileExtension IN ('png','jpg','jpeg','gif','svg','webp')
+                  AND ContentDocument.FileExtension IN ('png','jpg','jpeg','gif','bmp','tif','tiff','svg')
                 WITH USER_MODE
             ];
             if (results.isEmpty()) return 0L;
