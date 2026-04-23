@@ -1,9 +1,9 @@
 # Changelog
 
-## v1.57.0 — `{%Image:N}` record-attached images, textarea newline fix, mobile signing pinch-zoom
+## v1.58.0 — `{%Image:N}` record-attached images, textarea newline fix, mobile signing pinch-zoom
 
-Promoted package: `04tal000006lplBAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lplBAAQ)
-Upgrade-safety validator: passed. v1.56.x subscribers can install directly.
+Promoted package: **TBD** · Install URL: **TBD**
+Supersedes v1.57.0, which failed its install validator because the attempted `docGenTreeBuilder` `isExposed=true → false` change violated the managed-package upgrade rule (once a component is exposed to subscribers, you can't un-expose it in an upgrade). v1.58.0 reverts that specific change — the tree-builder component stays exposed — and ships the rest of v1.57.0 intact. v1.56.x subscribers can install v1.58.0 directly; no one successfully installed v1.57.0, so there is no v1.57 → v1.58 upgrade path to worry about.
 
 The headline feature is a merge tag that makes images intuitive: drag a photo onto any record, write `{%Image:1}` in your template, and it renders. No ContentVersion ID field, no query-builder setup, no lookup. Plus three community bug fixes and a signing UX rework for mobile.
 
@@ -41,10 +41,6 @@ Multi-line textarea fields were losing their run formatting (font, size, bold, i
 ### Fixed: `#34` — `DocGenDataProvider` interface must be `global`
 
 The Apex Provider feature (V4 query config) was completely unusable in subscriber orgs: the `DocGenDataProvider` interface was declared `public`, which makes it package-private after install. Subscribers trying to implement `portwoodglobal.DocGenDataProvider` got `Type is not visible`. Changed to `global`, unblocks the feature for all installed orgs.
-
-### Fixed: `#30` — `docGenTreeBuilder` didn't load when dropped on a page
-
-The tree builder is an internal helper for the `docGenAdmin` template wizard — it requires a parent-supplied `@api selectedObject` property that Lightning App Builder can't configure. But its manifest exposed it to App / Record / Home pages anyway, so admins who dragged it onto a page got a permanent "Loading schema…" spinner. Set `isExposed=false`. Admins access tree-building through the template wizard instead.
 
 ### Mobile signing UX — pinch-to-zoom instead of forced shrink
 

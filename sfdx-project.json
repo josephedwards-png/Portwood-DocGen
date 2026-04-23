@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.57.0 — {%Image:N} record-attached images + textarea newline fix + mobile signing",
-      "versionNumber": "1.57.0.NEXT",
-      "ancestorId": "04tal000006i1rNAAQ",
+      "versionName": "1.58.0 — {%Image:N} record-attached images + textarea newline fix + mobile signing (supersedes broken v1.57.0)",
+      "versionNumber": "1.58.0.NEXT",
+      "ancestorId": "04tal000006lplBAAQ",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
