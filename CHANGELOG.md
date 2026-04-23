@@ -2,7 +2,7 @@
 
 ## v1.59.0 — Image aspect/rotation preservation, async Save-to-Record, 30 MB pre-flight
 
-Promoted package: **TBD** · Install URL: **TBD**
+Promoted package: `04tal000006lrDVAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lrDVAAY)
 Upgrade-safety validator: passed. v1.58.x subscribers can install directly.
 
 Three related changes that together make image-heavy PDF generation actually usable in the field — portrait phone photos render correctly, large documents save to records without silent failure, and the UI warns up-front if the attachment size exceeds the platform ceiling.
