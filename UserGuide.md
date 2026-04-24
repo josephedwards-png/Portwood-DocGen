@@ -21,6 +21,7 @@
 8. [Bulk generation](#8-bulk-generation)
 9. [E-signatures (v3)](#9-e-signatures-v3)
 10. [Flow automation](#10-flow-automation)
+10A. [Apex API reference (programmatic access)](#10a-apex-api-reference-programmatic-access)
 11. [Heap-aware routing (how big datasets are handled)](#11-heap-aware-routing-how-big-datasets-are-handled)
 12. [Admin & settings](#12-admin--settings)
 13. [Limits & known constraints](#13-limits--known-constraints)
@@ -33,7 +34,7 @@
 Portwood DocGen is a native Salesforce document generation engine. It merges Salesforce record data into Word and PowerPoint templates to produce PDF, DOCX, PPTX, or XLSX files. It runs 100% inside Salesforce — no external services, no API callouts, no session ID leakage.
 
 **Capabilities at a glance**
-- Word/PowerPoint/Excel templates with `{FieldName}` merge tags
+- Word, HTML, PowerPoint, Excel templates with `{FieldName}` merge tags
 - Multi-object query builder (any depth — Opportunity → Line Items → Product → Pricebook)
 - Child record loops (tables, bulleted lists), aggregates (SUM/COUNT/AVG/MIN/MAX), conditionals, comparisons
 - Locale-aware currency/number/date formatting (35+ currencies, 25+ locales)
@@ -84,15 +85,16 @@ Three permission sets ship with the package. Assign what each user needs.
 ### 4.1 Creating a template
 
 1. Open the DocGen app → **My Templates** tab → **+ New Template**.
-2. Pick a template type: **Word** (`.docx`), **PowerPoint** (`.pptx`), or **Excel** (`.xlsx`).
+2. Pick a template type: **Word** (`.docx`), **HTML** (`.html` / `.htm` / `.zip`), **PowerPoint** (`.pptx`), or **Excel** (`.xlsx`).
 3. Pick a base object (Account, Opportunity, Case, any custom object).
-4. Upload your Word/PowerPoint/Excel file containing `{FieldName}` merge tags.
+4. Upload your file containing `{FieldName}` merge tags.
 5. Configure the query — which fields, which child relationships (see [§5](#5-query-builder)).
 6. Choose the default **output format** (PDF or the native format).
 7. Save.
 
 **Output formats by template type:**
 - Word (`.docx`) template → output PDF or DOCX
+- HTML (`.html` / `.htm` / `.zip`) template → output PDF only (see [§4.7](#47-html-templates-google-docs-notion-any-html-source))
 - PowerPoint (`.pptx`) template → output PPTX only (PowerPoint→PDF is not supported by the Salesforce platform)
 - Excel (`.xlsx`) template → output XLSX only
 
@@ -127,6 +129,103 @@ These can be combined. All three must match for the template to appear.
 ### 4.6 Template sharing
 
 Template access uses **standard Salesforce sharing** — sharing rules, manual sharing, and role hierarchy. Field-level security is enforced on the merged data too. There's no custom sharing UI; if you want to restrict who *sees* a template in the picker, use the visibility controls in §4.5 instead.
+
+### 4.7 HTML templates (Google Docs, Notion, any HTML source)
+
+Shipped in **v1.61**. HTML templates let you author in any tool that produces HTML — Google Docs is the flagship workflow — and render to PDF. Every merge tag that works in Word templates works identically: `{Name}`, loops, conditionals, aggregates, images, `{Today}`, `{Now}`, `{%Image:N}`, etc.
+
+**Why:** Word templates lock authors into Microsoft Word. HTML templates let content teams design where they already work (Google Docs, Notion, ChatGPT, Apple Pages, any rich-text editor that emits HTML). Merge engine is the same; authoring surface is wide open.
+
+#### 4.7.1 Authoring in Google Docs
+
+1. Design the document in Google Docs. Normal formatting — headings, tables, images, colors, fonts.
+2. Add merge tags as plain text: `{Name}`, `{Account.Name}`, `{Amount:currency}`, loops like `{#Contacts}...{/Contacts}`. Full syntax reference in [§6](#6-merge-tag-reference).
+3. **File → Download → Web Page (.html, zipped)**. Google Docs produces a `.zip` with your HTML plus an `images/` folder.
+4. In the Command Hub, create a template with **Type = HTML** (Output Format is forced to PDF). Upload the `.zip`.
+5. DocGen unzips the file in your browser, saves each image as a ContentVersion linked to the template, and rewrites the HTML's `<img src="images/...">` references to `/sfc/servlet.shepherd/version/download/<cvId>` URLs that `Blob.toPdf` resolves natively.
+6. Click **Save as New Version** — the template is live.
+
+**Why unzip in the browser?** Salesforce's default File Upload Security blocks `.zip` uploads. DocGen's LWC reads zip bytes with a pure-JavaScript reader (native `DecompressionStream` + manual central-directory parse, zero dependencies), extracts just the HTML + images, and uploads those via Apex. The zip itself never becomes a ContentVersion, so the org setting never sees it. Bonus: unzipping client-side keeps Apex heap flat regardless of template size.
+
+#### 4.7.2 Other authoring tools
+
+- **Notion / Confluence** — export page as HTML
+- **ChatGPT / Claude** — ask for HTML, save to a `.html` file
+- **Apple Pages** — File → Export To → HTML
+- **Hand-written HTML** — any text editor
+
+For single-file uploads (`.html` / `.htm`), DocGen scans for inline `<img src="data:image/...">` URIs — common in Notion / ChatGPT / rich-text paste output — and extracts each to a ContentVersion with the `src` rewritten. `Blob.toPdf` can't decode data URIs directly, so this conversion is what makes those images render.
+
+#### 4.7.3 Header / Footer fields
+
+HTML templates gain two optional fields on a dedicated **Header / Footer** tab in the template edit modal:
+
+- `Header_Html__c` — rendered in the top page margin of every PDF page
+- `Footer_Html__c` — rendered in the bottom page margin of every PDF page
+
+Each field has a WYSIWYG rich-text editor with a **Show HTML** / **Show Editor** toggle that flips to a monospace textarea showing the raw HTML (for image widths, inline styles, or any markup the rich editor can't expose). Every merge tag that works in the body works in these fields.
+
+#### 4.7.4 Page numbers
+
+Put `{PageNumber}` and `{TotalPages}` in the Header HTML or Footer HTML field. These compile to Flying Saucer CSS page counters inside the PDF's `@page` margin boxes — "Page 3 of 17" renders correctly on every page automatically.
+
+Example footer HTML:
+
+```html
+<div style="text-align:center; font-size:9pt; color:#888;">
+  Page {PageNumber} of {TotalPages}
+</div>
+```
+
+**Flying Saucer limitation:** page counters only resolve inside `@page` rules, not on DOM elements. When a header/footer contains counter tokens, DocGen renders that margin as plain text (no inline images or rich formatting). A header *without* counters stays rich HTML via CSS running elements. Practical workaround: logo in the header (no counters), page count in the footer (counters only). Both fields can be populated simultaneously.
+
+#### 4.7.5 Images
+
+Three ways to get images into an HTML template:
+
+1. **Google Docs zip** — images inserted in the Google Doc are bundled into the `.zip` and extracted automatically on upload.
+2. **Inline data URIs** — `<img src="data:image/png;base64,...">` in the HTML (Notion / ChatGPT / pasted rich text) is scanned on upload; each is saved as its own ContentVersion and the `src` is rewritten.
+3. **`{%Image:N}` / `{%FieldName}` merge tags** — same syntax as Word templates. Renders the Nth record-attached image, or a ContentVersion ID stored in a field. Emits `<img src="/sfc/...">` at merge time.
+
+#### 4.7.6 Loops in tables
+
+Loop auto-expansion works the same as Word. Either pattern produces one repeated row per record:
+
+```html
+<table>
+  <thead><tr><th>Product</th><th>Amount</th></tr></thead>
+  <tbody>
+    <!-- Pattern A: loop wraps the row -->
+    {#OpportunityLineItems}
+    <tr><td>{Product2.Name}</td><td>{TotalPrice:currency}</td></tr>
+    {/OpportunityLineItems}
+
+    <!-- Pattern B: loop inside the row (DocGen expands to the <tr>) -->
+    <tr>{#OpportunityLineItems}<td>{Product2.Name}</td>{/OpportunityLineItems}</tr>
+  </tbody>
+</table>
+```
+
+`<li>` list items auto-expand the same way.
+
+#### 4.7.7 Bulk generation + Giant Query
+
+HTML templates work with every generation path: single-record, bulk (individual PDFs or merged), and Giant Query (60K+ row child relationships via batched rendering). Same 12 MB Queueable heap envelope, same 50,000-row batch ceiling, same Flow action.
+
+#### 4.7.8 Known limitations
+
+- **Barcodes / QR codes** — `{*Field:qr}` etc. are Word-only today; in HTML templates the tag falls back to plain text. On the roadmap.
+- **DOCX output** — not applicable. HTML templates are PDF-only.
+- **Signatures** — `{@Signature_Role}` flows haven't been validated against HTML templates yet. Use Word templates if you need signatures today.
+- **Page counters + rich header/footer content** — see §4.7.4. Flying Saucer flattens the margin to text when counters are present.
+
+#### 4.7.9 Troubleshooting
+
+- **"Your company doesn't support the following file types: .zip"** — DocGen's LWC extracts the zip client-side and never uploads the zip itself, so this org-level File Upload Security error shouldn't appear in normal use. If you see it, hard-refresh the page (Cmd+Shift+R / Ctrl+Shift+R) to clear any cached LWC bundle.
+- **Images show as broken squares in the PDF** — `Blob.toPdf` can only fetch images via relative `/sfc/` URLs; it can't reach arbitrary HTTPS URLs (no session ID). Make sure the image source is in the zip, a data URI in the HTML, a `{%Image:N}` tag, or a `{%FieldName}` pointing at a real ContentVersion.
+- **Page numbers appearing without a configured header/footer** — your template's source HTML already has `@page { @bottom-center { content: counter(page) ... } }`. Google Docs' Web Page export sometimes includes this automatically. Either remove the `@page` block from the HTML body before upload, or accept it (many users actually want page numbers).
+- **Bulk merge PDF is blank or cut off** — fixed in v1.62.0. v1.61.0 had a bug concatenating multiple full-HTML snippets that caused Flying Saucer to abandon rendering after the first few records. Upgrade the package.
+- **Merge tag shows up literally in the PDF (e.g. the text "{Name}")** — the tag didn't resolve. Check the field name is correct and in your Query Config, and that the WYSIWYG editor didn't HTML-encode the braces (DocGen decodes `&#123;` and `&#125;` automatically, but non-standard editors could still trip this).
 
 ---
 
@@ -685,6 +784,120 @@ Auto-detect giant-query mode from a Flow.
 - **Outputs**: ContentDocumentId (if sync), Job ID (if giant), `isGiantQuery` flag, success flag.
 
 Use when the dataset size is unknown at Flow-design time (customer portal, screen Flow). The action scouts child counts and routes automatically.
+
+---
+
+## 10A. Apex API reference (programmatic access)
+
+Call DocGen from your own Apex code, triggers, scheduled jobs, or Lightning components. All classes are global in the managed package namespace `portwoodglobal`, so subscribers prefix as `portwoodglobal.DocGenService` from their own code.
+
+> Backwards compatibility: methods below are published as stable global entry points. New optional overloads may be added in future releases; existing signatures will not be removed without a major version bump and a deprecation notice.
+
+### 10A.1 `DocGenService` — synchronous generation
+
+Primary entry point from Apex. Use from triggers, scheduled Apex, or other service classes.
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `generateDocument(Id templateId, Id recordId)` | `Id` (ContentDocumentId) | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format. |
+| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)` | `Id` | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination. |
+| `generatePdfBlob(Id templateId, Id recordId)` | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system. |
+| `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)` | `Id` | Same as generateDocument but skips the per-record data query. Used internally by the bulk batch; call if you're building a custom bulk loop. |
+| `renderPreviewHtml(Id templateId, Id recordId)` | `String` (HTML) | The merged HTML that would go into `Blob.toPdf`. Useful for preview panes, email body, or custom rendering. |
+
+```apex
+// Example: trigger PDF generation from an approval process
+Id contentDocId = portwoodglobal.DocGenService.generateDocument(
+    'a0zXXXXXXXXXXXXX',   // template ID
+    accountId,            // record ID
+    'PDF'                 // force PDF regardless of template setting
+);
+```
+
+### 10A.2 `DocGenController` — LWC / Aura endpoints
+
+All methods are `@AuraEnabled` so you can call them from your own LWC / Aura components. Use the full path from LWC:
+```js
+import generatePdf from '@salesforce/apex/portwoodglobal.DocGenController.generatePdf';
+```
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `generatePdf(Id templateId, Id recordId, Boolean saveToRecord)` | `Map<String,Object>` (`base64`, `contentDocumentId`, `title`) | LWC-friendly PDF generation. `saveToRecord=true` attaches, `false` returns base64 only. |
+| `generatePdfAsync(Id templateId, Id recordId)` | `Id` (AsyncApexJob Id) | Enqueues a Queueable for large PDFs (>~15 MB) that exceed the sync Aura timeout. Client polls. |
+| `generateDocumentGiantQuery(Id templateId, Id recordId)` | `Map<String,Object>` (`isGiantQuery`, `jobId` OR `docId` + `contentVersionId`) | Auto-routes: small child counts go sync, >2000 rows spawn a batched Giant Query job. |
+| `saveTemplate(Map<String,Object> fields, Boolean createVersion, String contentVersionId)` | `void` | Programmatic template save. Fields: Id, Name, Type__c, Base_Object_API__c, Query_Config__c, Header_Html__c, Footer_Html__c, etc. |
+| `getAllTemplates()` | `List<DocGen_Template__c>` | Every template in the org (cacheable). |
+| `getTemplatesForObject(String objectApiName)` | `List<DocGen_Template__c>` | Audience-filtered list. Applies `Required_Permission_Sets__c` and static `Record_Filter__c`. |
+| `getTemplatesForObjectAndRecord(String objectApiName, String recordId)` | `List<DocGen_Template__c>` | Above plus per-record filter evaluation (`Specific_Record_Ids__c`, runtime `Record_Filter__c`). |
+| `saveHtmlTemplateImage(Id templateId, String fileName, String base64Content)` | `Map<String,Object>` (`contentVersionId`, `url`) | Stores an inline image from an HTML template upload (v1.61+). Called from the LWC during client-side unzip. |
+| `saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent)` | `Map<String,Object>` (`contentVersionId`, `contentDocumentId`) | Stores the rewritten HTML body after image extraction. |
+
+### 10A.3 `DocGenBulkController` — bulk generation
+
+| Method | Returns | Purpose |
+|---|---|---|
+| `submitJob(Id templateId, String condition, String jobLabel, Boolean mergePdf, Integer batchSize, Boolean mergeOnly)` | `Id` (DocGen_Job__c Id) | Launches a bulk batch. `condition` is a SOQL WHERE on the template's base object. `mergePdf` produces a combined PDF; `mergeOnly` skips per-record files. |
+| `analyzeJob(Id templateId, Integer recordCount, Integer batchSize, Boolean mergePdf)` | `JobAnalysis` (SOQL / DML / heap / record-count checks) | Pre-flight estimator. Run before `submitJob` to warn about governor-limit risks. |
+| `getBulkTemplates()` | `List<DocGen_Template__c>` | Audience-filtered template list for the bulk UI. |
+| `getJobStatus(Id jobId)` | `DocGen_Job__c` | Current status, success count, error count, total records, merged-PDF CV Id. |
+| `validateFilter(String objectName, String condition)` | `Integer` (matching count) | Validates a WHERE clause and returns the count. Use to preview scope. |
+
+### 10A.4 Flow invocable actions (full signatures)
+
+Usable from Flow Builder and from Apex via `Invocable.Action.createCustomAction(...)`:
+
+| Action | Class | Input | Output |
+|---|---|---|---|
+| Generate Document | `DocGenFlowAction` | `templateId`, `recordId`, optional `outputFormatOverride` | `contentDocumentId`, `contentVersionId`, `fileName` |
+| Generate Bulk Documents | `DocGenBulkFlowAction` | `templateId`, `whereClause`, `jobLabel`, `mergePdf`, `batchSize`, `mergeOnly` | `jobId` |
+| Generate Document (Auto Giant Query) | `DocGenGiantQueryFlowAction` | `templateId`, `recordId` | `contentDocumentId` (small) OR `jobId` (giant) |
+| Create Signature Request | `DocGenSignatureFlowAction` | `templateId`, `recordId`, `signers` (List<Signer>: `email`, `role`, `firstName`, `lastName`), `signingOrder` | `signatureRequestId`, `status` |
+
+### 10A.5 `DocGenDataProvider` interface — custom data source
+
+Implement this interface to supply custom data from external APIs, computed fields, or cross-object aggregations. Set the template's **Query Type** to **Apex Provider** and name your class.
+
+```apex
+global interface portwoodglobal.DocGenDataProvider {
+    Map<String, Object> getData(Id recordId);
+}
+```
+
+Return a map whose keys match the merge tags in your template. Nested maps → parent-lookup tags (`{Owner.Name}`), lists of maps → child loops (`{#Contacts}`).
+
+Example:
+
+```apex
+global class MyCustomProvider implements portwoodglobal.DocGenDataProvider {
+    global Map<String, Object> getData(Id recordId) {
+        Account a = [SELECT Id, Name, Industry FROM Account WHERE Id = :recordId LIMIT 1];
+        Map<String, Object> data = new Map<String, Object>{
+            'Name' => a.Name,
+            'Industry' => a.Industry,
+            'ComputedScore' => calculateRiskScore(a)  // your logic
+        };
+        // Add a child list for {#Contacts}...{/Contacts}
+        List<Map<String, Object>> contacts = new List<Map<String, Object>>();
+        for (Contact c : [SELECT FirstName, LastName FROM Contact WHERE AccountId = :recordId]) {
+            contacts.add(new Map<String, Object>{
+                'FirstName' => c.FirstName, 'LastName' => c.LastName
+            });
+        }
+        data.put('Contacts', new Map<String, Object>{'records' => contacts});
+        return data;
+    }
+}
+```
+
+### 10A.6 Namespace prefix
+
+The package installs in the `portwoodglobal` namespace. From subscriber code:
+
+- **Apex**: prefix — `portwoodglobal.DocGenService.generateDocument(...)`
+- **LWC**: full import path — `@salesforce/apex/portwoodglobal.DocGenController.generatePdf`
+- **Flow**: actions appear in the palette with the package namespace label
+- **Merge tags in templates**: field API names as written on the base object — no namespace prefix in tags
 
 ---
 

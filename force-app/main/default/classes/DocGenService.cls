@@ -1700,6 +1700,13 @@ public with sharing class DocGenService {
         }
         MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
 
+        // HTML template type: mr.documentXml is already a ready-to-render HTML
+        // document — skip the DOCX→HTML conversion (which would return empty
+        // since there are no DOCX processedXmlEntries for HTML templates).
+        if (mr.templateType == 'HTML') {
+            return mr.documentXml == null ? '' : mr.documentXml;
+        }
+
         Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
         setNumberingXml(mr);
         return DocGenHtmlRenderer.convertToHtml(combineXmlWithHeadersFooters(mr), pdfImages);

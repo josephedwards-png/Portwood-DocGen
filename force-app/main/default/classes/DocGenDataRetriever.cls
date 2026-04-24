@@ -1367,9 +1367,36 @@ public with sharing class DocGenDataRetriever {
                     'totalSize' => gcList.size(),
                     'records' => gcList
                 });
+            }
 
-                // Recurse deeper if this grandchild has its own children
-                // Deep recursion beyond grandchildren not yet implemented — would need another level of stitching
+            // Great-grandchildren (and deeper): if the grandchild spec has its
+            // own children, aggregate all grandchild records across all parent
+            // records into one synthetic data map and recurse. One SOQL per
+            // depth level — scales to arbitrary nesting without N+1 queries.
+            // Map mutations propagate back to the original data via shared refs.
+            if (!grandchildSpec.children.isEmpty()) {
+                List<Map<String, Object>> allGrandchildren = new List<Map<String, Object>>();
+                for (Object rec : childRecords) {
+                    if (!(rec instanceof Map<String, Object>)) { continue; }
+                    Object wrapper = ((Map<String, Object>) rec).get(grandchildSpec.relationshipName);
+                    if (!(wrapper instanceof Map<String, Object>)) { continue; }
+                    Object recsObj = ((Map<String, Object>) wrapper).get('records');
+                    if (!(recsObj instanceof List<Object>)) { continue; }
+                    for (Object gc : (List<Object>) recsObj) {
+                        if (gc instanceof Map<String, Object>) {
+                            allGrandchildren.add((Map<String, Object>) gc);
+                        }
+                    }
+                }
+                if (!allGrandchildren.isEmpty()) {
+                    Map<String, Object> syntheticParent = new Map<String, Object>{
+                        grandchildSpec.relationshipName => new Map<String, Object>{
+                            'totalSize' => allGrandchildren.size(),
+                            'records' => allGrandchildren
+                        }
+                    };
+                    stitchGrandchildren(syntheticParent, grandchildSpec);
+                }
             }
         }
     }

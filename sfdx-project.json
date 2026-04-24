@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.61.0 — HTML templates (Google Docs, Notion, any HTML source) with header/footer + page numbers",
-      "versionNumber": "1.61.0.NEXT",
-      "ancestorId": "04tal000006lrGjAAI",
+      "versionName": "1.62.0 — HTML template bulk merge fix + {%Image:N} HTML rendering + Learning Center docs",
+      "versionNumber": "1.62.0.NEXT",
+      "ancestorId": "04tal000006pzu1AAA",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -95,6 +95,9 @@
     "Portwood DocGen Managed@1.59.0-1": "04tal000006lrDVAAY",
     "Portwood DocGen Managed@1.60.0-1": "04tal000006lrGjAAI",
     "Portwood DocGen Managed@1.61.0-1": "04tal000006pviLAAQ",
-    "Portwood DocGen Managed@1.61.0-2": "04tal000006pzu1AAA"
+    "Portwood DocGen Managed@1.61.0-2": "04tal000006pzu1AAA",
+    "Portwood DocGen Managed@1.62.0-1": "04tal000006q0gPAAQ",
+    "Portwood DocGen Managed@1.62.0-2": "04tal000006q0q5AAA",
+    "Portwood DocGen Managed@1.62.0-3": "04tal000006q929AAA"
   }
 }

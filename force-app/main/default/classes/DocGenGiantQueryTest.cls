@@ -1159,4 +1159,60 @@ private class DocGenGiantQueryTest {
                 'Tags for other relationships must be left untouched for downstream resolvers');
         }
     }
+
+    /**
+     * Three-level V1-flat nested subquery (great-grandchildren) must stitch
+     * recursively. Before v1.62: stitchGrandchildren only handled one level.
+     * Regression guard for the recursive implementation.
+     */
+    @IsTest
+    static void testThreeLevelNestedSubqueryStitch() {
+        User admin = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId() LIMIT 1];
+        System.runAs(admin) {
+            Account a = new Account(Name = 'Deep3Test');
+            insert a;
+            Contact c = new Contact(LastName = 'Solo', AccountId = a.Id);
+            insert c;
+            Case ca = new Case(Subject = 'The Case', ContactId = c.Id, AccountId = a.Id);
+            Case cb = new Case(Subject = 'Other Case', ContactId = c.Id, AccountId = a.Id);
+            insert new List<Case>{ca, cb};
+            insert new List<CaseComment>{
+                new CaseComment(ParentId = ca.Id, CommentBody = 'first'),
+                new CaseComment(ParentId = ca.Id, CommentBody = 'second'),
+                new CaseComment(ParentId = cb.Id, CommentBody = 'lonely')
+            };
+
+            String cfg = 'Name, ' +
+                '(SELECT Id, LastName, ' +
+                '  (SELECT Id, Subject, ' +
+                '    (SELECT Id, CommentBody FROM CaseComments) ' +
+                '  FROM Cases) ' +
+                'FROM Contacts)';
+
+            Test.startTest();
+            Map<String, Object> data = DocGenDataRetriever.getRecordData(a.Id, 'Account', cfg);
+            Test.stopTest();
+
+            Map<String, Object> contactsWrap = (Map<String, Object>) data.get('Contacts');
+            List<Object> contactRecs = (List<Object>) contactsWrap.get('records');
+            System.assertEquals(1, contactRecs.size(), 'one contact expected');
+
+            Map<String, Object> contact = (Map<String, Object>) contactRecs[0];
+            Map<String, Object> casesWrap = (Map<String, Object>) contact.get('Cases');
+            System.assertNotEquals(null, casesWrap, 'grandchild Cases must be stitched');
+            List<Object> caseRecs = (List<Object>) casesWrap.get('records');
+            System.assertEquals(2, caseRecs.size(), 'two cases expected');
+
+            Integer totalComments = 0;
+            for (Object kr : caseRecs) {
+                Map<String, Object> kase = (Map<String, Object>) kr;
+                Map<String, Object> commentsWrap = (Map<String, Object>) kase.get('CaseComments');
+                System.assertNotEquals(null, commentsWrap,
+                    'great-grandchild CaseComments must be stitched onto each Case');
+                List<Object> commentRecs = (List<Object>) commentsWrap.get('records');
+                totalComments += commentRecs.size();
+            }
+            System.assertEquals(3, totalComments, 'all three comments must land on correct cases');
+        }
+    }
 }

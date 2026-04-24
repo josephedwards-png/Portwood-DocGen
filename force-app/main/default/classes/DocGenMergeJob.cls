@@ -43,25 +43,61 @@ public with sharing class DocGenMergeJob implements Queueable {
                 return;
             }
 
-            // Concatenate all snippets with page breaks
-            String fullHtml = '';
+            // Get job + template details (template type drives the merge strategy)
+            DocGen_Job__c job = [
+                SELECT Label__c, Name, CreatedById, Success_Count__c, Total_Records__c,
+                       Template__r.Type__c
+                FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE LIMIT 1
+            ];
+            Boolean isHtmlTemplate = job.Template__r != null && job.Template__r.Type__c == 'HTML';
+
+            // Concatenate snippets. For DOCX-source snippets, naive concat of
+            // full HTML documents works (Flying Saucer tolerates nested <html>
+            // up to a few docs). For HTML-source snippets, each snippet is 10+ KB
+            // of full <html>/<head>/<body> and Flying Saucer aborts render after
+            // ~10 documents — causing the "blank pages / most records missing"
+            // issue. So for HTML templates we strip wrappers per-snippet and
+            // concatenate only body content + deduped styles, then wrap once.
+            String fullHtml;
             Set<Id> docIdsToDelete = new Set<Id>();
-            for (Integer i = 0; i < snippets.size(); i++) {
-                if (i > 0) {
-                    fullHtml += '<div style="page-break-before:always"></div>';
+            Integer snippetCount = snippets.size();
+            if (isHtmlTemplate) {
+                String combinedStyles = '';
+                String combinedBody = '';
+                Set<String> seenStyles = new Set<String>();
+                for (Integer i = 0; i < snippets.size(); i++) {
+                    docIdsToDelete.add(snippets[i].ContentDocumentId);
+                    String raw = snippets[i].VersionData.toString();
+                    String styles = DocGenService.extractHtmlStyleBlocks(raw);
+                    String body = DocGenService.extractHtmlBodyContent(raw);
+                    if (String.isNotBlank(styles) && !seenStyles.contains(styles)) {
+                        combinedStyles += styles + '\n';
+                        seenStyles.add(styles);
+                    }
+                    if (i > 0) {
+                        combinedBody += '<div style="page-break-before:always"></div>';
+                    }
+                    combinedBody += body;
                 }
-                fullHtml += snippets[i].VersionData.toString();
-                docIdsToDelete.add(snippets[i].ContentDocumentId);
+                fullHtml = '<html><head><meta charset="utf-8"/><style>' +
+                    combinedStyles +
+                    '</style></head><body>' +
+                    combinedBody +
+                    '</body></html>';
+            } else {
+                fullHtml = '';
+                for (Integer i = 0; i < snippets.size(); i++) {
+                    if (i > 0) {
+                        fullHtml += '<div style="page-break-before:always"></div>';
+                    }
+                    fullHtml += snippets[i].VersionData.toString();
+                    docIdsToDelete.add(snippets[i].ContentDocumentId);
+                }
             }
+            snippets = null; // free heap before Blob.toPdf
 
             // Render one merged PDF
             Blob pdfBlob = Blob.toPdf(fullHtml);
-
-            // Get job details
-            DocGen_Job__c job = [
-                SELECT Label__c, Name, CreatedById, Success_Count__c, Total_Records__c
-                FROM DocGen_Job__c WHERE Id = :jobId WITH SYSTEM_MODE LIMIT 1
-            ];
             String fileName = String.isNotBlank(job.Label__c) ? job.Label__c : 'Bulk Generation ' + job.Name;
 
             // Save merged PDF linked to the Job record
@@ -89,7 +125,7 @@ public with sharing class DocGenMergeJob implements Queueable {
             }
 
             // Send bell + push notification to the job submitter
-            sendCompletionNotification(job, fileName, snippets.size());
+            sendCompletionNotification(job, fileName, snippetCount);
 
         } catch (Exception e) {
             update new DocGen_Job__c(Id = jobId, Status__c = 'Completed with Errors'); // NOPMD ApexCRUDViolation — package-internal; CRUD controlled by permission sets

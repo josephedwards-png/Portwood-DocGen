@@ -161,6 +161,7 @@
     <a href="#creating-templates">Creating Templates</a>
     <a href="#query-builder">Query Builder</a>
     <a href="#template-formats">Template Formats</a>
+    <a href="#html-templates">HTML Templates (Google Docs)</a>
     <a href="#versioning">Template Versioning</a>
     <a href="#import-export">Import &amp; Export</a>
 
@@ -196,6 +197,7 @@
 
     <div class="sidebar-title">Automation</div>
     <a href="#flow-actions">Flow Actions</a>
+    <a href="#apex-api">Apex API Reference</a>
     <a href="#apex-provider">Custom Apex Data Provider</a>
 
     <div class="sidebar-title">E-Signatures</div>
@@ -292,16 +294,120 @@
 
 <h2 id="template-formats">Template Formats</h2>
 
-<p>DocGen supports three template formats. Word is the most capable.</p>
+<p>DocGen supports four template formats. Word and HTML can both produce PDFs; Excel and PowerPoint render in their native file formats.</p>
 
 <table>
     <tr><th>Format</th><th>Template File</th><th>Output Options</th><th>Best For</th></tr>
     <tr><td><strong>Word</strong></td><td><code>.docx</code></td><td>PDF or DOCX</td><td>Contracts, proposals, invoices, letters</td></tr>
+    <tr><td><strong>HTML</strong> <em>(v1.61+)</em></td><td><code>.html</code>, <code>.htm</code>, <code>.zip</code></td><td>PDF</td><td>Google Docs, Notion, ChatGPT, Apple Pages &mdash; any HTML source</td></tr>
     <tr><td><strong>Excel</strong></td><td><code>.xlsx</code></td><td>XLSX</td><td>Data exports, reports, financial summaries</td></tr>
     <tr><td><strong>PowerPoint</strong></td><td><code>.pptx</code></td><td>PPTX</td><td>Presentations, slide decks</td></tr>
 </table>
 
-<p>Word is the only format that supports images, barcodes, QR codes, rich text, headers/footers, and PDF output. Excel and PowerPoint support all merge tags and formatting but output in their native format only.</p>
+<p>Word is still the most feature-complete &mdash; barcodes and QR codes are currently Word-only. HTML templates unlock a whole class of authoring tools that don't produce <code>.docx</code> (Google Docs' Web Page export is the flagship workflow). See the <a href="#html-templates">HTML Templates</a> section for the full authoring guide. Excel and PowerPoint accept every merge tag but output in their native formats only.</p>
+
+<h2 id="html-templates">HTML Templates (Google Docs, Notion, any HTML source)</h2>
+
+<p>HTML templates (shipped in v1.61) are a new way to author DocGen templates using any tool that can export HTML. Output is always PDF. Every merge tag that works in Word templates works identically in HTML templates &mdash; <code>&#123;Name&#125;</code>, loops, conditionals, aggregates, images, page numbers, <code>&#123;Today&#125;</code>, <code>&#123;Now&#125;</code>.</p>
+
+<p><strong>Why HTML templates?</strong> Word templates lock you into the Microsoft Word authoring experience. HTML templates let your team design in Google Docs, Notion, ChatGPT, Apple Pages, or any rich-text editor that produces HTML. Design where your content lives, keep the DocGen merge-tag engine the same.</p>
+
+<h3>Authoring in Google Docs (recommended)</h3>
+
+<ol>
+    <li>Design the document in Google Docs. Use normal formatting &mdash; headings, tables, images, colors, fonts.</li>
+    <li>Add merge tags as plain text where you want data from Salesforce: <code>&#123;Name&#125;</code>, <code>&#123;Account.Name&#125;</code>, <code>&#123;Amount:currency&#125;</code>, loops like <code>&#123;#Contacts&#125;...&#123;/Contacts&#125;</code>. All the merge tag syntax from Word templates works identically &mdash; see Merge Tags in the sidebar for the full reference.</li>
+    <li>Go to <strong>File &gt; Download &gt; Web Page (.html, zipped)</strong>. Google Docs produces a <code>.zip</code> containing your HTML plus an <code>images/</code> folder with every image in the doc.</li>
+    <li>In the DocGen Command Hub, click <strong>Create Template</strong>, set <strong>Type</strong> to <strong>HTML</strong>. Output Format is automatically locked to <strong>PDF</strong>.</li>
+    <li>On the Upload step, drop the <code>.zip</code> file. DocGen unzips it in your browser, extracts each image into a Salesforce ContentVersion linked to the template, and rewrites the HTML's <code>&lt;img src="images/..."&gt;</code> references to <code>/sfc/servlet.shepherd/version/download/&lt;cvId&gt;</code> URLs that <code>Blob.toPdf</code> resolves natively.</li>
+    <li>Click <strong>Save as New Version</strong>. The template is live.</li>
+</ol>
+
+<p><strong>Why unzip in the browser?</strong> Salesforce's default File Upload Security setting blocks <code>.zip</code> uploads with "Your company doesn't support the following file types: .zip". DocGen sidesteps that by reading the zip bytes with a pure-JavaScript ZIP reader (no external dependencies), pulling out the <code>.html</code> + images, and uploading only the extracted pieces via Apex. The <code>.zip</code> itself never becomes a ContentVersion, so the org setting never sees it. Bonus: unzipping on the client keeps Apex heap flat regardless of template size.</p>
+
+<h3>Other authoring tools</h3>
+
+<p>Any tool that can export or paste HTML works. Upload the resulting <code>.html</code> or <code>.htm</code> file directly:</p>
+
+<ul>
+    <li><strong>Notion / Confluence</strong> &mdash; export the page as HTML.</li>
+    <li><strong>ChatGPT / Claude</strong> &mdash; ask it to generate HTML, paste into a plain text file with a <code>.html</code> extension.</li>
+    <li><strong>Apple Pages</strong> &mdash; File &gt; Export To &gt; HTML.</li>
+    <li><strong>Hand-written HTML</strong> &mdash; any text editor works. Merge tags are plain text.</li>
+</ul>
+
+<p>For single-file uploads, DocGen scans the HTML for inline <code>&lt;img src="data:image/..."&gt;</code> URIs (Notion and ChatGPT frequently emit these for pasted images) and converts each to a ContentVersion. <code>Blob.toPdf</code> can't decode data URIs directly, so this conversion is what makes the images actually render in the final PDF.</p>
+
+<h3>Header &amp; Footer fields</h3>
+
+<p>HTML templates have dedicated <strong>Header HTML</strong> and <strong>Footer HTML</strong> fields on a Header / Footer tab in the template edit modal. Each field has:</p>
+
+<ul>
+    <li>A WYSIWYG rich-text editor with bold, italic, alignment, color, images, and links.</li>
+    <li>A <strong>Show HTML</strong> / <strong>Show Editor</strong> toggle that flips to a monospace textarea showing the raw HTML &mdash; useful when you need to set image widths, apply inline styles, or adjust markup the rich editor can't expose.</li>
+</ul>
+
+<p>Every merge tag that works in the body works in the header and footer: <code>&#123;Name&#125;</code>, <code>&#123;Today:date&#125;</code>, <code>&#123;Owner.Name&#125;</code>, etc. Values resolve per-record at generation time.</p>
+
+<h3>Page Numbers</h3>
+
+<p>Put <code>&#123;PageNumber&#125;</code> and <code>&#123;TotalPages&#125;</code> in the Header HTML or Footer HTML field. At render time these compile to Flying Saucer CSS page counters inside the PDF's page-margin boxes. Each page gets its own correctly-updated counter &mdash; "Page 3 of 17" on page 3, "Page 4 of 17" on page 4, automatically.</p>
+
+<pre style="background:#f4f6f9;padding:0.75rem;border-radius:4px;"><code>&lt;div style="text-align:center; font-size:9pt; color:#888;"&gt;
+  Page &#123;PageNumber&#125; of &#123;TotalPages&#125;
+&lt;/div&gt;</code></pre>
+
+<p><strong>Flying Saucer limitation:</strong> CSS page counters only resolve inside <code>@page</code> margin rules &mdash; not on DOM elements. When a header or footer contains <code>&#123;PageNumber&#125;</code> or <code>&#123;TotalPages&#125;</code>, DocGen renders it as plain text in the page-margin box (no inline images or rich formatting in that margin). A header <em>without</em> counter tokens stays full rich HTML. <strong>Practical workaround:</strong> logo / rich content in the header (no counters), page count in the footer (counters only). Or the reverse. Both fields can be populated simultaneously.</p>
+
+<h3>Images in HTML Templates</h3>
+
+<p>Three ways to get images into an HTML template:</p>
+
+<ul>
+    <li><strong>Google Docs zip</strong> &mdash; any image inserted in the Google Doc is bundled into the <code>.zip</code> export. On upload, each is extracted into its own ContentVersion automatically.</li>
+    <li><strong>Inline data URIs</strong> &mdash; HTML like <code>&lt;img src="data:image/png;base64,..."/&gt;</code> (produced by Notion, ChatGPT, and rich-text editors for pasted images) is scanned on upload and each data URI is saved as its own ContentVersion with the <code>src</code> rewritten.</li>
+    <li><strong>Record-attached merge tags</strong> &mdash; <code>&#123;%Image:N&#125;</code> (Nth image attached to the current record) and <code>&#123;%FieldName&#125;</code> (field value is a ContentVersion ID) both emit an <code>&lt;img&gt;</code> pointing at the resolved URL. Same syntax as Word templates.</li>
+</ul>
+
+<h3>Loops and Tables</h3>
+
+<p>Loop syntax is identical to Word templates. For repeating table rows, either pattern works &mdash; DocGen auto-expands to the enclosing <code>&lt;tr&gt;</code> (or <code>&lt;li&gt;</code> for lists), exactly the way it auto-expands to <code>&lt;w:tr&gt;</code> in Word.</p>
+
+<pre style="background:#f4f6f9;padding:0.75rem;border-radius:4px;"><code>&lt;table&gt;
+  &lt;thead&gt;&lt;tr&gt;&lt;th&gt;Product&lt;/th&gt;&lt;th&gt;Amount&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;!-- Pattern A: loop wraps the row --&gt;
+    &#123;#OpportunityLineItems&#125;
+    &lt;tr&gt;&lt;td&gt;&#123;Product2.Name&#125;&lt;/td&gt;&lt;td&gt;&#123;TotalPrice:currency&#125;&lt;/td&gt;&lt;/tr&gt;
+    &#123;/OpportunityLineItems&#125;
+
+    &lt;!-- Pattern B: loop inside the row (DocGen expands to the &lt;tr&gt;) --&gt;
+    &lt;tr&gt;&#123;#OpportunityLineItems&#125;&lt;td&gt;&#123;Product2.Name&#125;&lt;/td&gt;&#123;/OpportunityLineItems&#125;&lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;</code></pre>
+
+<h3>Bulk Generation &amp; Giant Query</h3>
+
+<p>HTML templates work with every generation path: single-record, Bulk Generation (individual PDFs per record <em>or</em> merged into one PDF), and the Giant Query pipeline (60K+ row child relationships handled via batched rendering). Same 12 MB Queueable heap envelope, same 50,000-row batch ceiling, same Flow action.</p>
+
+<h3>Known limitations</h3>
+
+<ul>
+    <li><strong>Barcodes / QR codes</strong> &mdash; <code>&#123;*Field:qr&#125;</code> etc. are currently Word-only. In HTML templates the tag falls back to plain text substitution. On the roadmap.</li>
+    <li><strong>DOCX output</strong> &mdash; not applicable. HTML templates are PDF-only.</li>
+    <li><strong>Signatures</strong> &mdash; <code>&#123;@Signature_Role&#125;</code> flows haven't been validated against HTML templates yet. Use Word templates if you need signatures today.</li>
+    <li><strong>Page counters + rich header/footer content</strong> &mdash; see Page Numbers above. Flying Saucer flattens the margin box to text when counters are present.</li>
+</ul>
+
+<h3>Troubleshooting</h3>
+
+<ul>
+    <li><strong>"Your company doesn't support the following file types: .zip"</strong> &mdash; this error comes from Salesforce's org-level File Upload Security. DocGen's LWC extracts the zip client-side and never uploads the zip itself, so this shouldn't appear in normal use. If you see it, hard-refresh the page (Cmd+Shift+R / Ctrl+Shift+R) to clear any cached bundle.</li>
+    <li><strong>Images show as broken squares in the PDF</strong> &mdash; <code>Blob.toPdf</code> can only fetch images via relative <code>/sfc/</code> URLs; it can't reach arbitrary HTTPS URLs (no session ID). Make sure the image source is one of: a file in the zip, a data URI in the HTML, a <code>&#123;%Image:N&#125;</code> tag, or a <code>&#123;%FieldName&#125;</code> pointing at a real ContentVersion.</li>
+    <li><strong>Page numbers appearing without a configured header/footer</strong> &mdash; your template's source HTML already has <code>@page &#123; @bottom-center &#123; content: counter(page) ... &#125; &#125;</code>. Google Docs' Web Page export sometimes includes this automatically. Either remove the <code>@page</code> block from the HTML body before upload, or accept it (many users actually want page numbers).</li>
+    <li><strong>Bulk merge PDF is blank or cut off</strong> &mdash; fixed in v1.62.0. v1.61.0 had a bug concatenating multiple full-HTML snippets that caused Flying Saucer to abandon rendering after the first few records. Upgrade the package.</li>
+    <li><strong>Merge tag shows up literally in the PDF (e.g. the text "&#123;Name&#125;")</strong> &mdash; the tag didn't resolve. Check that the field name is correct and in your Query Config, and that the WYSIWYG editor didn't HTML-encode the braces (DocGen decodes <code>&amp;#123;</code> and <code>&amp;#125;</code> automatically, but very non-standard editors could still trip this).</li>
+</ul>
 
 <h2 id="versioning">Template Versioning</h2>
 
@@ -477,6 +583,58 @@
 </table>
 
 <div class="tip"><strong>Checkbox format</strong> renders <code>[X]</code> for truthy values and <code>[ ]</code> for false/blank. Use it inline with labels: <code>Active: {IsActive:checkbox}  Discount: {HasDiscount:checkbox}</code></div>
+
+<h3>International Currency &amp; Locale Formatting</h3>
+
+<p>For global documents, add an ISO currency code and/or locale after the format keyword. This lets you control currency symbols, number separators, and date layouts per-tag:</p>
+
+<table>
+    <tr><th>What You Type</th><th>What Appears</th><th>Notes</th></tr>
+    <tr><td colspan="3"><strong>Currency with ISO Code</strong></td></tr>
+    <tr><td><code>&#123;Amount:currency:EUR&#125;</code></td><td>&euro;1,234.56</td><td>Euro symbol, your locale's separators</td></tr>
+    <tr><td><code>&#123;Amount:currency:GBP&#125;</code></td><td>&pound;1,234.56</td><td>British Pound</td></tr>
+    <tr><td><code>&#123;Amount:currency:JPY&#125;</code></td><td>&yen;1,235</td><td>Japanese Yen (no decimals)</td></tr>
+    <tr><td><code>&#123;Amount:currency:INR&#125;</code></td><td>&#8377;1,234.56</td><td>Indian Rupee</td></tr>
+    <tr><td><code>&#123;Amount:currency:CHF&#125;</code></td><td>CHF 1,234.56</td><td>Swiss Franc</td></tr>
+    <tr><td colspan="3"><strong>Currency with ISO Code + Locale</strong></td></tr>
+    <tr><td><code>&#123;Amount:currency:EUR:de_DE&#125;</code></td><td>1.234,56 &euro;</td><td>German style: dot thousands, comma decimal, symbol after</td></tr>
+    <tr><td><code>&#123;Amount:currency:GBP:en_GB&#125;</code></td><td>&pound;1,234.56</td><td>British English formatting</td></tr>
+    <tr><td><code>&#123;Amount:currency:BRL:pt_BR&#125;</code></td><td>1.234,56 R$</td><td>Brazilian Real in Portuguese format</td></tr>
+    <tr><td colspan="3"><strong>Numbers with Locale</strong></td></tr>
+    <tr><td><code>&#123;Quantity:number:de_DE&#125;</code></td><td>1.234.567</td><td>German: dots as thousands separators</td></tr>
+    <tr><td><code>&#123;Quantity:number:fr_FR&#125;</code></td><td>1.234.567</td><td>French: dots as thousands separators</td></tr>
+    <tr><td colspan="3"><strong>Percentages with Locale</strong></td></tr>
+    <tr><td><code>&#123;Rate:percent:de_DE&#125;</code></td><td>15,5%</td><td>German: comma as decimal separator</td></tr>
+    <tr><td colspan="3"><strong>Dates with Locale</strong></td></tr>
+    <tr><td><code>&#123;CloseDate:date&#125;</code></td><td><em>(your locale's default)</em></td><td>Auto-detects from running user's locale</td></tr>
+    <tr><td><code>&#123;CloseDate:date:de_DE&#125;</code></td><td>18.03.2026</td><td>German date format (dd.MM.yyyy)</td></tr>
+    <tr><td><code>&#123;CloseDate:date:ja_JP&#125;</code></td><td>2026/03/18</td><td>Japanese date format (yyyy/MM/dd)</td></tr>
+    <tr><td><code>&#123;CloseDate:date:en_GB&#125;</code></td><td>18/03/2026</td><td>British date format (dd/MM/yyyy)</td></tr>
+</table>
+
+<p><strong>Supported currencies:</strong> USD, EUR, GBP, JPY, CNY, CHF, CAD, AUD, INR, KRW, BRL, MXN, SEK, NOK, DKK, PLN, CZK, HUF, TRY, ZAR, SGD, HKD, NZD, THB, MYR, PHP, IDR, TWD, ILS, RUB, NGN, KES, AED, SAR, COP, CLP, PEN, ARS, EGP, GHS.</p>
+
+<p><strong>Supported locales:</strong> en_US, en_GB, en_AU, de_DE, de_CH, fr_FR, fr_CH, es_ES, it_IT, pt_BR, nl_NL, da_DK, sv_SE, nb_NO, ja_JP, zh_CN, ko_KR, ru_RU, pl_PL, cs_CZ, hu_HU, tr_TR, ro_RO, el_GR, uk_UA, id_ID, vi_VN, and more. When no locale is specified, the running user's Salesforce locale is used for the <code>:date</code> keyword.</p>
+
+<p><strong>How it works:</strong> The base tag (<code>:currency</code>, <code>:number</code>, <code>:percent</code>) without any locale uses US-style formatting for backward compatibility. Add an ISO currency code to change the symbol. Add a locale code to change the number separators and symbol placement. The <code>:date</code> keyword uses the running user's locale by default, or an explicit locale if provided.</p>
+
+<h3>Built-in Date &amp; Time Tags</h3>
+
+<p>Two special merge tags resolve to the current date or time without needing a formula field. They accept the same format suffixes as any date field, so locale and custom patterns all work:</p>
+
+<table>
+    <tr><th>What You Type</th><th>What Appears</th><th>Notes</th></tr>
+    <tr><td><code>&#123;Today&#125;</code></td><td>2026-04-20</td><td>Current date in default ISO format</td></tr>
+    <tr><td><code>&#123;Today:MM/dd/yyyy&#125;</code></td><td>04/20/2026</td><td>Current date, custom pattern</td></tr>
+    <tr><td><code>&#123;Today:MMMM d, yyyy&#125;</code></td><td>April 20, 2026</td><td>Long date pattern</td></tr>
+    <tr><td><code>&#123;Today:date&#125;</code></td><td><em>(running user's locale default)</em></td><td>Auto-detects user's Salesforce locale</td></tr>
+    <tr><td><code>&#123;Today:date:de_DE&#125;</code></td><td>20.04.2026</td><td>Explicit locale override</td></tr>
+    <tr><td><code>&#123;Now&#125;</code></td><td>2026-04-20 14:30:00</td><td>Current date + time</td></tr>
+    <tr><td><code>&#123;Now:yyyy-MM-dd HH:mm&#125;</code></td><td>2026-04-20 14:30</td><td>Custom datetime pattern</td></tr>
+    <tr><td><code>&#123;Now:date:ja_JP&#125;</code></td><td>2026/04/20</td><td>Now formatted as a Japanese-locale date</td></tr>
+</table>
+
+<p><strong>When to use:</strong> Stamp a "Generated on" line in a footer, time-stamp an invoice, add the current date to a contract header. Works in sync and giant-query PDFs, bulk generation, and e-signature stamped documents.</p>
 
 <h2 id="aggregates">Aggregates (SUM, COUNT, AVG)</h2>
 
@@ -777,6 +935,83 @@
     <p><strong>Input:</strong> Template ID, Record ID &nbsp; <strong>Output:</strong> Content Doc ID or Job ID</p>
     <p>Auto-detects dataset size. Under 2K rows: generates sync. Over 2K: launches async batch. Ideal for Experience Cloud portals where dataset size is unknown — the user clicks one button and DocGen handles the rest.</p>
 </div>
+
+<h2 id="apex-api">Apex API Reference</h2>
+
+<p>Call DocGen from your own Apex code, triggers, scheduled jobs, or Lightning components. All classes are global in the managed package namespace <code>portwoodglobal</code>, so you'll prefix them as <code>portwoodglobal.DocGenService</code> from subscriber code.</p>
+
+<p><strong>Backwards compatibility:</strong> the APIs below are published as stable global methods. New optional overloads may be added in future releases; existing signatures will not be removed without a major version bump and deprecation notice.</p>
+
+<h3>DocGenService &mdash; synchronous generation</h3>
+
+<p>Primary entry point for generating documents from Apex. Use when you need to trigger DocGen programmatically from a trigger, scheduled Apex, or another service class.</p>
+
+<table>
+    <tr><th>Method</th><th>Returns</th><th>Purpose</th></tr>
+    <tr><td><code>generateDocument(Id templateId, Id recordId)</code></td><td><code>Id</code> (ContentDocumentId)</td><td>Generates a document, saves as a File on the record, returns the new ContentDocumentId. Uses the template's default output format.</td></tr>
+    <tr><td><code>generateDocument(Id templateId, Id recordId, String outputFormatOverride)</code></td><td><code>Id</code></td><td>Same as above but lets you pass <code>'PDF'</code>, <code>'Word'</code>, <code>'PowerPoint'</code>, or <code>'HTML'</code> to override the template's setting. Throws if the template locks output or if you ask for an incompatible format.</td></tr>
+    <tr><td><code>generatePdfBlob(Id templateId, Id recordId)</code></td><td><code>Map&lt;String, Object&gt;</code> with keys <code>blob</code> (PDF Blob), <code>title</code> (String)</td><td>Renders a PDF in-memory without saving it anywhere. Use when you want to email the PDF, attach it to a different record, or post it somewhere.</td></tr>
+    <tr><td><code>generateDocumentFromData(Id templateId, Id recordId, Map&lt;String, Object&gt; preloadedRecordData)</code></td><td><code>Id</code></td><td>Same as generateDocument but uses pre-fetched data instead of querying. Internal batch use; call directly if you're implementing your own bulk loop.</td></tr>
+    <tr><td><code>renderPreviewHtml(Id templateId, Id recordId)</code></td><td><code>String</code> (HTML)</td><td>Returns the merged HTML that would go into Blob.toPdf. Useful for preview panes, email body, or custom rendering.</td></tr>
+</table>
+
+<pre style="background:#f4f6f9;padding:0.75rem;border-radius:4px;"><code>// Example: trigger PDF generation from an approval process
+Id contentDocId = portwoodglobal.DocGenService.generateDocument(
+    'a0zXXXXXXXXXXXXX',   // template ID
+    accountId,            // record ID
+    'PDF'                 // force PDF regardless of template setting
+);</code></pre>
+
+<h3>DocGenController &mdash; LWC / Aura endpoints</h3>
+
+<p>Every method is <code>@AuraEnabled</code> so you can call them from your own Lightning web components, Aura components, or REST proxies. Use the <code>@salesforce/apex/portwoodglobal.DocGenController.*</code> import syntax from LWC.</p>
+
+<table>
+    <tr><th>Method</th><th>Returns</th><th>Purpose</th></tr>
+    <tr><td><code>generatePdf(Id templateId, Id recordId, Boolean saveToRecord)</code></td><td><code>Map&lt;String, Object&gt;</code> with <code>base64</code>, <code>contentDocumentId</code>, <code>title</code></td><td>LWC-friendly PDF generation. Set <code>saveToRecord=true</code> to attach, <code>false</code> to download client-side only.</td></tr>
+    <tr><td><code>generatePdfAsync(Id templateId, Id recordId)</code></td><td><code>Id</code> (AsyncApexJob Id)</td><td>Enqueues a Queueable to render + save. Use for large PDFs (over ~15 MB) that exceed the synchronous Aura timeout. Client polls for completion.</td></tr>
+    <tr><td><code>generateDocumentGiantQuery(Id templateId, Id recordId)</code></td><td><code>Map&lt;String, Object&gt;</code> with <code>isGiantQuery</code>, <code>jobId</code> OR <code>docId</code> + <code>contentVersionId</code></td><td>Auto-routes: small child counts render synchronously, &gt; 2000 rows spawn a batched Giant Query job. Use when you don't know the dataset size in advance.</td></tr>
+    <tr><td><code>saveTemplate(Map&lt;String, Object&gt; fields, Boolean createVersion, String contentVersionId)</code></td><td><code>void</code></td><td>Programmatic template save. <code>fields</code> includes Id, Name, Type__c, Base_Object_API__c, Query_Config__c, Header_Html__c, Footer_Html__c, etc. Pass <code>createVersion=true</code> and an uploaded <code>contentVersionId</code> to publish a new template version.</td></tr>
+    <tr><td><code>getAllTemplates()</code></td><td><code>List&lt;DocGen_Template__c&gt;</code></td><td>Returns every template in the org (cacheable). Filter client-side.</td></tr>
+    <tr><td><code>getTemplatesForObject(String objectApiName)</code></td><td><code>List&lt;DocGen_Template__c&gt;</code></td><td>Audience-filtered template list for a given SObject. Applies <code>Required_Permission_Sets__c</code> and <code>Record_Filter__c</code> rules.</td></tr>
+    <tr><td><code>getTemplatesForObjectAndRecord(String objectApiName, String recordId)</code></td><td><code>List&lt;DocGen_Template__c&gt;</code></td><td>Same as above plus per-record filter matching (checks <code>Specific_Record_Ids__c</code> and runtime <code>Record_Filter__c</code> evaluation).</td></tr>
+    <tr><td><code>saveHtmlTemplateImage(Id templateId, String fileName, String base64Content)</code></td><td><code>Map&lt;String, Object&gt;</code> with <code>contentVersionId</code>, <code>url</code></td><td>Stores an inline image from an HTML template upload (v1.61+). Called from the LWC during client-side unzip.</td></tr>
+    <tr><td><code>saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent)</code></td><td><code>Map&lt;String, Object&gt;</code> with <code>contentVersionId</code>, <code>contentDocumentId</code></td><td>Stores the rewritten HTML body after image extraction.</td></tr>
+</table>
+
+<h3>DocGenBulkController &mdash; bulk generation</h3>
+
+<table>
+    <tr><th>Method</th><th>Returns</th><th>Purpose</th></tr>
+    <tr><td><code>submitJob(Id templateId, String condition, String jobLabel, Boolean mergePdf, Integer batchSize, Boolean mergeOnly)</code></td><td><code>Id</code> (DocGen_Job__c Id)</td><td>Launches a bulk generation batch. <code>condition</code> is a SOQL WHERE clause on the template's base object. <code>mergePdf</code> produces a combined PDF; <code>mergeOnly</code> skips per-record files.</td></tr>
+    <tr><td><code>analyzeJob(Id templateId, Integer recordCount, Integer batchSize, Boolean mergePdf)</code></td><td><code>JobAnalysis</code> (SOQL/DML/heap/record-count checks with status and recommendations)</td><td>Pre-flight estimator. Run before submitJob to warn about governor-limit risks. Returns a human-readable summary plus a structured list of items.</td></tr>
+    <tr><td><code>getBulkTemplates()</code></td><td><code>List&lt;DocGen_Template__c&gt;</code></td><td>Audience-filtered template list for the bulk UI.</td></tr>
+    <tr><td><code>getJobStatus(Id jobId)</code></td><td><code>DocGen_Job__c</code></td><td>Current status, success count, error count, total records, merged-PDF CV Id.</td></tr>
+    <tr><td><code>validateFilter(String objectName, String condition)</code></td><td><code>Integer</code> (matching record count)</td><td>Validates a WHERE clause and returns the count. Use to preview the scope before submitting.</td></tr>
+</table>
+
+<h3>Flow invocable actions</h3>
+
+<p>Usable directly in Flow Builder (Record-Triggered Flows, Screen Flows, Scheduled Flows, Subflows) and from Apex via <code>Invocable.Action.createCustomAction(...)</code>.</p>
+
+<table>
+    <tr><th>Action</th><th>Class</th><th>Input</th><th>Output</th></tr>
+    <tr><td><strong>Generate Document</strong></td><td><code>DocGenFlowAction</code></td><td><code>templateId</code>, <code>recordId</code>, optional <code>outputFormatOverride</code></td><td><code>contentDocumentId</code>, <code>contentVersionId</code>, <code>fileName</code></td></tr>
+    <tr><td><strong>Generate Bulk Documents</strong></td><td><code>DocGenBulkFlowAction</code></td><td><code>templateId</code>, <code>whereClause</code>, <code>jobLabel</code>, <code>mergePdf</code>, <code>batchSize</code>, <code>mergeOnly</code></td><td><code>jobId</code></td></tr>
+    <tr><td><strong>Generate Document (Auto Giant Query)</strong></td><td><code>DocGenGiantQueryFlowAction</code></td><td><code>templateId</code>, <code>recordId</code></td><td><code>contentDocumentId</code> (small) OR <code>jobId</code> (giant)</td></tr>
+    <tr><td><strong>Create Signature Request</strong></td><td><code>DocGenSignatureFlowAction</code></td><td><code>templateId</code>, <code>recordId</code>, <code>signers</code> (List&lt;Signer&gt; apex type with <code>email</code>, <code>role</code>, <code>firstName</code>, <code>lastName</code>), <code>signingOrder</code></td><td><code>signatureRequestId</code>, <code>status</code></td></tr>
+</table>
+
+<h3>Namespace prefix note</h3>
+
+<p>The package is installed in the <code>portwoodglobal</code> namespace. From subscriber code:</p>
+
+<ul>
+    <li><strong>Apex:</strong> prefix class names &mdash; <code>portwoodglobal.DocGenService.generateDocument(...)</code></li>
+    <li><strong>LWC:</strong> use the full import path &mdash; <code>import generatePdf from '@salesforce/apex/portwoodglobal.DocGenController.generatePdf';</code></li>
+    <li><strong>Flow:</strong> actions appear in the palette prefixed with the package namespace label.</li>
+    <li><strong>Field references in templates:</strong> merge tags reference standard / custom field API names as written on the base object. The package namespace is not included in merge tags.</li>
+</ul>
 
 <h2 id="apex-provider">Custom Apex Data Provider</h2>
 
