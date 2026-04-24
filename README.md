@@ -4,7 +4,7 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.60.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.61.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -18,10 +18,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006lrGjAAI --wait 10 --target-org <your-org>
+sf package install --package 04tal000006pzu1AAA --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lrGjAAI) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lrGjAAI)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006pzu1AAA) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006pzu1AAA)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -29,9 +29,9 @@ sf package install --package 04tal000006lrGjAAI --wait 10 --target-org <your-org
 
 ## Quick Start
 
-1. **Create a template** — pick Word, Excel, or PowerPoint. Choose your Salesforce object.
+1. **Create a template** — pick Word, Excel, PowerPoint, or HTML. Choose your Salesforce object.
 2. **Select your fields** — use the visual query builder, or paste a full SOQL statement for complex nested relationships.
-3. **Add tags and upload** — type `{Name}` where you want data. Upload the file.
+3. **Add tags and upload** — type `{Name}` where you want data. Upload the file (or a Google Docs "Download → Web Page" zip for HTML templates).
 4. **Generate** — from any record page, in bulk, or from a Flow.
 
 Download example templates from [portwoodglobalsolutions.com](https://portwoodglobalsolutions.com).
@@ -45,10 +45,13 @@ Download example templates from [portwoodglobalsolutions.com](https://portwoodgl
 | Format | Template | Output Options | Best For |
 |--------|----------|---------------|----------|
 | **Word** | `.docx` | PDF or DOCX | Contracts, proposals, invoices, letters |
+| **HTML** (v1.61+) | `.html`, `.htm`, `.zip` | PDF | Google Docs, Notion, ChatGPT, Apple Pages, any HTML source |
 | **Excel** | `.xlsx` | XLSX | Data exports, reports, financial summaries |
 | **PowerPoint** | `.pptx` | PPTX | Presentations, slide decks |
 
-Word is the most capable — it's the only format that supports images, barcodes, QR codes, rich text, and PDF output.
+Word and HTML both support images, rich text, headers/footers, and PDF output. Word adds barcodes and QR codes. Excel and PowerPoint render in their native formats only.
+
+**HTML templates** accept Google Docs "Download → Web Page" zips directly — the admin UI unzips client-side, extracts each image into a ContentVersion, and rewrites the HTML to reference them. Inline `data:image/...` URIs from Notion / ChatGPT / rich-text paste are handled the same way. Optional `Header HTML` / `Footer HTML` fields with a WYSIWYG editor (and a **Show HTML** toggle for raw-source edits) support merge tags including `{PageNumber}` and `{TotalPages}`.
 
 ### Merge Tags
 
@@ -410,7 +413,8 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.60.0 | **Latest (Released)** | `04tal000006lrGjAAI` |
+| v1.61.0 | **Latest (Released)** | `04tal000006pzu1AAA` |
+| v1.60.0 | Previous | `04tal000006lrGjAAI` |
 | v1.59.0 | Previous | `04tal000006lrDVAAY` |
 | v1.58.0 | Previous | `04tal000006lpoPAAQ` |
 | v1.57.0 | Superseded (install validator rejected) | `04tal000006lplBAAQ` |

@@ -1,5 +1,55 @@
 # Changelog
 
+## v1.61.0 — HTML templates (Google Docs, Notion, any HTML source) with header/footer + page numbers
+
+Promoted package: `04tal000006pzu1AAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006pzu1AAA)
+v1.60.x subscribers can install directly.
+
+DocGen now accepts HTML as a first-class template type alongside Word, Excel, and PowerPoint. Upload a Google Docs "Download → Web Page" zip, a raw `.html`/`.htm` export from Notion / ChatGPT / Apple Pages, or anything else that produces HTML — DocGen merges it to PDF using the same merge-tag engine Word templates use.
+
+### New template type
+
+- `Type__c` picklist gains `HTML`. Output format is locked to PDF.
+- New `Header_Html__c` and `Footer_Html__c` LongTextArea fields edited via a WYSIWYG editor with a **Show HTML** / **Show Editor** toggle for raw-source edits (image widths, inline styles, markup the rich editor can't expose).
+- Accepted uploads: `.html`, `.htm`, `.zip` (Google Docs Web Page export).
+
+### Google Docs zip handling
+
+The LWC unzips the export client-side using a pure-JS ZIP reader (native `DecompressionStream('deflate-raw')` + manual central-directory parse, zero external dependencies). Each image is uploaded as its own ContentVersion linked to the template, and every `<img src="images/...">` reference in the HTML is rewritten to `/sfc/servlet.shepherd/version/download/<cvId>`. The zip itself never becomes a ContentVersion, so Salesforce's default File Upload Security block on `.zip` files doesn't apply. Heap stays flat regardless of template size because each image is uploaded in its own Apex call.
+
+### Inline data URI images
+
+Source HTML from Notion, ChatGPT, Apple Pages, or any rich-text paste often contains `<img src="data:image/...;base64,...">`. The LWC scans those URIs and uploads each as a ContentVersion, rewriting the src the same way it handles zipped image files. `Blob.toPdf()` doesn't decode data URIs, so this conversion is required for the images to render in the final PDF.
+
+### Merge tags and loops
+
+- Every existing merge tag works in HTML body, header, and footer — `{Name}`, `{Owner.Name}`, `{Field:format}`, `{SUM:Rel.Field}`, `{#Rel}…{/Rel}` loops, `{#IF …}`, `{:else}`, `{Today}`, `{Now}`, etc.
+- `{#Rel}…{/Rel}` auto-expands to the enclosing `<tr>` or `<li>` — same smart-container behavior Word templates get for `<w:tr>` / `<w:p>`.
+- `{%Image:N}` and `{%Field}` image tags emit `<img>` tags pointing at the resolved ContentVersion URL (previously leaked DOCX DrawingML into HTML output).
+- WYSIWYG editors that HTML-entity-encode curly braces (`&#123;Name&#125;`) are handled — entities are decoded before merge.
+
+### Page numbers
+
+`{PageNumber}` and `{TotalPages}` in header/footer fields compile to Flying Saucer `@page` margin-box content CSS with `counter(page)` / `counter(pages)` calls. The tokens survive `processXml` via a passthrough (same mechanism as `{@Signature_…}`).
+
+Limitation: Flying Saucer resolves CSS counters only inside `@page` rules, not in `::before` on DOM elements. Headers/footers that contain counter tokens render as plain text in the margin box. Headers/footers without counters keep rich HTML (images, tables, formatting) via the CSS running-element pattern.
+
+### Giant-query PDF parity
+
+HTML templates share the DOCX giant-query pipeline. When a parent record has >2000 child rows in a declared relationship, DocGen routes to `DocGenGiantQueryBatch` + `DocGenGiantQueryAssembler` — both now detect HTML source and skip the DOCX XML conversion. Same 60K+ row capacity, same heap bounds.
+
+### Tests
+
+Nineteen new Apex tests in `DocGenHtmlTemplateTest` covering body/header/footer merge, page counters, loop containers, zip extraction, giant-query PDF, and data URI round-trips. E2E-03 extended with HTML assertions. DocGen's existing DOCX giant-query tests (38) untouched and passing.
+
+### Limitations worth knowing
+
+- Headers/footers that combine rich content (images, tables) with page counters flatten to plain text. Use image-in-header + counter-in-footer, or vice versa.
+- HTML templates don't currently support `{@Signature_…}` flows — untested.
+- Bulk generation, preview modal, Flow invocable, template export/import, and version restore are wired up but haven't been explicitly validated end-to-end for HTML.
+
+---
+
 ## v1.60.0 — Correct image extension filter for `{%Image:N}`
 
 Promoted package: `04tal000006lrGjAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006lrGjAAI)
