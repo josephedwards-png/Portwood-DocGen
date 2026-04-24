@@ -108,6 +108,32 @@ try {
     } else { fail++; System.debug('GENERATE PDF SAVE TO RECORD: FAIL — null result'); }
 } catch (Exception e) { fail++; System.debug('GENERATE PDF SAVE TO RECORD: FAIL — ' + e.getMessage()); }
 
+// ===== HTML template type (v1.61+) — raw HTML input, PDF output =====
+try {
+    DocGen_Template__c hTmpl = new DocGen_Template__c(
+        Name = 'E2E HTML Template ' + Datetime.now().getTime(),
+        Type__c = 'HTML', Output_Format__c = 'PDF', Base_Object_API__c = 'Account',
+        Query_Config__c = 'Name, Industry',
+        Header_Html__c = '<div>{Name} - Page {PageNumber}</div>',
+        Footer_Html__c = '<div>Page {PageNumber} of {TotalPages}</div>'
+    );
+    insert hTmpl;
+    String body = '<html><body><h1>{Name}</h1><p>Industry: {Industry}</p></body></html>';
+    ContentVersion hcv = new ContentVersion(Title = hTmpl.Name, PathOnClient = 'b.html',
+        VersionData = Blob.valueOf(body), FirstPublishLocationId = hTmpl.Id);
+    insert hcv;
+    hcv = [SELECT Id FROM ContentVersion WHERE Id = :hcv.Id];
+    insert new DocGen_Template_Version__c(Template__c = hTmpl.Id, Content_Version_Id__c = hcv.Id, Is_Active__c = true);
+    Map<String, Object> hr = DocGenService.generatePdfBlob(hTmpl.Id, acctId);
+    Blob hpdf = (Blob) hr.get('blob');
+    if (hpdf != null && hpdf.size() > 100) { pass++; System.debug('HTML TEMPLATE PDF: PASS — size=' + hpdf.size()); }
+    else { fail++; System.debug('HTML TEMPLATE PDF: FAIL — blob too small'); }
+    String lh = DocGenService.lastRenderedHtml;
+    if (lh != null && lh.contains('counter(page)') && lh.contains('@top-center')) { pass++; System.debug('HTML COUNTER CSS: PASS'); }
+    else { fail++; System.debug('HTML COUNTER CSS: FAIL'); }
+    delete hTmpl;
+} catch (Exception e) { fail++; System.debug('HTML TEMPLATE PDF: FAIL — ' + e.getMessage() + ' line ' + e.getLineNumber()); }
+
 System.debug('========================================');
 System.debug('E2E-03 GENERATE PDF — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

@@ -417,6 +417,72 @@
 
                         </lightning-tab>
 
+                        <!-- Tab 1b: HTML Header / Footer (HTML type only) -->
+                        <template if:true={isEditTypeHtml}>
+                        <lightning-tab label="Header / Footer" value="headerFooter">
+                            <div class="slds-var-p-around_small">
+                                <div class="slds-box slds-theme_shade slds-var-m-bottom_medium" style="font-size: 0.85rem;">
+                                    Content placed in the page margins of every page. Supports merge tags including
+                                    <code>&#123;PageNumber&#125;</code> and <code>&#123;TotalPages&#125;</code>. Leave blank to omit.
+                                </div>
+                                <div class="slds-var-m-top_small" style="display:flex; align-items:center; justify-content:space-between;">
+                                    <label class="slds-form-element__label" style="font-weight:600;">Header</label>
+                                    <lightning-button
+                                        label={headerSourceToggleLabel}
+                                        icon-name="utility:anywhere_chat"
+                                        variant="base"
+                                        onclick={toggleHeaderHtmlSource}>
+                                    </lightning-button>
+                                </div>
+                                <template if:false={showHeaderHtmlSource}>
+                                    <lightning-input-rich-text
+                                        value={editTemplateHeaderHtml}
+                                        onchange={handleEditHeaderHtmlChange}
+                                        placeholder="e.g. &#123;Name&#125; — Page &#123;PageNumber&#125; of &#123;TotalPages&#125;"
+                                        label-visible="false">
+                                    </lightning-input-rich-text>
+                                </template>
+                                <template if:true={showHeaderHtmlSource}>
+                                    <lightning-textarea
+                                        label="Header HTML source"
+                                        variant="label-hidden"
+                                        value={editTemplateHeaderHtml}
+                                        onchange={handleEditHeaderHtmlChange}
+                                        placeholder='<div style="text-align:right;"><img src="..." width="40"/> Page &#123;PageNumber&#125;</div>'
+                                        class="docgen-html-source">
+                                    </lightning-textarea>
+                                </template>
+                                <div class="slds-var-m-top_large" style="display:flex; align-items:center; justify-content:space-between;">
+                                    <label class="slds-form-element__label" style="font-weight:600;">Footer</label>
+                                    <lightning-button
+                                        label={footerSourceToggleLabel}
+                                        icon-name="utility:anywhere_chat"
+                                        variant="base"
+                                        onclick={toggleFooterHtmlSource}>
+                                    </lightning-button>
+                                </div>
+                                <template if:false={showFooterHtmlSource}>
+                                    <lightning-input-rich-text
+                                        value={editTemplateFooterHtml}
+                                        onchange={handleEditFooterHtmlChange}
+                                        placeholder="e.g. Confidential — Page &#123;PageNumber&#125; of &#123;TotalPages&#125;"
+                                        label-visible="false">
+                                    </lightning-input-rich-text>
+                                </template>
+                                <template if:true={showFooterHtmlSource}>
+                                    <lightning-textarea
+                                        label="Footer HTML source"
+                                        variant="label-hidden"
+                                        value={editTemplateFooterHtml}
+                                        onchange={handleEditFooterHtmlChange}
+                                        placeholder='<div style="text-align:center;font-size:9pt;">Confidential — Page &#123;PageNumber&#125; of &#123;TotalPages&#125;</div>'
+                                        class="docgen-html-source">
+                                    </lightning-textarea>
+                                </template>
+                            </div>
+                        </lightning-tab>
+                        </template>
+
                         <!-- Tab 2: Query Configuration -->
                         <lightning-tab label="Query Configuration" value="query" onactive={handleQueryTabActive}>
                              <div class="slds-var-p-horizontal_small" style="padding-top: 8px;">
@@ -614,21 +680,42 @@
                                           </div>
                                      </div>
                                      <div class="slds-box slds-theme_shade" style="border-radius: 6px;">
-                                         <lightning-file-upload
-                                            label="Upload New Version"
-                                            name="fileUploaderEdit"
-                                            accept={acceptedFormats}
-                                            record-id={editTemplateId}
-                                            onuploadfinished={handleEditUploadFinished}>
-                                        </lightning-file-upload>
-                                        
+                                        <template if:false={isEditTypeHtml}>
+                                            <lightning-file-upload
+                                                label="Upload New Version"
+                                                name="fileUploaderEdit"
+                                                accept={acceptedFormats}
+                                                record-id={editTemplateId}
+                                                onuploadfinished={handleEditUploadFinished}>
+                                            </lightning-file-upload>
+                                        </template>
+
+                                        <template if:true={isEditTypeHtml}>
+                                            <label class="slds-form-element__label">Upload New Version</label>
+                                            <p class="slds-text-body_small slds-var-m-bottom_x-small">Accepts <code>.html</code>, <code>.htm</code>, or a Google Docs "Download → Web Page" <code>.zip</code>. Images are extracted and linked automatically.</p>
+                                            <input type="file"
+                                                class="docgen-html-file-input"
+                                                accept=".html,.htm,.zip"
+                                                onchange={handleHtmlFileSelected}
+                                                style="display:none;"/>
+                                            <lightning-button
+                                                label="Choose File"
+                                                icon-name="utility:upload"
+                                                onclick={triggerHtmlFilePicker}
+                                                disabled={isUploadingHtml}>
+                                            </lightning-button>
+                                            <template if:true={isUploadingHtml}>
+                                                <lightning-spinner alternative-text="Uploading" size="small" class="slds-var-m-left_small"></lightning-spinner>
+                                            </template>
+                                        </template>
+
                                         <template if:true={uploadedFileName}>
                                             <div class="slds-box slds-box_x-small slds-theme_success slds-var-m-top_medium">
                                                 <lightning-icon icon-name="utility:check" size="x-small" class="slds-var-m-right_small" variant="inverse"></lightning-icon>
                                                 <strong>Ready to Save:</strong> {uploadedFileName}
                                             </div>
                                         </template>
-                                        
+
                                         <p class="slds-text-body_small slds-var-m-top_medium slds-text-color_weak"><strong>Note:</strong> Uploading attaches the file. You must click <strong>"Save as New Version"</strong> below to create a new snapshot.</p>
                                      </div>
                                  </div>

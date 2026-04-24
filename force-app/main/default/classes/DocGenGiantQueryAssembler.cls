@@ -160,8 +160,28 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
     /**
      * Builds the HTML template wrapper with CSS and resolved parent merge tags.
      * Returns the template with a {ROWS} placeholder for row injection.
+     *
+     * Two paths:
+     *   - DOCX templates: read the pre-baked `docgen_tmpl_html_<versionId>` CV
+     *     (built at version-save time by DocGenHtmlRenderer.convertToHtml), inject
+     *     column CSS derived from <w:tblGrid>, resolve parent/aggregate tags,
+     *     replace the loop <tr> with {ROWS}.
+     *   - HTML templates (v1.61+): read the active version's body CV directly,
+     *     resolve parent/aggregate tags, replace the loop <tr>/<li> with {ROWS},
+     *     then wrap with @page margin boxes + header/footer/page counters via
+     *     DocGenService.wrapHtmlForPdf.
      */
     private String buildHtmlTemplate() {
+        // Route HTML-type templates to their own path — simpler, no DOCX-specific
+        // column-CSS extraction or <w:tblGrid> parsing.
+        List<DocGen_Template__c> tpls = [
+            SELECT Type__c, Header_Html__c, Footer_Html__c FROM DocGen_Template__c
+            WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (!tpls.isEmpty() && tpls[0].Type__c == 'HTML') {
+            return buildHtmlTemplateForHtmlType(tpls[0].Header_Html__c, tpls[0].Footer_Html__c);
+        }
+
         List<DocGen_Template_Version__c> vers = [
             SELECT Id FROM DocGen_Template_Version__c
             WHERE Template__c = :templateId AND Is_Active__c = true
@@ -240,6 +260,100 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
      */
     private static String injectRowsIntoTemplate(String template, String rows) {
         return template.replace('{ROWS}', rows);
+    }
+
+    /**
+     * HTML-type template shell builder. Reads the active version's body CV
+     * (already rewritten with /sfc/ image URLs at upload time), resolves
+     * parent + aggregate merge tags, inserts a {ROWS} placeholder at the
+     * giant-loop boundary, and wraps with the PDF shell (page margin boxes,
+     * running header/footer with page counters). Output has the same shape
+     * the DOCX path emits: a full HTML doc with {ROWS} ready for row injection.
+     */
+    private String buildHtmlTemplateForHtmlType(String headerHtml, String footerHtml) {
+        List<DocGen_Template_Version__c> vers = [
+            SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = true
+            WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (vers.isEmpty() || String.isBlank(vers[0].Content_Version_Id__c)) {
+            throw new DocGenException('HTML template has no active version body.');
+        }
+        Id bodyCvId = (Id) vers[0].Content_Version_Id__c;
+        List<ContentVersion> cvs = [
+            SELECT VersionData FROM ContentVersion WHERE Id = :bodyCvId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (cvs.isEmpty()) {
+            throw new DocGenException('HTML template body ContentVersion not found.');
+        }
+        String rawHtml = cvs[0].VersionData.toString();
+
+        String sourceStyles = DocGenService.extractHtmlStyleBlocks(rawHtml);
+        String bodyContent = DocGenService.extractHtmlBodyContent(rawHtml);
+
+        // Resolve parent-level merge tags (outside the loop) and grand-total
+        // aggregate tags. Both operate as regex/string replace on HTML —
+        // same implementation works for HTML-type templates.
+        bodyContent = resolveParentMergeTags(bodyContent);
+        bodyContent = resolveGiantAggregateTags(bodyContent);
+
+        // Replace the giant-loop <tr>…</tr> (or <li>…</li>) section with a
+        // {ROWS} placeholder. Same boundary logic the DOCX path uses — find
+        // the nearest opening tag before {#Rel} and the next closing container.
+        String openTag = '{#' + giantRelationshipName + '}';
+        if (bodyContent.contains(openTag)) {
+            Integer openIdx = bodyContent.indexOf(openTag);
+            Integer trStart = bodyContent.lastIndexOf('<tr', openIdx);
+            Integer tableEnd = bodyContent.indexOf('</table>', openIdx);
+            Integer liStart = bodyContent.lastIndexOf('<li', openIdx);
+            Integer listEnd = -1;
+            Integer ulEnd = bodyContent.indexOf('</ul>', openIdx);
+            Integer olEnd = bodyContent.indexOf('</ol>', openIdx);
+            if (ulEnd != -1 && olEnd != -1) {
+                listEnd = Math.min(ulEnd, olEnd);
+            } else if (ulEnd != -1) {
+                listEnd = ulEnd;
+            } else if (olEnd != -1) {
+                listEnd = olEnd;
+            }
+
+            // Prefer the innermost (closest to openTag) container
+            Boolean useTable = (trStart != -1 && tableEnd != -1 && (liStart == -1 || trStart > liStart));
+            Boolean useList = (liStart != -1 && listEnd != -1 && (trStart == -1 || liStart > trStart));
+
+            if (useTable) {
+                bodyContent = bodyContent.substring(0, trStart) + '{ROWS}' + bodyContent.substring(tableEnd);
+            } else if (useList) {
+                bodyContent = bodyContent.substring(0, liStart) + '{ROWS}' + bodyContent.substring(listEnd);
+            } else {
+                // No recognisable container — fall back to replacing the
+                // `{#Rel}…{/Rel}` section with {ROWS} directly. The loop body
+                // already got rendered per-record into fragments; the shell
+                // just needs a drop-in point.
+                Integer closeIdx = bodyContent.indexOf('{/' + giantRelationshipName + '}');
+                if (closeIdx != -1) {
+                    Integer closeEnd = bodyContent.indexOf('}', closeIdx) + 1;
+                    bodyContent = bodyContent.substring(0, openIdx) + '{ROWS}' + bodyContent.substring(closeEnd);
+                }
+            }
+        } else {
+            // Loop tag not present in parent-resolved body (shouldn't happen,
+            // but handle gracefully by appending a table at the end).
+            bodyContent += '<table style="width:100%;border-collapse:collapse;">{ROWS}</table>';
+        }
+
+        // Resolve field merge tags in the header/footer using the same parent-
+        // tag resolver that runs on the body. Without this, `{Name}`, `{Owner.Name}`,
+        // `{Field:format}` tags in Header_Html__c / Footer_Html__c would render
+        // as literal text in the final PDF.
+        String mergedHeader = String.isBlank(headerHtml)
+            ? null
+            : resolveParentMergeTags(DocGenService.decodeBraceEntities(headerHtml));
+        String mergedFooter = String.isBlank(footerHtml)
+            ? null
+            : resolveParentMergeTags(DocGenService.decodeBraceEntities(footerHtml));
+
+        return DocGenService.wrapHtmlForPdf(bodyContent, sourceStyles, mergedHeader, mergedFooter);
     }
 
     /**

@@ -14,7 +14,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         if (templateId == null) { throw new DocGenException('Template ID is missing.'); }
 
         /* code-analyzer-suppress ApexFlsViolation */
-        List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
+        List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c,
+                Header_Html__c, Footer_Html__c
             FROM DocGen_Template__c
             WHERE Id = :templateId
             WITH SYSTEM_MODE
@@ -45,7 +46,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             'templateFile' => fileContent,
             'templateType' => template.Type__c,
             'outputFormat' => template.Output_Format__c,
-            'titleFormat' => template.Document_Title_Format__c
+            'titleFormat' => template.Document_Title_Format__c,
+            'headerHtml' => template.Header_Html__c,
+            'footerHtml' => template.Footer_Html__c
         };
     }
 
@@ -69,7 +72,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         // Cache template metadata + file content on first call
         if (cachedTemplateId != templateId || cachedTemplateEnvelope == null) {
             /* code-analyzer-suppress ApexFlsViolation */
-            List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c
+            List<DocGen_Template__c> templates = [SELECT Base_Object_API__c, Query_Config__c, Type__c, Output_Format__c, Document_Title_Format__c,
+                    Header_Html__c, Footer_Html__c
                 FROM DocGen_Template__c
                 WHERE Id = :templateId
                 WITH SYSTEM_MODE
@@ -86,7 +90,9 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 'templateFile' => fileContent,
                 'templateType' => template.Type__c,
                 'outputFormat' => template.Output_Format__c,
-                'titleFormat' => template.Document_Title_Format__c
+                'titleFormat' => template.Document_Title_Format__c,
+                'headerHtml' => template.Header_Html__c,
+                'footerHtml' => template.Footer_Html__c
             };
             cachedTemplateId = templateId;
         }
@@ -374,37 +380,62 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 };
             }
 
-            // Giant Query path: create Job, extract loop body, launch batch
-            // Use pre-decomposed XML to get document.xml — avoids ZIP decompression heap cost
+            // Giant Query path: create Job, extract loop body, launch batch.
+            // Load the template body: for DOCX use pre-decomposed word/document.xml
+            // (or zip fallback); for HTML the active version's Content_Version_Id__c
+            // IS already the rewritten HTML body (with /sfc/ URLs for images).
             /* code-analyzer-suppress ApexFlsViolation */
-            List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
+            List<DocGen_Template_Version__c> activeVersions = [
+                SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c
                 WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH SYSTEM_MODE LIMIT 1];
+                WITH SYSTEM_MODE LIMIT 1
+            ];
             String documentXml = null;
-            if (!activeVersions.isEmpty()) {
-                String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
-                List<ContentVersion> xmlCvs = [
-                    SELECT VersionData FROM ContentVersion
-                    WHERE Title = :xmlKey WITH USER_MODE LIMIT 1 // NOPMD — internal pre-decomposed part
-                ];
-                if (!xmlCvs.isEmpty()) {
-                    documentXml = xmlCvs[0].VersionData.toString();
-                }
-            }
-            // Fallback: decompress ZIP if pre-decomposed parts unavailable
-            if (documentXml == null) {
-                String base64File = DocGenTemplateManager.getTemplateFileContent(templateId);
-                Blob templateBlob = EncodingUtil.base64Decode(base64File);
-                Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
-                for (Compression.ZipEntry entry : reader.getEntries()) {
-                    if (entry.getName() == 'word/document.xml') {
-                        documentXml = reader.extract(entry.getName()).toString();
-                        break;
+
+            if (template.Type__c == 'HTML') {
+                // HTML-type: read the active version's body CV directly. The body has
+                // already been rewritten at upload time (image src → /sfc/ URLs).
+                if (!activeVersions.isEmpty() && String.isNotBlank(activeVersions[0].Content_Version_Id__c)) {
+                    Id bodyCvId = (Id) activeVersions[0].Content_Version_Id__c;
+                    /* code-analyzer-suppress ApexFlsViolation */
+                    List<ContentVersion> htmlCvs = [
+                        SELECT VersionData FROM ContentVersion
+                        WHERE Id = :bodyCvId WITH SYSTEM_MODE LIMIT 1
+                    ];
+                    if (!htmlCvs.isEmpty()) {
+                        documentXml = htmlCvs[0].VersionData.toString();
                     }
                 }
-            }
-            if (documentXml == null) {
-                throw new DocGenException('Template does not contain word/document.xml.');
+                if (documentXml == null) {
+                    throw new DocGenException('HTML template has no active version body. Upload a template file first.');
+                }
+            } else {
+                // DOCX/PPTX: pre-decomposed XML avoids ZIP decompression heap cost
+                if (!activeVersions.isEmpty()) {
+                    String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
+                    List<ContentVersion> xmlCvs = [
+                        SELECT VersionData FROM ContentVersion
+                        WHERE Title = :xmlKey WITH USER_MODE LIMIT 1 // NOPMD — internal pre-decomposed part
+                    ];
+                    if (!xmlCvs.isEmpty()) {
+                        documentXml = xmlCvs[0].VersionData.toString();
+                    }
+                }
+                // Fallback: decompress ZIP if pre-decomposed parts unavailable
+                if (documentXml == null) {
+                    String base64File = DocGenTemplateManager.getTemplateFileContent(templateId);
+                    Blob templateBlob = EncodingUtil.base64Decode(base64File);
+                    Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
+                    for (Compression.ZipEntry entry : reader.getEntries()) {
+                        if (entry.getName() == 'word/document.xml') {
+                            documentXml = reader.extract(entry.getName()).toString();
+                            break;
+                        }
+                    }
+                }
+                if (documentXml == null) {
+                    throw new DocGenException('Template does not contain word/document.xml.');
+                }
             }
 
             Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationship);
@@ -580,24 +611,51 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             Map<String, Object> childNodeConfig = (Map<String, Object>) JSON.deserializeUntyped(childNodeConfigJson);
 
-            // Get document XML from pre-decomposed parts (no ZIP decompression)
+            // Load template body: DOCX uses pre-decomposed word/document.xml;
+            // HTML uses the active version's Content_Version_Id__c directly.
             /* code-analyzer-suppress ApexFlsViolation */
-            List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
+            List<DocGen_Template__c> tplForType = [
+                SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            ];
+            String templateType = tplForType.isEmpty() ? 'Word' : tplForType[0].Type__c;
+
+            /* code-analyzer-suppress ApexFlsViolation */
+            List<DocGen_Template_Version__c> activeVersions = [
+                SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c
                 WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH SYSTEM_MODE LIMIT 1];
+                WITH SYSTEM_MODE LIMIT 1
+            ];
             String documentXml = null;
-            if (!activeVersions.isEmpty()) {
-                String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
-                List<ContentVersion> xmlCvs = [
-                    SELECT VersionData FROM ContentVersion
-                    WHERE Title = :xmlKey WITH USER_MODE LIMIT 1 // NOPMD — internal pre-decomposed part
-                ];
-                if (!xmlCvs.isEmpty()) {
-                    documentXml = xmlCvs[0].VersionData.toString();
+
+            if (templateType == 'HTML') {
+                if (!activeVersions.isEmpty() && String.isNotBlank(activeVersions[0].Content_Version_Id__c)) {
+                    Id bodyCvId = (Id) activeVersions[0].Content_Version_Id__c;
+                    /* code-analyzer-suppress ApexFlsViolation */
+                    List<ContentVersion> htmlCvs = [
+                        SELECT VersionData FROM ContentVersion
+                        WHERE Id = :bodyCvId WITH SYSTEM_MODE LIMIT 1
+                    ];
+                    if (!htmlCvs.isEmpty()) {
+                        documentXml = htmlCvs[0].VersionData.toString();
+                    }
                 }
-            }
-            if (documentXml == null) {
-                throw new DocGenException('Pre-decomposed template parts not found. Please re-save the template.');
+                if (documentXml == null) {
+                    throw new DocGenException('HTML template has no active version body. Upload a template file first.');
+                }
+            } else {
+                if (!activeVersions.isEmpty()) {
+                    String xmlKey = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_word__document.xml';
+                    List<ContentVersion> xmlCvs = [
+                        SELECT VersionData FROM ContentVersion
+                        WHERE Title = :xmlKey WITH USER_MODE LIMIT 1 // NOPMD — internal pre-decomposed part
+                    ];
+                    if (!xmlCvs.isEmpty()) {
+                        documentXml = xmlCvs[0].VersionData.toString();
+                    }
+                }
+                if (documentXml == null) {
+                    throw new DocGenException('Pre-decomposed template parts not found. Please re-save the template.');
+                }
             }
 
             Map<String, String> loopParts = DocGenService.extractLoopBody(documentXml, giantRelationship);
@@ -1245,7 +1303,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
         return [SELECT Id, Name, Description__c, Type__c, Base_Object_API__c, Category__c, Query_Config__c,
                    Test_Record_Id__c, Output_Format__c, Document_Title_Format__c, Is_Default__c,
                    Sort_Order__c, Lock_Output_Format__c, Specific_Record_Ids__c, Required_Permission_Sets__c,
-                   Record_Filter__c,
+                   Record_Filter__c, Header_Html__c, Footer_Html__c,
                    (SELECT ContentDocumentId FROM ContentDocumentLinks ORDER BY ContentDocument.CreatedDate DESC LIMIT 1)
             FROM DocGen_Template__c
             WITH SYSTEM_MODE
@@ -1310,6 +1368,12 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             }
             if (fields.containsKey('Record_Filter__c')) {
                 template.Record_Filter__c = (String) fields.get('Record_Filter__c');
+            }
+            if (fields.containsKey('Header_Html__c')) {
+                template.Header_Html__c = (String) fields.get('Header_Html__c');
+            }
+            if (fields.containsKey('Footer_Html__c')) {
+                template.Footer_Html__c = (String) fields.get('Footer_Html__c');
             }
             // Update Default flag if provided — enforce one default per object
             if (fields.containsKey('Is_Default__c')) {
@@ -1397,10 +1461,113 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                     // Intentionally swallowed — image extraction failure is non-fatal
                     String noop = imgErr.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
                 }
+
+                // HTML templates (v1.61+): if the upload was a Google Docs
+                // "Download → Web Page" zip, extract images + rewrite src refs.
+                // No-ops for single-html uploads or non-HTML templates.
+                try {
+                    DocGenService.extractAndSaveHtmlTemplateAssets(templateId, version.Id);
+                } catch (Exception htmlErr) {
+                    String noop = htmlErr.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
+                }
             }
         } catch (Exception e) {
             throw DocGenService.ahe(e, 'Error saving template. Please verify your inputs and permissions.');
         }
+    }
+
+    /**
+     * HTML template upload — image part (v1.61+).
+     *
+     * Part of the client-side zip-break-apart flow: the LWC unzips Google Docs
+     * exports in the browser, then calls this endpoint once per image with the
+     * image's base64. Each call consumes only a single image's worth of heap,
+     * independent of total template size.
+     *
+     * The ContentVersion is linked to the template so the image appears in
+     * Files and is cleaned up if the template is deleted. Returns the CV Id
+     * so the client can rewrite <img src> references before sending the body.
+     */
+    @AuraEnabled
+    public static Map<String, Object> saveHtmlTemplateImage(Id templateId, String fileName, String base64Content) {
+        if (templateId == null) { throw new DocGenException('Template ID is required.'); }
+        if (String.isBlank(fileName)) { throw new DocGenException('File name is required.'); }
+        if (String.isBlank(base64Content)) { throw new DocGenException('File content is required.'); }
+
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template__c> tpls = [
+            SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (tpls.isEmpty()) { throw new DocGenException('Template not found.'); }
+        if (tpls[0].Type__c != 'HTML') {
+            throw new DocGenException('saveHtmlTemplateImage is for HTML-type templates only.');
+        }
+
+        String base = fileName.substringAfterLast('/');
+        if (String.isBlank(base)) { base = fileName; }
+
+        ContentVersion cv = new ContentVersion();
+        cv.Title = 'docgen_html_img_' + templateId + '_' + Datetime.now().getTime() + '_' + base;
+        cv.PathOnClient = base;
+        cv.VersionData = EncodingUtil.base64Decode(base64Content);
+        cv.FirstPublishLocationId = templateId;
+        /* code-analyzer-suppress ApexFlsViolation */
+        insert cv; // NOPMD — package-internal; CRUD via DocGen perm sets
+
+        return new Map<String, Object>{
+            'contentVersionId' => cv.Id,
+            'fileName' => base,
+            'url' => '/sfc/servlet.shepherd/version/download/' + cv.Id
+        };
+    }
+
+    /**
+     * HTML template upload — body part (v1.61+).
+     *
+     * Final call in the client-side zip-break-apart flow. The LWC has already
+     * unzipped, uploaded each image via saveHtmlTemplateImage, and rewritten
+     * every <img src="..."> in the HTML to point at the returned CV URLs.
+     * Server just stores the finished HTML as a ContentVersion — tiny heap.
+     *
+     * Returns the same shape lightning-file-upload produces so the rest of
+     * the LWC save flow (Save as New Version → saveTemplate) is unchanged.
+     */
+    @AuraEnabled
+    public static Map<String, Object> saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent) {
+        if (templateId == null) { throw new DocGenException('Template ID is required.'); }
+        if (String.isBlank(htmlContent)) { throw new DocGenException('HTML content is required.'); }
+
+        /* code-analyzer-suppress ApexFlsViolation */
+        List<DocGen_Template__c> tpls = [
+            SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (tpls.isEmpty()) { throw new DocGenException('Template not found.'); }
+        if (tpls[0].Type__c != 'HTML') {
+            throw new DocGenException('saveHtmlTemplateBody is for HTML-type templates only.');
+        }
+
+        String pathBase = String.isBlank(fileName) ? 'body' : fileName.substringBeforeLast('.');
+        if (String.isBlank(pathBase)) { pathBase = 'body'; }
+
+        ContentVersion cv = new ContentVersion();
+        cv.Title = 'docgen_html_body_' + templateId + '_' + Datetime.now().getTime();
+        cv.PathOnClient = pathBase + '.html';
+        cv.VersionData = Blob.valueOf(htmlContent);
+        cv.FirstPublishLocationId = templateId;
+        /* code-analyzer-suppress ApexFlsViolation */
+        insert cv; // NOPMD — package-internal; CRUD via DocGen perm sets
+
+        /* code-analyzer-suppress ApexFlsViolation */
+        ContentVersion reload = [
+            SELECT Id, ContentDocumentId FROM ContentVersion
+            WHERE Id = :cv.Id WITH SYSTEM_MODE LIMIT 1
+        ];
+
+        return new Map<String, Object>{
+            'contentVersionId' => cv.Id,
+            'contentDocumentId' => reload.ContentDocumentId,
+            'fileName' => fileName
+        };
     }
 
     /**
@@ -3867,6 +4034,7 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             /* code-analyzer-suppress ApexFlsViolation */
             List<DocGen_Template__c> templates = [SELECT Name, Base_Object_API__c, Type__c, Output_Format__c, Category__c,
                        Description__c, Query_Config__c, Document_Title_Format__c, Is_Default__c,
+                       Header_Html__c, Footer_Html__c,
                        (SELECT Id, Is_Active__c, Query_Config__c, Content_Version_Id__c,
                                Category__c, Description__c, Type__c, Base_Object_API__c
                         FROM Versions__r WHERE Is_Active__c = true LIMIT 1),
@@ -3894,6 +4062,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmplData.put('Query_Config__c', tmpl.Query_Config__c);
             tmplData.put('Document_Title_Format__c', tmpl.Document_Title_Format__c);
             tmplData.put('Is_Default__c', tmpl.Is_Default__c);
+            tmplData.put('Header_Html__c', tmpl.Header_Html__c);
+            tmplData.put('Footer_Html__c', tmpl.Footer_Html__c);
             bundle.put('template', tmplData);
 
             // Active version's template file
@@ -3971,6 +4141,8 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
             tmpl.Query_Config__c = (String) tmplData.get('Query_Config__c');
             tmpl.Document_Title_Format__c = (String) tmplData.get('Document_Title_Format__c');
             tmpl.Is_Default__c = tmplData.get('Is_Default__c') == true;
+            tmpl.Header_Html__c = (String) tmplData.get('Header_Html__c');
+            tmpl.Footer_Html__c = (String) tmplData.get('Footer_Html__c');
             /* code-analyzer-suppress ApexFlsViolation */
             insert tmpl; // NOPMD ApexCRUDViolation - package-internal custom object; CRUD controlled by DocGen permission sets
 

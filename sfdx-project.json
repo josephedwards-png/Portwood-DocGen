@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.60.0 — Correct image extension filter (add BMP/TIFF, drop WebP)",
-      "versionNumber": "1.60.0.NEXT",
-      "ancestorId": "04tal000006lrDVAAY",
+      "versionName": "1.61.0 — HTML templates (Google Docs, Notion, any HTML source) with header/footer + page numbers",
+      "versionNumber": "1.61.0.NEXT",
+      "ancestorId": "04tal000006lrGjAAI",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -93,6 +93,8 @@
     "Portwood DocGen Managed@1.57.0-2": "04tal000006lplBAAQ",
     "Portwood DocGen Managed@1.58.0-1": "04tal000006lpoPAAQ",
     "Portwood DocGen Managed@1.59.0-1": "04tal000006lrDVAAY",
-    "Portwood DocGen Managed@1.60.0-1": "04tal000006lrGjAAI"
+    "Portwood DocGen Managed@1.60.0-1": "04tal000006lrGjAAI",
+    "Portwood DocGen Managed@1.61.0-1": "04tal000006pviLAAQ",
+    "Portwood DocGen Managed@1.61.0-2": "04tal000006pzu1AAA"
   }
 }

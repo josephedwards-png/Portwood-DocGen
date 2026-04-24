@@ -210,6 +210,22 @@ public with sharing class DocGenService {
         mr.templateType = templateType;
         mr.outputFormat = outputFormat;
 
+        // HTML template type (v1.61+): no ZIP, no DOCX XML — raw HTML body with
+        // merge-tag substitution + header/footer fields wrapped via @page CSS
+        // running elements. Output is always PDF via Blob.toPdf().
+        if (templateType == 'HTML') {
+            currentTemplateType = 'HTML';
+            currentOutputFormat = 'PDF';
+            return mergeHtmlTemplate(
+                mr,
+                base64File,
+                recordDataMap,
+                (String) dataMap.get('headerHtml'),
+                (String) dataMap.get('footerHtml'),
+                (String) dataMap.get('titleFormat')
+            );
+        }
+
         // Determine rels path based on template type
         if (templateType == 'PowerPoint') {
             mr.relsPath = 'ppt/_rels/presentation.xml.rels';
@@ -589,7 +605,7 @@ public with sharing class DocGenService {
         MergeResult mr = mergeTemplate(templateId, recordId, resolvedImages, outputFormatOverride);
 
         Blob resultBlob;
-        if (mr.outputFormat == 'PDF' && mr.templateType == 'Word') {
+        if (mr.outputFormat == 'PDF' && (mr.templateType == 'Word' || mr.templateType == 'HTML')) {
             resultBlob = renderPdf(mr, templateId, recordId);
         } else {
             resultBlob = assembleZip(mr);
@@ -614,8 +630,8 @@ public with sharing class DocGenService {
     @TestVisible
     private static void validateOutputFormatOverride(Id templateId, String outputFormatOverride) {
         if (String.isBlank(outputFormatOverride)) return;
-        if (outputFormatOverride != 'PDF' && outputFormatOverride != 'Word' && outputFormatOverride != 'PowerPoint') {
-            throw new DocGenException('Invalid output format override: ' + outputFormatOverride + '. Expected PDF, Word, or PowerPoint.');
+        if (outputFormatOverride != 'PDF' && outputFormatOverride != 'Word' && outputFormatOverride != 'PowerPoint' && outputFormatOverride != 'HTML') {
+            throw new DocGenException('Invalid output format override: ' + outputFormatOverride + '. Expected PDF, Word, PowerPoint, or HTML.');
         }
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template__c> tpls = [
@@ -1415,8 +1431,17 @@ public with sharing class DocGenService {
      */
     private static Blob renderPdf(MergeResult mr, Id templateId, Id recordId) {
         if (Test.isRunningTest()) {
-            lastRenderedHtml = '<html><body><p>Test PDF</p></body></html>';
+            lastRenderedHtml = (mr != null && mr.templateType == 'HTML' && String.isNotBlank(mr.documentXml))
+                ? mr.documentXml
+                : '<html><body><p>Test PDF</p></body></html>';
             return Blob.toPdf(lastRenderedHtml);
+        }
+
+        // HTML template type: documentXml is a ready-to-render HTML document —
+        // skip the DOCX→HTML conversion entirely.
+        if (mr.templateType == 'HTML') {
+            lastRenderedHtml = mr.documentXml;
+            return Blob.toPdf(mr.documentXml);
         }
 
         Map<String, String> pdfImages = buildPdfImageMap(mr, templateId);
@@ -1448,7 +1473,12 @@ public with sharing class DocGenService {
         MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
 
         if (mr.templateType == 'PowerPoint') {
-            throw new DocGenException('Preview is only supported for Word templates.');
+            throw new DocGenException('Preview is only supported for Word and HTML templates.');
+        }
+
+        // HTML templates: documentXml is already the full rendered HTML
+        if (mr.templateType == 'HTML') {
+            return mr.documentXml;
         }
 
         // Build the same image map the PDF generator uses
@@ -1492,7 +1522,7 @@ public with sharing class DocGenService {
         MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
 
         if (mr.templateType == 'PowerPoint') {
-            throw new DocGenException('Server-side PDF generation is only supported for Word templates.');
+            throw new DocGenException('Server-side PDF generation is only supported for Word and HTML templates.');
         }
 
         Blob pdfBlob = renderPdf(mr, templateId, recordId);
@@ -1559,7 +1589,7 @@ public with sharing class DocGenService {
         validateOutputFormatOverride(templateId, outputFormatOverride);
         MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride);
 
-        if (mr.outputFormat == 'PDF' && mr.templateType == 'Word') {
+        if (mr.outputFormat == 'PDF' && (mr.templateType == 'Word' || mr.templateType == 'HTML')) {
             Blob pdfBlob = renderPdf(mr, templateId, recordId);
             return savePdfFile(pdfBlob, mr.docTitle, recordId);
         }
@@ -1803,6 +1833,16 @@ public with sharing class DocGenService {
                 continue;
             }
 
+            // Preserve {PageNumber} and {TotalPages} — resolved by the HTML-to-PDF
+            // wrap layer via @page CSS counter() rules. Flying Saucer can only
+            // resolve counter(page)/counter(pages) inside @page context, so the
+            // tokens have to survive processXml intact for wrapHtmlForPdf to see.
+            if ('PageNumber'.equalsIgnoreCase(tagContent) || 'TotalPages'.equalsIgnoreCase(tagContent)) {
+                output += '{' + rawTag + '}';
+                cursor = tagClose + 1;
+                continue;
+            }
+
             // Strip Salesforce-style {!Field} prefix — treat {!X} the same as {X}
             if (tagContent.startsWith('!')) {
                 tagContent = tagContent.substring(1).trim();
@@ -1855,6 +1895,37 @@ public with sharing class DocGenService {
                                 if (chosenContainerStart == -1 || paragraphStart > chosenContainerStart) {
                                     chosenContainerStart = paragraphStart;
                                     chosenContainerEnd = paragraphContainerEnd;
+                                }
+                            }
+                        }
+                    }
+
+                    // HTML template type (v1.61+): mirror the DOCX auto-expand behavior
+                    // for <tr> rows and <li> list items. Only considered when the merge
+                    // engine is running in HTML context — leaves DOCX paths untouched.
+                    if (currentTemplateType == 'HTML') {
+                        // Candidate: HTML <tr> row
+                        Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', cursor);
+                        if (htmlTrStart != -1) {
+                            Integer htmlTrEnd = xml.indexOf('</tr>', htmlTrStart);
+                            Boolean trClosedBeforeCursor = xml.substring(htmlTrStart, cursor).contains('</tr>');
+                            if (!trClosedBeforeCursor && htmlTrEnd != -1 && htmlTrEnd > closeTagEnd) {
+                                if (chosenContainerStart == -1 || htmlTrStart > chosenContainerStart) {
+                                    chosenContainerStart = htmlTrStart;
+                                    chosenContainerEnd = htmlTrEnd + 5; // </tr>
+                                }
+                            }
+                        }
+
+                        // Candidate: HTML <li> list item
+                        Integer htmlLiStart = lastIndexOfTagStart(xml, 'li', cursor);
+                        if (htmlLiStart != -1) {
+                            Integer htmlLiEnd = xml.indexOf('</li>', htmlLiStart);
+                            Boolean liClosedBeforeCursor = xml.substring(htmlLiStart, cursor).contains('</li>');
+                            if (!liClosedBeforeCursor && htmlLiEnd != -1 && htmlLiEnd > closeTagEnd) {
+                                if (chosenContainerStart == -1 || htmlLiStart > chosenContainerStart) {
+                                    chosenContainerStart = htmlLiStart;
+                                    chosenContainerEnd = htmlLiEnd + 5; // </li>
                                 }
                             }
                         }
@@ -3383,6 +3454,24 @@ public with sharing class DocGenService {
             spec.fileName = 'docgen_image_' + imageCounter + '.' + ext;
             spec.fileExtension = ext;
 
+            // HTML template (v1.61+): emit an <img> tag with the resolved URL
+            // instead of DOCX DrawingML. Blob.toPdf resolves /sfc/ relative URLs
+            // natively. Data URIs can't be rendered by Blob.toPdf so blob-only
+            // field values (without a resolvable URL) skip to avoid broken img.
+            if (currentTemplateType == 'HTML') {
+                String imgUrl = (spec.contentVersionImageUrl != null)
+                    ? spec.contentVersionImageUrl
+                    : spec.sourceUrl;
+                if (String.isBlank(imgUrl) || imgUrl.startsWith('data:')) {
+                    return '';
+                }
+                String sizeCss = '';
+                if (spec.widthPx != null) { sizeCss += 'width:' + spec.widthPx + 'px;'; }
+                if (spec.heightPx != null) { sizeCss += 'height:' + spec.heightPx + 'px;'; }
+                if (String.isBlank(sizeCss)) { sizeCss = 'max-width:100%;'; }
+                return '<img src="' + imgUrl.escapeHtml4() + '" style="' + sizeCss + '"/>';
+            }
+
             // Register image — blob for DOCX, URL for PDF
             Map<String, Object> imgEntry = new Map<String, Object>{
                 'relId' => spec.relationshipId,
@@ -4076,18 +4165,49 @@ public with sharing class DocGenService {
 
         Integer closeTagEnd = xml.indexOf('}', sectionEnd) + 1;
 
-        // Determine container boundaries (same logic as processXml — expand to w:tr if applicable)
+        // Determine container boundaries (same logic as processXml — expand to
+        // the nearest valid row/list-item container if applicable). Checks both
+        // DOCX <w:tr> and HTML <tr>/<li> containers; whichever is closer and
+        // encloses the full {#Rel}...{/Rel} section wins. Safe for both
+        // template types because DOCX XML doesn't contain literal <tr>/<li>
+        // and HTML doesn't contain <w:tr>.
         Integer containerStart = openIdx;
         Integer containerEnd = closeTagEnd;
 
-        // Check for table row container
-        Integer rowContainerStart = lastIndexOfTagStart(xml, 'w:tr', openIdx);
-        if (rowContainerStart != -1) {
-            Integer rowContainerEnd = xml.indexOf('</w:tr>', rowContainerStart);
-            Boolean rowClosedBeforeOpen = xml.substring(rowContainerStart, openIdx).contains('</w:tr>');
-            if (!rowClosedBeforeOpen && rowContainerEnd != -1 && rowContainerEnd >= closeTagEnd) {
-                containerStart = rowContainerStart;
-                containerEnd = rowContainerEnd + 7; // </w:tr>
+        // DOCX <w:tr>
+        Integer wTrStart = lastIndexOfTagStart(xml, 'w:tr', openIdx);
+        if (wTrStart != -1) {
+            Integer wTrEnd = xml.indexOf('</w:tr>', wTrStart);
+            Boolean closedBeforeOpen = xml.substring(wTrStart, openIdx).contains('</w:tr>');
+            if (!closedBeforeOpen && wTrEnd != -1 && wTrEnd >= closeTagEnd) {
+                containerStart = wTrStart;
+                containerEnd = wTrEnd + 7; // </w:tr>
+            }
+        }
+
+        // HTML <tr>
+        Integer htmlTrStart = lastIndexOfTagStart(xml, 'tr', openIdx);
+        if (htmlTrStart != -1) {
+            Integer htmlTrEnd = xml.indexOf('</tr>', htmlTrStart);
+            Boolean closedBeforeOpen = xml.substring(htmlTrStart, openIdx).contains('</tr>');
+            if (!closedBeforeOpen && htmlTrEnd != -1 && htmlTrEnd >= closeTagEnd) {
+                if (containerStart == openIdx || htmlTrStart > containerStart) {
+                    containerStart = htmlTrStart;
+                    containerEnd = htmlTrEnd + 5; // </tr>
+                }
+            }
+        }
+
+        // HTML <li>
+        Integer htmlLiStart = lastIndexOfTagStart(xml, 'li', openIdx);
+        if (htmlLiStart != -1) {
+            Integer htmlLiEnd = xml.indexOf('</li>', htmlLiStart);
+            Boolean closedBeforeOpen = xml.substring(htmlLiStart, openIdx).contains('</li>');
+            if (!closedBeforeOpen && htmlLiEnd != -1 && htmlLiEnd >= closeTagEnd) {
+                if (containerStart == openIdx || htmlLiStart > containerStart) {
+                    containerStart = htmlLiStart;
+                    containerEnd = htmlLiEnd + 5; // </li>
+                }
             }
         }
 
@@ -4290,5 +4410,367 @@ public with sharing class DocGenService {
 
         Blob resultBlob = assembleZip(mr);
         return saveFile(resultBlob, mr.docTitle, recordId, outputFormat, templateType);
+    }
+
+    /**
+     * HTML template asset extraction (v1.61+).
+     * Runs after an HTML-type template version is created. If the uploaded file
+     * is a zip (Google Docs "Download → Web Page" format), unpacks it:
+     *   - Saves each image entry as a ContentVersion linked to the version
+     *     (titled docgen_html_img_<versionId>_<basename>)
+     *   - Rewrites <img src="..."> references in the HTML to point at the
+     *     saved ContentVersions' /sfc/servlet.shepherd/... relative URLs
+     *   - Saves the rewritten HTML as a new ContentVersion and repoints the
+     *     version's Content_Version_Id__c at it
+     * For single .html uploads there is nothing to extract — the method returns.
+     */
+    public static void extractAndSaveHtmlTemplateAssets(Id templateId, Id versionId) {
+        List<DocGen_Template__c> templates = [
+            SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (templates.isEmpty() || templates[0].Type__c != 'HTML') { return; }
+
+        List<DocGen_Template_Version__c> vers = [
+            SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c
+            WHERE Id = :versionId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (vers.isEmpty() || String.isBlank(vers[0].Content_Version_Id__c)) { return; }
+        Id sourceCvId = (Id) vers[0].Content_Version_Id__c;
+
+        List<ContentVersion> cvs = [
+            SELECT VersionData, FileExtension, Title FROM ContentVersion
+            WHERE Id = :sourceCvId WITH SYSTEM_MODE LIMIT 1
+        ];
+        if (cvs.isEmpty()) { return; }
+        String ext = cvs[0].FileExtension == null ? '' : cvs[0].FileExtension.toLowerCase();
+        if (ext != 'zip') { return; }  // .html/.htm uploads have no assets to extract
+
+        Compression.ZipReader reader = new Compression.ZipReader(cvs[0].VersionData);
+
+        String htmlEntryName = null;
+        String htmlContent = null;
+        Map<String, Blob> imageEntries = new Map<String, Blob>();
+        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
+
+        for (Compression.ZipEntry entry : reader.getEntries()) {
+            String name = entry.getName();
+            String lower = name.toLowerCase();
+            if ((lower.endsWith('.html') || lower.endsWith('.htm')) && htmlEntryName == null) {
+                htmlEntryName = name;
+                htmlContent = reader.extract(name).toString();
+            } else {
+                Integer dot = lower.lastIndexOf('.');
+                if (dot > 0) {
+                    String e = lower.substring(dot + 1);
+                    if (imageExts.contains(e)) {
+                        imageEntries.put(name, reader.extract(name));
+                    }
+                }
+            }
+        }
+
+        if (String.isBlank(htmlContent)) {
+            throw new DocGenException('HTML template zip has no .html file.');
+        }
+
+        // 1. Insert each image as a ContentVersion, collect originalPath → CV map
+        List<ContentVersion> imageCvs = new List<ContentVersion>();
+        Map<String, Integer> nameToIndex = new Map<String, Integer>();
+        String imgPrefix = 'docgen_html_img_' + versionId + '_';
+        Integer idx = 0;
+        for (String name : imageEntries.keySet()) {
+            String base = name.substringAfterLast('/');
+            if (String.isBlank(base)) { base = name; }
+            ContentVersion icv = new ContentVersion();
+            icv.Title = imgPrefix + base;
+            icv.PathOnClient = base;
+            icv.VersionData = imageEntries.get(name);
+            icv.FirstPublishLocationId = versionId;
+            imageCvs.add(icv);
+            nameToIndex.put(name, idx);
+            idx++;
+        }
+        if (!imageCvs.isEmpty()) {
+            insert imageCvs; // NOPMD ApexCRUDViolation — package-internal; CRUD via DocGen perm sets
+        }
+
+        // 2. Rewrite every referenced image path in the HTML to its CV URL
+        String rewritten = htmlContent;
+        if (!imageCvs.isEmpty()) {
+            List<Id> reloadIds = new List<Id>();
+            for (ContentVersion icv : imageCvs) { reloadIds.add(icv.Id); }
+            Map<Id, ContentVersion> byId = new Map<Id, ContentVersion>([
+                SELECT Id FROM ContentVersion WHERE Id IN :reloadIds WITH SYSTEM_MODE
+            ]);
+            for (String originalPath : imageEntries.keySet()) {
+                Integer i = nameToIndex.get(originalPath);
+                if (i == null) { continue; }
+                Id cvId = imageCvs[i].Id;
+                if (cvId == null) { continue; }
+                String url = '/sfc/servlet.shepherd/version/download/' + cvId;
+                String basePath = originalPath.substringAfterLast('/');
+                // Google Docs most often writes src="images/foo.png". Replace
+                // the full path first, then the bare basename as a fallback.
+                rewritten = rewritten.replace('"' + originalPath + '"', '"' + url + '"');
+                rewritten = rewritten.replace('\'' + originalPath + '\'', '\'' + url + '\'');
+                if (String.isNotBlank(basePath) && basePath != originalPath) {
+                    rewritten = rewritten.replace('"' + basePath + '"', '"' + url + '"');
+                    rewritten = rewritten.replace('\'' + basePath + '\'', '\'' + url + '\'');
+                }
+            }
+        }
+
+        // 3. Save rewritten HTML as a new ContentVersion; repoint the version at it
+        ContentVersion htmlCv = new ContentVersion();
+        htmlCv.Title = 'docgen_html_body_' + versionId;
+        htmlCv.PathOnClient = 'docgen_html_body_' + versionId + '.html';
+        htmlCv.VersionData = Blob.valueOf(rewritten);
+        htmlCv.FirstPublishLocationId = versionId;
+        insert htmlCv; // NOPMD ApexCRUDViolation — package-internal; CRUD via DocGen perm sets
+
+        DocGen_Template_Version__c upd = new DocGen_Template_Version__c(
+            Id = versionId,
+            Content_Version_Id__c = htmlCv.Id
+        );
+        update upd; // NOPMD ApexCRUDViolation — package-internal; CRUD via DocGen perm sets
+    }
+
+    // =====================================================================
+    // HTML Template Pipeline (v1.61+)
+    //
+    // HTML-type templates are raw .html files (exported from Google Docs,
+    // Notion, etc.) with merge tags. Pipeline:
+    //   1. Decode base64 ContentVersion → HTML string
+    //   2. Extract <body> content + preserve <style> block
+    //   3. Run processXml on body + Header_Html__c + Footer_Html__c fields
+    //   4. Substitute {PageNumber}/{TotalPages} → CSS counter spans
+    //   5. Wrap with @page margin boxes for Flying Saucer (Blob.toPdf engine)
+    //   6. Return MergeResult with full HTML in documentXml; renderPdf() sees
+    //      templateType='HTML' and passes documentXml straight to Blob.toPdf.
+    // =====================================================================
+    private static MergeResult mergeHtmlTemplate(
+        MergeResult mr,
+        String base64File,
+        Map<String, Object> recordDataMap,
+        String headerHtml,
+        String footerHtml,
+        String titleFormat
+    ) {
+        Blob htmlBlob = EncodingUtil.base64Decode(base64File);
+        String rawHtml = htmlBlob.toString();
+
+        String sourceStyles = extractHtmlStyleBlocks(rawHtml);
+        String bodyContent = extractHtmlBodyContent(rawHtml);
+
+        String mergedBody = processXml(bodyContent, recordDataMap);
+        String mergedHeader = String.isBlank(headerHtml)
+            ? null
+            : processXml(decodeBraceEntities(headerHtml), recordDataMap);
+        String mergedFooter = String.isBlank(footerHtml)
+            ? null
+            : processXml(decodeBraceEntities(footerHtml), recordDataMap);
+
+        mr.documentXml = wrapHtmlForPdf(mergedBody, sourceStyles, mergedHeader, mergedFooter);
+
+        String title = generateDocTitle(titleFormat, recordDataMap);
+        if (String.isBlank(title)) {
+            Object nameVal = resolveValue(recordDataMap, 'Name');
+            title = (nameVal != null) ? String.valueOf(nameVal) : 'Document';
+        }
+        mr.docTitle = title;
+        return mr;
+    }
+
+    /**
+     * Extracts and concatenates the contents of all <style> blocks from HTML source.
+     * Preserves Google Docs / Notion / Word HTML class-based styling in the PDF.
+     */
+    public static String extractHtmlStyleBlocks(String html) {
+        if (String.isBlank(html)) { return ''; }
+        String result = '';
+        Integer cursor = 0;
+        String lower = html.toLowerCase();
+        while (cursor < html.length()) {
+            Integer start = lower.indexOf('<style', cursor);
+            if (start == -1) { break; }
+            Integer openEnd = html.indexOf('>', start);
+            if (openEnd == -1) { break; }
+            Integer closeStart = lower.indexOf('</style>', openEnd);
+            if (closeStart == -1) { break; }
+            result += html.substring(openEnd + 1, closeStart) + '\n';
+            cursor = closeStart + 8;
+        }
+        return result;
+    }
+
+    /**
+     * Returns content inside <body>...</body>, or the whole string if no body tag.
+     * Handles common HTML export wrappers (<html>, <head>) from Google Docs, Notion, Word, etc.
+     */
+    public static String extractHtmlBodyContent(String html) {
+        if (String.isBlank(html)) { return ''; }
+        String lower = html.toLowerCase();
+        Integer bodyOpen = lower.indexOf('<body');
+        if (bodyOpen == -1) {
+            Integer htmlClose = lower.indexOf('</html>');
+            Integer headClose = lower.indexOf('</head>');
+            Integer start = (headClose != -1) ? (html.indexOf('>', headClose) + 1) : 0;
+            Integer endPos = (htmlClose != -1) ? htmlClose : html.length();
+            if (start >= endPos) { return html; }
+            return html.substring(start, endPos);
+        }
+        Integer openEnd = html.indexOf('>', bodyOpen);
+        if (openEnd == -1) { return html; }
+        Integer bodyClose = lower.lastIndexOf('</body>');
+        if (bodyClose == -1 || bodyClose <= openEnd) {
+            return html.substring(openEnd + 1);
+        }
+        return html.substring(openEnd + 1, bodyClose);
+    }
+
+    /**
+     * No-op — retained for backward compatibility. Page-counter tokens are now
+     * preserved through processXml and resolved by wrapHtmlForPdf's @page CSS.
+     */
+    public static String substituteHtmlPageCounters(String html) {
+        return html;
+    }
+
+    /**
+     * Decodes HTML-entity-encoded curly braces back to literal `{` / `}`.
+     * lightning-input-rich-text (and other WYSIWYG editors) sometimes emit
+     * `&#123;` / `&#125;` / `&lbrace;` / `&rbrace;` around authored merge
+     * tags; processXml only matches literal braces, so un-encode before merge.
+     */
+    public static String decodeBraceEntities(String html) {
+        if (String.isBlank(html)) { return html; }
+        return html
+            .replace('&#123;', '{').replace('&#x7B;', '{').replace('&#x7b;', '{').replace('&lbrace;', '{')
+            .replace('&#125;', '}').replace('&#x7D;', '}').replace('&#x7d;', '}').replace('&rbrace;', '}');
+    }
+
+    /**
+     * Wraps merged body + header + footer into a full HTML document for
+     * Flying Saucer PDF rendering.
+     *
+     * Page counters ({PageNumber} / {TotalPages}) are only resolvable inside
+     * @page rules, so headers/footers containing those tokens get their text
+     * rendered via @page margin box `content` property with counter(page) /
+     * counter(pages) calls. Side effect: inline markup (images, tables,
+     * formatting) in such a header/footer is flattened to plain text, which
+     * is a Flying Saucer limitation.
+     *
+     * Headers/footers without page counters use the CSS running element
+     * pattern (position: running(name) + @page { @top-center: element(name) })
+     * which preserves arbitrary HTML.
+     */
+    public static String wrapHtmlForPdf(String body, String sourceStyles, String header, String footer) {
+        Boolean headerHasCounters = hasPageCounterTokens(header);
+        Boolean footerHasCounters = hasPageCounterTokens(footer);
+
+        String css = '@page { size: letter; margin: 1in;';
+        if (String.isNotBlank(header)) {
+            if (headerHasCounters) {
+                css += ' @top-center { ' + buildPageMarginContentCss(header) + ' vertical-align: bottom; font-size: 9pt; color: #444; }';
+            } else {
+                css += ' @top-center { content: element(dgheader); vertical-align: bottom; }';
+            }
+        }
+        if (String.isNotBlank(footer)) {
+            if (footerHasCounters) {
+                css += ' @bottom-center { ' + buildPageMarginContentCss(footer) + ' vertical-align: top; font-size: 9pt; color: #444; }';
+            } else {
+                css += ' @bottom-center { content: element(dgfooter); vertical-align: top; }';
+            }
+        }
+        css += ' }';
+        if (String.isNotBlank(header) && !headerHasCounters) {
+            css += ' .docgen-running-header { position: running(dgheader); }';
+        }
+        if (String.isNotBlank(footer) && !footerHasCounters) {
+            css += ' .docgen-running-footer { position: running(dgfooter); }';
+        }
+        css += ' body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.4; color: #000; margin: 0; }';
+        css += ' img { max-width: 100%; }';
+        css += ' table { border-collapse: collapse; }';
+
+        String html = '<html><head><meta charset="utf-8"/>';
+        html += '<style>' + css + '</style>';
+        if (String.isNotBlank(sourceStyles)) {
+            html += '<style>' + sourceStyles + '</style>';
+        }
+        html += '</head><body>';
+        if (String.isNotBlank(header) && !headerHasCounters) {
+            html += '<div class="docgen-running-header">' + header + '</div>';
+        }
+        if (String.isNotBlank(footer) && !footerHasCounters) {
+            html += '<div class="docgen-running-footer">' + footer + '</div>';
+        }
+        html += (body == null ? '' : body);
+        html += '</body></html>';
+        return html;
+    }
+
+    private static Boolean hasPageCounterTokens(String html) {
+        if (String.isBlank(html)) { return false; }
+        return html.contains('{PageNumber}') || html.contains('{TotalPages}');
+    }
+
+    /**
+     * Converts a user-authored header/footer HTML fragment containing
+     * {PageNumber} / {TotalPages} tokens into a Flying Saucer @page margin
+     * box `content` property value.
+     *
+     * HTML tags are stripped (flattened to plain text) because @page content
+     * only accepts strings + counter() functions. Tokens become counter(page)
+     * / counter(pages) calls; surrounding text becomes CSS string literals.
+     *
+     * Example:
+     *   "<div>Page {PageNumber} of {TotalPages}</div>"
+     *     → content: "Page " counter(page) " of " counter(pages);
+     */
+    private static String buildPageMarginContentCss(String html) {
+        String text = html == null ? '' : decodeBraceEntities(html).replaceAll('<[^>]+>', '');
+        text = text.replace('&nbsp;', ' ')
+                   .replace('&amp;', '&')
+                   .replace('&lt;', '<')
+                   .replace('&gt;', '>')
+                   .replace('&quot;', '"')
+                   .replace('&#39;', '\'');
+
+        List<String> parts = new List<String>();
+        Integer cursor = 0;
+        while (cursor < text.length()) {
+            Integer pnIdx = text.indexOf('{PageNumber}', cursor);
+            Integer tpIdx = text.indexOf('{TotalPages}', cursor);
+
+            Integer next = -1;
+            String counterFn = null;
+            if (pnIdx != -1 && (tpIdx == -1 || pnIdx < tpIdx)) {
+                next = pnIdx;
+                counterFn = 'counter(page)';
+            } else if (tpIdx != -1) {
+                next = tpIdx;
+                counterFn = 'counter(pages)';
+            }
+
+            if (next == -1) {
+                if (cursor < text.length()) {
+                    parts.add('"' + escapeForCssString(text.substring(cursor)) + '"');
+                }
+                break;
+            }
+            if (next > cursor) {
+                parts.add('"' + escapeForCssString(text.substring(cursor, next)) + '"');
+            }
+            parts.add(counterFn);
+            cursor = next + 12; // both tokens are 12 chars ({PageNumber}, {TotalPages})
+        }
+        if (parts.isEmpty()) { parts.add('""'); }
+        return 'content: ' + String.join(parts, ' ') + ';';
+    }
+
+    private static String escapeForCssString(String s) {
+        return s.replace('\\', '\\\\').replace('"', '\\"');
     }
 }

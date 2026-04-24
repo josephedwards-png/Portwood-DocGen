@@ -34,6 +34,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
     private String whereClause;
     private String limitClause;
     private List<List<Id>> sortedIdChunks;
+    // v1.61 — HTML-type source skips the DOCX w:tr → <tr> conversion below.
+    // Detected from the inner loop body once up-front.
+    private Boolean isHtmlSource;
 
     public DocGenGiantQueryBatch(Id jobId, Id templateId, Id recordId, Map<String, Object> childNodeConfig, String innerXml, String outputFormat) {
         this.jobId = jobId;
@@ -43,6 +46,9 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         this.outputFormat = outputFormat;
         this.fragmentSequence = 0;
         this.batchSize = 50;
+        // DOCX loop bodies contain <w:tr>/<w:t>; HTML loop bodies don't. One
+        // indexOf is cheap and avoids an extra SOQL for Type__c on every execute.
+        this.isHtmlSource = innerXml == null || !innerXml.contains('<w:');
 
         this.relationshipName = (String) childNodeConfig.get('relationshipName');
         this.giantRelationshipName = this.relationshipName;
@@ -213,9 +219,12 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
             Blob fragmentData;
 
             if ('PDF'.equalsIgnoreCase(outputFormat)) {
-                // Convert DOCX XML rows to simple HTML <tr><td> — lightweight text extraction
-                // No DocGenHtmlRenderer (too heavy for batch execute heap)
-                fragmentData = Blob.valueOf(xmlRowsToHtmlRows(renderedRows));
+                // DOCX source: convert <w:tr>/<w:tc> XML rows → HTML <tr><td>.
+                // HTML source (v1.61+): rows are already HTML — use as-is.
+                // No DocGenHtmlRenderer (too heavy for batch execute heap).
+                fragmentData = Blob.valueOf(
+                    isHtmlSource ? renderedRows : xmlRowsToHtmlRows(renderedRows)
+                );
             } else {
                 fragmentData = Blob.valueOf(renderedRows);
             }

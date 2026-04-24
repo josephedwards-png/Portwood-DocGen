@@ -40,7 +40,14 @@ import LOCK_OUTPUT_FORMAT_FIELD from '@salesforce/schema/DocGen_Template__c.Lock
 import SPECIFIC_RECORD_IDS_FIELD from '@salesforce/schema/DocGen_Template__c.Specific_Record_Ids__c';
 import REQUIRED_PERM_SETS_FIELD from '@salesforce/schema/DocGen_Template__c.Required_Permission_Sets__c';
 import RECORD_FILTER_FIELD from '@salesforce/schema/DocGen_Template__c.Record_Filter__c';
+// 1.61 — HTML template type: header/footer fields
+import HEADER_HTML_FIELD from '@salesforce/schema/DocGen_Template__c.Header_Html__c';
+import FOOTER_HTML_FIELD from '@salesforce/schema/DocGen_Template__c.Footer_Html__c';
 import testRecordFilter from '@salesforce/apex/DocGenController.testRecordFilter';
+// 1.61 — HTML zip sidesteps File Upload Security via client-side unzip + per-part upload
+import saveHtmlTemplateImage from '@salesforce/apex/DocGenController.saveHtmlTemplateImage';
+import saveHtmlTemplateBody from '@salesforce/apex/DocGenController.saveHtmlTemplateBody';
+import { readZip, bytesToBase64 } from './docGenZipReader';
 // Version fields (DocGen_Template_Version__c)
 import VER_IS_ACTIVE_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Is_Active__c';
 import VER_CV_ID_FIELD from '@salesforce/schema/DocGen_Template_Version__c.Content_Version_Id__c';
@@ -63,6 +70,9 @@ const F = {
     SpecificRecordIds: SPECIFIC_RECORD_IDS_FIELD.fieldApiName,
     RequiredPermSets: REQUIRED_PERM_SETS_FIELD.fieldApiName,
     RecordFilter: RECORD_FILTER_FIELD.fieldApiName,
+    // 1.61 — HTML header/footer
+    HeaderHtml: HEADER_HTML_FIELD.fieldApiName,
+    FooterHtml: FOOTER_HTML_FIELD.fieldApiName,
     // Version fields
     VerIsActive: VER_IS_ACTIVE_FIELD.fieldApiName,
     VerCvId: VER_CV_ID_FIELD.fieldApiName
@@ -150,6 +160,13 @@ const VERSION_COLUMNS = [
     @track editTemplateRecordFilterResult = '';
     @track editTemplateRecordFilterResultMessage = '';
     @track editTemplateRecordFilterTesting = false;
+    // 1.61 — HTML type header/footer
+    @track editTemplateHeaderHtml;
+    @track editTemplateFooterHtml;
+    // Show-source toggles so authors can hand-edit raw HTML (image widths,
+    // inline styles, merge-tag attributes the WYSIWYG can't expose).
+    @track showHeaderHtmlSource = false;
+    @track showFooterHtmlSource = false;
 
     @track currentFileId;
     @track uploadedFileName = '';
@@ -846,7 +863,16 @@ const VERSION_COLUMNS = [
         if (event.detail.value === 'Excel' && this.editTemplateOutputFormat === 'PDF') {
             this.editTemplateOutputFormat = 'Native';
         }
+        if (event.detail.value === 'HTML') {
+            this.editTemplateOutputFormat = 'PDF';
+        }
     }
+    handleEditHeaderHtmlChange(event) { this.editTemplateHeaderHtml = event.detail.value; }
+    handleEditFooterHtmlChange(event) { this.editTemplateFooterHtml = event.detail.value; }
+    toggleHeaderHtmlSource() { this.showHeaderHtmlSource = !this.showHeaderHtmlSource; }
+    toggleFooterHtmlSource() { this.showFooterHtmlSource = !this.showFooterHtmlSource; }
+    get headerSourceToggleLabel() { return this.showHeaderHtmlSource ? 'Show Editor' : 'Show HTML'; }
+    get footerSourceToggleLabel() { return this.showFooterHtmlSource ? 'Show Editor' : 'Show HTML'; }
     handleEditOutputFormatChange(event) { this.editTemplateOutputFormat = event.detail.value; }
     handleEditDescChange(event) { this.editTemplateDesc = event.detail.value; }
     handleEditDefaultChange(event) { this.editTemplateIsDefault = event.target.checked; }
@@ -1092,7 +1118,8 @@ const VERSION_COLUMNS = [
         return [
             { label: 'Word', value: 'Word' },
             { label: 'PowerPoint', value: 'PowerPoint' },
-            { label: 'Excel', value: 'Excel' }
+            { label: 'Excel', value: 'Excel' },
+            { label: 'HTML', value: 'HTML' }
         ];
     }
 
@@ -1101,6 +1128,11 @@ const VERSION_COLUMNS = [
         if (type === 'Excel') {
             return [
                 { label: 'Native (.xlsx)', value: 'Native' }
+            ];
+        }
+        if (type === 'HTML') {
+            return [
+                { label: 'PDF', value: 'PDF' }
             ];
         }
         return [
@@ -1113,7 +1145,12 @@ const VERSION_COLUMNS = [
         const type = this.isCreating ? this.newTemplateType : this.editTemplateType;
         if (type === 'PowerPoint') return ['.pptx'];
         if (type === 'Excel') return ['.xlsx'];
+        if (type === 'HTML') return ['.html', '.htm', '.zip'];
         return ['.docx'];
+    }
+
+    get isEditTypeHtml() {
+        return this.editTemplateType === 'HTML';
     }
 
     // --- Create Logic ---
@@ -1258,6 +1295,8 @@ const VERSION_COLUMNS = [
             this.editTemplateRecordFilter = row[F.RecordFilter];
             this.editTemplateRecordFilterResult = '';
             this.editTemplateRecordFilterResultMessage = '';
+            this.editTemplateHeaderHtml = row[F.HeaderHtml] || '';
+            this.editTemplateFooterHtml = row[F.FooterHtml] || '';
 
             let cdLinks = [];
             if (row.ContentDocumentLinks) {
@@ -1524,7 +1563,9 @@ const VERSION_COLUMNS = [
             'Lock_Output_Format__c': this.editTemplateLockOutputFormat,
             'Specific_Record_Ids__c': this.editTemplateSpecificRecordIds,
             'Required_Permission_Sets__c': this.editTemplateRequiredPermissionSets,
-            'Record_Filter__c': this.editTemplateRecordFilter
+            'Record_Filter__c': this.editTemplateRecordFilter,
+            'Header_Html__c': this.editTemplateHeaderHtml,
+            'Footer_Html__c': this.editTemplateFooterHtml
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 
@@ -1560,7 +1601,9 @@ const VERSION_COLUMNS = [
             'Lock_Output_Format__c': this.editTemplateLockOutputFormat,
             'Specific_Record_Ids__c': this.editTemplateSpecificRecordIds,
             'Required_Permission_Sets__c': this.editTemplateRequiredPermissionSets,
-            'Record_Filter__c': this.editTemplateRecordFilter
+            'Record_Filter__c': this.editTemplateRecordFilter,
+            'Header_Html__c': this.editTemplateHeaderHtml,
+            'Footer_Html__c': this.editTemplateFooterHtml
         };
         this.editTemplateQuery = fields['Query_Config__c'];
 
@@ -1663,6 +1706,131 @@ const VERSION_COLUMNS = [
             this.currentFileId = file.documentId;
             this.uploadedContentVersionId = file.contentVersionId;
             this.uploadedFileName = file.name;
+        }
+    }
+
+    @track isUploadingHtml = false;
+
+    triggerHtmlFilePicker() {
+        const input = this.template.querySelector('.docgen-html-file-input');
+        if (input) { input.click(); }
+    }
+
+    async handleHtmlFileSelected(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) { return; }
+        const lower = (file.name || '').toLowerCase();
+        if (!lower.endsWith('.html') && !lower.endsWith('.htm') && !lower.endsWith('.zip')) {
+            this.showToast('Unsupported file', 'Please choose an .html, .htm, or .zip file.', 'error');
+            event.target.value = '';
+            return;
+        }
+        this.isUploadingHtml = true;
+        try {
+            const templateId = this.editTemplateId;
+            let htmlText;
+            let imagePaths = [];
+            let imageBytes = [];
+
+            if (lower.endsWith('.zip')) {
+                const buffer = await file.arrayBuffer();
+                const entries = await readZip(buffer);
+                const imgExts = new Set(['png','jpg','jpeg','gif','bmp','tif','tiff','svg']);
+                for (const entry of entries) {
+                    const n = entry.name.toLowerCase();
+                    if (!htmlText && (n.endsWith('.html') || n.endsWith('.htm'))) {
+                        htmlText = new TextDecoder('utf-8').decode(entry.data);
+                    } else {
+                        const dot = n.lastIndexOf('.');
+                        if (dot > 0 && imgExts.has(n.substring(dot + 1))) {
+                            imagePaths.push(entry.name);
+                            imageBytes.push(entry.data);
+                        }
+                    }
+                }
+                if (!htmlText) {
+                    throw new Error('Zip contains no .html or .htm file.');
+                }
+            } else {
+                htmlText = await file.text();
+            }
+
+            // Extract inline data: URI images (common in Notion, ChatGPT, Apple
+            // Pages, or any rich-text-paste HTML). Blob.toPdf can't decode
+            // data URIs, so each inline image becomes its own ContentVersion
+            // with the src rewritten to /sfc/... just like zipped images.
+            const dataUriMatches = [];
+            const dataUriRe = /src\s*=\s*(["'])(data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s]+?))\1/g;
+            let m;
+            while ((m = dataUriRe.exec(htmlText)) !== null) {
+                const dataUri = m[2];
+                let ext = m[3].toLowerCase();
+                if (ext === 'jpeg') { ext = 'jpg'; }
+                if (ext === 'svg+xml') { ext = 'svg'; }
+                const base64 = m[4].replace(/\s+/g, '');
+                dataUriMatches.push({ dataUri, ext, base64 });
+            }
+
+            // Upload each image; server returns CV Id + URL per part
+            const urlByPath = {};
+            for (let i = 0; i < imagePaths.length; i++) {
+                const base = imagePaths[i].split('/').pop() || imagePaths[i];
+                // eslint-disable-next-line no-await-in-loop
+                const imgResult = await saveHtmlTemplateImage({
+                    templateId,
+                    fileName: base,
+                    base64Content: bytesToBase64(imageBytes[i])
+                });
+                urlByPath[imagePaths[i]] = imgResult.url;
+                if (base !== imagePaths[i]) { urlByPath[base] = imgResult.url; }
+            }
+
+            // Upload extracted data: URIs; key by the full data: string so the
+            // regex-replace below swaps each original URI for its CV URL.
+            const dataUriUrlMap = [];
+            for (let i = 0; i < dataUriMatches.length; i++) {
+                const d = dataUriMatches[i];
+                // eslint-disable-next-line no-await-in-loop
+                const imgResult = await saveHtmlTemplateImage({
+                    templateId,
+                    fileName: 'inline_' + (i + 1) + '.' + d.ext,
+                    base64Content: d.base64
+                });
+                dataUriUrlMap.push({ dataUri: d.dataUri, url: imgResult.url });
+            }
+
+            // Rewrite <img src="..."> references client-side
+            let rewritten = htmlText;
+            for (const path of Object.keys(urlByPath)) {
+                const url = urlByPath[path];
+                rewritten = rewritten.split('"' + path + '"').join('"' + url + '"');
+                rewritten = rewritten.split("'" + path + "'").join("'" + url + "'");
+            }
+            for (const entry of dataUriUrlMap) {
+                rewritten = rewritten.split(entry.dataUri).join(entry.url);
+            }
+            const totalImages = imagePaths.length + dataUriMatches.length;
+
+            // Save the final HTML body
+            const bodyResult = await saveHtmlTemplateBody({
+                templateId,
+                fileName: file.name,
+                htmlContent: rewritten
+            });
+
+            this.currentFileId = bodyResult.contentDocumentId;
+            this.uploadedContentVersionId = bodyResult.contentVersionId;
+            this.uploadedFileName = file.name;
+            const imgMsg = totalImages > 0
+                ? ' (' + totalImages + ' image' + (totalImages === 1 ? '' : 's') + ' extracted)'
+                : '';
+            this.showToast('Uploaded', file.name + imgMsg + ' — click "Save as New Version" to activate.', 'success');
+        } catch (err) {
+            const msg = err && err.body && err.body.message ? err.body.message : (err && err.message) || String(err);
+            this.showToast('Upload Failed', msg, 'error');
+        } finally {
+            this.isUploadingHtml = false;
+            event.target.value = '';
         }
     }
 

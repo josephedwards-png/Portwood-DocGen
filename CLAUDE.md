@@ -69,6 +69,93 @@ At PDF generation time, `buildPdfImageMap()` queries for these pre-committed CVs
 
 **Never re-parse `Query_Config__c` from new giant-query code paths.** Templates use three config formats (V1 flat, V2 JSON, V3 tree). `JSON.deserializeUntyped` throws on V1 flat strings — any assembler-side code that tries to read config must either (a) detect format first, or (b) receive pre-parsed `childObjectName` / `lookupField` / `whereClause` from the caller. `DocGenGiantQueryBatch` passes these into `DocGenGiantQueryAssembler`'s 7-arg constructor for exactly this reason (v1.53.0+). The old 4-arg constructor keeps a V3-JSON fallback for direct invocations.
 
+## HTML Template Pipeline (v1.61.0+)
+
+HTML templates are raw `.html` files (exported from Google Docs, Notion, Apple Pages, ChatGPT — anything that produces HTML) with merge tags inlined. Type `HTML` + Output Format `PDF`. Added in `feature/html-templates` branch.
+
+### Why HTML is a first-class template type
+
+Every authoring tool exports HTML cleanly. HTML doesn't have OOXML's tag-fragmentation problem (`<w:r>` runs splitting `{Field}` across boundaries). Supporting HTML directly — rather than translating every dialect of DOCX — unlocks every modern content workflow with zero dialect hell. Previous attempt at "DOCX dialect normalizer" (deleted branch `feature/docx-dialect-support`) was solving the wrong problem expensively.
+
+### Pipeline (DocGenService)
+
+1. `mergeTemplate()` detects `templateType == 'HTML'` and branches to `mergeHtmlTemplate()` *before* any DOCX-specific logic runs (no ZIP decode, no rels path, no pre-decomposed XML lookups).
+2. `mergeHtmlTemplate()`:
+   - Base64-decodes the ContentVersion to the raw HTML string.
+   - Calls `extractHtmlStyleBlocks()` to preserve `<style>` contents from `<head>`.
+   - Calls `extractHtmlBodyContent()` to strip `<html>/<head>/<body>` wrappers.
+   - Runs `processXml()` on body + `Header_Html__c` + `Footer_Html__c` fields. The same merge-tag engine Word templates use — field substitution, formatters, conditionals, loops all work. `<w:tr>`/`<w:p>` container expansion is DOCX-specific and falls through to the "innerXml repeat" fallback for HTML (user writes `{#Loop}<tr>...</tr>{/Loop}` explicitly).
+   - Calls `substituteHtmlPageCounters()` on header/footer HTML: `{PageNumber}` → `<span class="dg-pgn"></span>`, `{TotalPages}` → `<span class="dg-tpg"></span>`.
+   - Calls `wrapHtmlForPdf()` to produce a full HTML document with Flying Saucer `@page` margin boxes and running elements.
+3. `renderPdf()` sees `mr.templateType == 'HTML'` and passes `mr.documentXml` straight to `Blob.toPdf()` — skipping `DocGenHtmlRenderer.convertToHtml()` entirely.
+
+### Header/footer architecture
+
+Stored on the template record as two LongTextArea fields: `Header_Html__c` and `Footer_Html__c`. Authored in the admin UI via **`lightning-input-rich-text`** WYSIWYG editors on a dedicated "Header / Footer" tab that only shows when `Type__c == 'HTML'`. Both fields get full merge-tag processing (so `{Name}` in the footer resolves to the record's Name), and `{PageNumber}` / `{TotalPages}` tokens survive through merge and get substituted to CSS-counter spans right before the final wrap.
+
+### Flying Saucer CSS features used
+
+- `@page { @top-center { content: "Page " counter(page) " of " counter(pages); } }` — the **only** reliable way to emit page numbers. Flying Saucer resolves `counter(page)` / `counter(pages)` **only inside @page rules**; the same call in a `::before` pseudo-element on a DOM node does not resolve even if that node is hoisted via `position: running()`.
+- `.docgen-running-header { position: running(dgheader); }` + `@page { @top-center { content: element(dgheader); } }` — for rich HTML headers without page counters (images, tables, styling survive).
+- `{PageNumber}` / `{TotalPages}` tokens get passthrough treatment in `processXml()` (same mechanism as `{@Signature_}`) so they survive merge-tag resolution. `wrapHtmlForPdf()` detects them in the header/footer text and generates `@page` margin box `content` CSS with literal strings + `counter(page)` / `counter(pages)` calls.
+
+**Tradeoff:** headers/footers that contain page counters get their HTML markup flattened to plain text because the `@page` margin box `content` property only accepts strings + counter()/string() functions. Rich formatting (images, tables, bold, color) survives only for non-counter headers via the running-element path. Users who want both rich styling *and* page numbers have to pick — current API can't combine them. If this becomes a real constraint, the fallback is to nest the page counter inside a table cell using `string-set` + `string()` in a more advanced pattern, but that's significantly more complex.
+
+### Zip uploads (Google Docs "Download → Web Page") — client-side break-apart
+
+Google Docs's Web Page export is a zip containing `<title>.html` + an `images/` folder. Two constraints drove the architecture:
+
+1. Salesforce's File Upload Security blocks `.zip` uploads by default ("Your company doesn't support the following file types: .zip"). So the zip can never become a ContentVersion.
+2. Server-side `Compression.ZipReader` on image-heavy zips burns 5–10 MB of heap fast — single Apex request is capped at 6 MB sync.
+
+Solution: **break the zip apart client-side, upload each piece as its own Apex call.** The LWC does the unzip, then streams parts to two tiny endpoints with a single file's heap per call.
+
+**Client (`docGenAdmin/docGenZipReader.js`)** — pure JS ZIP reader, no external deps. Uses native `DecompressionStream('deflate-raw')` for the compression primitive and does the central-directory / local-header parsing in ~100 lines. Supports store + deflate methods, which is everything real-world ZIP producers emit. `readZip(ArrayBuffer)` returns `[{name, data: Uint8Array}, ...]`.
+
+**Client flow (`docGenAdmin.handleHtmlFileSelected`)**:
+1. Read the file as `ArrayBuffer`.
+2. If `.zip`: `readZip()` gives entries. Find first `.html`/`.htm` → body. Collect image-extension entries (png/jpg/jpeg/gif/bmp/tif/tiff/svg).
+3. If `.html`/`.htm`: read as text, no images.
+4. For each image: `saveHtmlTemplateImage(templateId, fileName, base64)` → returns `{contentVersionId, url}`. One image per Apex call = bounded heap.
+5. Client rewrites every `"originalPath"` and `'originalPath'` in the HTML to the returned URL.
+6. `saveHtmlTemplateBody(templateId, fileName, htmlContent)` saves the finished HTML. Returns `{contentVersionId, contentDocumentId}` — same shape `lightning-file-upload` produces, so `uploadedContentVersionId` gets set and the existing "Save as New Version" flow takes over without branching.
+
+**Server endpoints (`DocGenController`)** — both are ~20 lines:
+- `saveHtmlTemplateImage(templateId, fileName, base64Content)` — base64-decodes, inserts one ContentVersion titled `docgen_html_img_<templateId>_<ts>_<basename>` linked to the template, returns `{contentVersionId, fileName, url}`.
+- `saveHtmlTemplateBody(templateId, fileName, htmlContent)` — stores the already-rewritten HTML as a ContentVersion titled `docgen_html_body_<templateId>_<ts>`, returns `{contentVersionId, contentDocumentId, fileName}`.
+
+Neither endpoint does any zip parsing, src-rewriting, or heap-heavy work. The client-side unzip is free compute (runs in the user's browser) and the per-image upload pattern means heap usage is O(single image size), not O(total template size).
+
+At render time, `mergeHtmlTemplate()` reads the body CV directly — it's already the rewritten HTML with `/sfc/...` URLs. `Blob.toPdf()` resolves those URLs natively.
+
+### Giant-query PDFs for HTML (v1.61+)
+
+HTML templates use the same batched giant-query pipeline DOCX uses. When a scout finds > 2000 child rows, `DocGenController.generateDocumentGiantQuery` / `launchGiantQueryPdfBatch` branch on `Type__c`:
+
+- DOCX templates load `word/document.xml` (pre-decomposed CV or zip fallback).
+- HTML templates load the active version's `Content_Version_Id__c` body CV directly — it's already the rewritten HTML with `/sfc/` image URLs.
+
+`DocGenService.extractLoopBody` was extended to detect HTML containers (`<tr>`, `<li>`) in addition to DOCX `<w:tr>`. Safe for both types because DOCX XML doesn't contain literal HTML tags and vice versa.
+
+`DocGenGiantQueryBatch.execute()` detects HTML vs DOCX source by checking whether the innerXml contains `<w:`. For HTML source it uses the rendered rows directly; for DOCX it runs `xmlRowsToHtmlRows()` to convert Word XML into HTML `<tr><td>`. Same batch class, same heap bounds (50 rows per fragment × 12MB queueable heap).
+
+`DocGenGiantQueryAssembler.buildHtmlTemplate()` branches on `Type__c`. HTML-type routes to `buildHtmlTemplateForHtmlType()` which:
+1. Loads the body CV directly.
+2. Runs `resolveParentMergeTags` + `resolveGiantAggregateTags` on the body content.
+3. Finds the loop-row boundary and replaces with `{ROWS}` placeholder (same logic as DOCX but looking at HTML `<tr>`/`<li>`/`</table>` positions).
+4. Calls `DocGenService.wrapHtmlForPdf()` to apply `@page` margin boxes, running header/footer elements, and page counter CSS.
+
+Result: HTML templates get the same 60K+ row capacity DOCX has. Tested with synthetic contact sets in `DocGenHtmlTemplateTest.giantQueryPdfBatchProcessesHtmlTemplate`.
+
+### What HTML templates do NOT support (yet)
+
+- **Inline data URI images** (`<img src="data:image/png;base64,...">`): `Blob.toPdf()` does not decode data URIs. Zip uploads from Google Docs don't hit this because images come as separate files, but Notion/ChatGPT/single-HTML uploads with inline base64 images will render broken. Future work: extend `extractAndSaveHtmlTemplateAssets` to also walk the HTML for `data:image/` URIs, saving each to a ContentVersion and rewriting the src.
+- **Save-to-record async path**: untested. `generateDocument()` routes HTML to `savePdfFile()` just like Word-PDF, so it should work — but not explicitly validated.
+
+### Reference: Google Docs HTML export
+
+Exports from Google Docs (File → Download → Web Page) produce class-heavy but clean markup: `<style>` block with `.c0`–`.cN` classes + `<body>` with those classes applied. No `mso-` junk like Word saves. `extractHtmlStyleBlocks` preserves these classes so formatting survives end-to-end.
+
 ## Client-Side DOCX Assembly (In Progress)
 
 DOCX generation now uses client-side ZIP assembly to avoid Apex heap limits:
