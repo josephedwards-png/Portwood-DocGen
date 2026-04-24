@@ -1,5 +1,49 @@
 # Changelog
 
+## v1.62.0 — HTML bulk merge fix, `{%Image:N}` HTML rendering, recursive deep-nesting stitch, Learning Center + UserGuide expansion
+
+Promoted package: `04tal000006q929AAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006q929AAA)
+v1.61.x subscribers should upgrade — bulk merge for HTML templates was producing blank / cut-off PDFs on v1.61.0.
+
+### HTML template fixes
+
+- **Bulk merge blank pages, fixed.** v1.61.0 concatenated full `<html>…</html>` per-record snippets; Flying Saucer abandoned rendering after ~10 records, producing a tiny PDF with most records missing. `DocGenMergeJob` now strips the per-snippet `<html>`/`<head>`/`<body>` wrappers, dedupes `<style>` blocks, and assembles the body content under a single outer shell before calling `Blob.toPdf`. Branches on template Type — DOCX merge is untouched.
+- **Spurious "Completed with Errors" on clean runs, fixed.** NPE in the merge notification path was being caught and overwriting the job status. Captured `snippetCount` before nulling for heap reasons.
+- **`generateHtmlForRecord` returned empty HTML for HTML templates.** Was routing through `DocGenHtmlRenderer.convertToHtml` which has no DOCX XML to convert for HTML-type templates. Now early-returns `mr.documentXml`. This produced the blank bulk-merge snippets in the first place.
+
+### `{%Image:N}` + `{%FieldName}` for HTML templates
+
+`DocGenService.buildImageXml` previously emitted DOCX DrawingML regardless of template type, which leaked as broken XML into HTML PDFs. Now emits `<img src="/sfc/..."/>` for HTML templates with the resolved ContentVersion URL or data URI. Record-attached images (`{%Image:1}`, `{%Image:2}`) and field-based images (`{%PhotoField__c}`) both render correctly now.
+
+### Inline `data:image/...` URI extraction
+
+Rich-text editors (Notion, ChatGPT, Apple Pages, anything with paste-from-clipboard) commonly emit `<img src="data:image/png;base64,...">`. Flying Saucer can't decode data URIs. The LWC now scans uploaded HTML for data-URI `src` attributes, uploads each base64 blob as its own ContentVersion via `DocGenController.saveHtmlTemplateImage`, and rewrites the HTML to `/sfc/...` URLs. Round-trip works for any HTML source with inline images.
+
+### Deep-nested subquery stitching
+
+`DocGenDataRetriever.stitchGrandchildren` previously handled one level of grandchildren only (line 1371 had a TODO: "Deep recursion beyond grandchildren not yet implemented"). It now recurses into `grandchildSpec.children` by aggregating grandchild records across all parents into one synthetic data map and re-entering the stitcher. **One SOQL per depth level** — scales to arbitrary nesting without N+1 queries. V1-flat configs like `Name, (SELECT Id, (SELECT Id, (SELECT Id FROM Level3Rel) FROM Level2Rel) FROM Level1Rel)` now populate every level. NPSP-style queries (Opportunity → Payments → GAU Allocations) are now fully supported.
+
+### Admin UI polish
+
+Header / Footer tab on HTML templates gained a **Show HTML** / **Show Editor** toggle per field. Flips the WYSIWYG editor to a monospace textarea showing the raw HTML — useful for setting image widths, inline styles, or markup the rich editor can't expose.
+
+### Documentation — Learning Center + website User Guide + UserGuide.md
+
+All four in-sync doc surfaces got substantial additions:
+
+- **Learning Center** (in-app, `docGenCommandHub` LWC): full HTML Templates section (authoring, Google Docs zip workflow, images, headers/footers, page numbers, loops, known gaps, troubleshooting), new **Apex API Reference** section with method signatures for `DocGenService`, `DocGenController`, `DocGenBulkController`, Flow invocables, `DocGenDataProvider` interface example, and namespace prefix notes.
+- **Website User Guide** (`portwoodglobalsolutions.com/guide`): previously missing Comparisons (`{#IF …}`) section, Today/Now tag examples, International Currency + Locale formatting, E-Signatures (5 subsections), and Apex API Reference — all ported to full parity with the Learning Center.
+- **Managed package `DocGenGuide.page`** (ships in-org with the package): added International Currency / Today/Now / Apex API Reference.
+- **`UserGuide.md`** (markdown source): new §4.7 HTML Templates (9 sub-sections) and §10A Apex API Reference.
+
+### Tests
+
+- `DocGenHtmlTemplateTest` 19/19 pass
+- `DocGenGiantQueryTest` 39/39 pass (added `testThreeLevelNestedSubqueryStitch`)
+- e2e-03 / e2e-04 / e2e-07 pass
+
+---
+
 ## v1.61.0 — HTML templates (Google Docs, Notion, any HTML source) with header/footer + page numbers
 
 Promoted package: `04tal000006pzu1AAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006pzu1AAA)
