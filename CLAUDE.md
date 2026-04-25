@@ -69,6 +69,64 @@ At PDF generation time, `buildPdfImageMap()` queries for these pre-committed CVs
 
 **Never re-parse `Query_Config__c` from new giant-query code paths.** Templates use three config formats (V1 flat, V2 JSON, V3 tree). `JSON.deserializeUntyped` throws on V1 flat strings — any assembler-side code that tries to read config must either (a) detect format first, or (b) receive pre-parsed `childObjectName` / `lookupField` / `whereClause` from the caller. `DocGenGiantQueryBatch` passes these into `DocGenGiantQueryAssembler`'s 7-arg constructor for exactly this reason (v1.53.0+). The old 4-arg constructor keeps a V3-JSON fallback for direct invocations.
 
+## DOCX Watermarks (VML pict — header-embedded)
+
+Word inserts watermarks via VML inside header XML: `<w:pict><v:shape style="..."><v:imagedata r:id="rIdN"/></v:shape></w:pict>`. NOT DrawingML — different parser path. Three things had to align before they rendered:
+
+1. **`DocGenService.namespaceImageRelIds`** rewrites image relIds in header rels (so they don't collide with body relIds). It was only handling `r:embed="..."` (DrawingML). Watermarks use `r:id="..."` on `<v:imagedata>`. Now scopes a second pass to `<v:imagedata>` elements specifically — see `namespaceAttrInXml` with `scopeTag = '<v:imagedata'`. Don't widen this scope or hyperlinks (also `r:id`) get clobbered.
+
+2. **`DocGenHtmlRenderer.processBodyContent` + `processRun`** had no awareness of `<w:pict>`. Added it alongside `<w:drawing>` in both element-walk loops. Without this, the pict markup gets silently dropped as an unknown tag — relids exist, headers render, but no `<img>` is emitted.
+
+3. **`processPict()`** detects watermark heuristics (`rotation:` in style, `mso-position-horizontal:center`, `PowerPlusWaterMarkObject`, `WordPictureWatermark`) and emits a `<div class="docgen-watermark">` with `position:fixed`. Whitewash overlay is built by `extractWatermarks` from `data-wash` attribute and layered as `rgba(255,255,255,X)` between watermark (z:0) and body content (z:2 via `.docgen-body-content` wrapper).
+
+### Why we use a CSS layered whitewash, not opacity
+
+Salesforce's Flying Saucer build does NOT honor CSS `opacity` (CSS3) OR SVG `opacity` attribute. We tried both — image renders at full strength regardless. The S-Docs / Stack Overflow trick of layering a semi-transparent white div over the image works because `rgba()` in `background-color` IS supported (it's a color value, separate code path from opacity). Default wash is 0.95 (image visible at ~5%). Word's `<v:imagedata gain="..." blacklevel="..."/>` washout markers are intentionally NOT translated — the heuristic produced too-strong watermarks (~34% strength).
+
+### Why position:fixed centering uses top:50%/left:50%/margin
+
+Tried `top:0;left:0;right:0;bottom:0;text-align:center` (CSS 2.1 four-side trick) — Flying Saucer interprets `position:fixed` as `position:absolute` relative to body, and the wrapper anchors to wherever body content ends (bottom-right of short documents). The percentage centering with negative margins works because the wrapper's `left:50%` puts the LEFT edge at body midpoint, then negative margin-left pulls it back by half the image width.
+
+### Watermark rotation is NOT supported
+
+Flying Saucer doesn't honor `transform: rotate()` (CSS3) or any of its `-fs-` proprietary aliases for rotation. Word watermarks rendered into PDF appear UPRIGHT regardless of the `rotation:` value in VML style. Only fix is a pre-rotated PNG. Don't waste time trying SVG `<g transform="rotate()">` — Flying Saucer's SVG renderer doesn't render `<image>` elements at all (we tried and got blank output).
+
+## DOCX Rich Text Inline Images (Lightning ContentReference / 0EM)
+
+When Salesforce stores rich text field images in Lightning Experience, they get a ContentReference ID with `0EM` prefix (NOT a ContentDocument or ContentVersion). The `<img src="/servlet/rtaImage?eid=...&feoid=...&refid=0EM...">` URL fetches the bytes — but **only via privileged Salesforce-internal mechanisms**. Apex SOQL doesn't expose `0EM` as an SObject. Apex callouts get redirect-loops. LWC `fetch()` gets `Allow-Credentials:false`. Browser `<img>`+canvas gets tainted. Salesforce engineered the platform against client-side or Apex-side direct access.
+
+### The PDF-extract trick (the only path that works)
+
+`Blob.toPdf()` has internal resolver privileges Apex/LWC don't expose — it CAN fetch `rtaImage` URLs server-side without HTTP callouts, session IDs, or any external authentication. We exploit this:
+
+1. **Server (`DocGenController.renderImageAsPdfBase64(imageUrl)`)** — wraps the rtaImage URL in a minimal HTML document (`<img src="...">`), calls `Blob.toPdf()`. Returns a single-image PDF as base64.
+2. **Client (`docGenPdfImageExtractor.js`)** — parses the PDF object stream, finds the first `/Subtype /Image` XObject. For `/Filter /DCTDecode` (JPEG, the common case Flying Saucer emits), the stream bytes ARE the JPEG file — use directly.
+3. **Client (`docGenRunner.js`)** — for each rtaImage URL in `imageUrlMap` (server emits these unchanged from rich text), runs render→extract, embeds bytes in DOCX `word/media/`.
+
+PDF is in-memory only at every step (Blob in Apex → base64 across Aura → JS Uint8Array → garbage collected). Zero ContentDocument records, zero filesystem writes, zero cleanup needed.
+
+### Dead-end matrix (don't re-attempt these)
+
+| Approach | Why it fails |
+|---|---|
+| Apex SOQL on 0EM | Not exposed via `Schema.getGlobalDescribe()` — no SObject token |
+| Apex callout to `/servlet/rtaImage` with `UserInfo.getSessionId()` | Recursive redirect loop: file.force.com → lightning.force.com/content/session → my.salesforce.com/visualforce/session → loops back. API session can't satisfy browser-cookie auth |
+| Apex callout to `/services/data/.../richTextImageFields/.../...` with `UserInfo.getSessionId()` | Works in anonymous Apex (returns 200 OK with bytes) BUT fails in LWC-triggered AuraEnabled context. Also: session-ID callouts add AppExchange security review friction even for self-org |
+| `PageReference.getContent()` on rtaImage URL | `Maximum redirects (100) exceeded` — same loop |
+| `frontdoor.jsp?sid=...&retURL=...` session bridge | Returns 200 with bridged session in `Set-Cookie`, but Salesforce platform redacts the value to `SESSION_ID_REMOVED` before Apex can read it |
+| LWC `fetch('/services/data/...', { credentials: 'include' })` | Returns `Access-Control-Allow-Credentials: false` — browser drops response. Architectural CSRF protection, can't be flipped via Setup → CORS allowlist |
+| LWC `<img crossorigin="anonymous">` + `<canvas>` extraction | CORS taints canvas, `toBlob()` throws SecurityError. Without `crossorigin`, image renders but canvas is also tainted |
+| Named Credential to org self | Still ultimately needs cross-domain auth. Adds install-time customer config burden, doesn't avoid the underlying CORS architecture |
+
+### What also doesn't work end-to-end
+
+- **Server-side preview/sample DOCX** — `processAndReturnDocument` → `assembleZip` runs server-side. The PDF-extract trick requires the client to do the parsing (Apex has no PDF parser). Preview generates DOCX with the rich text image as a broken placeholder. Live with it; document the limitation.
+- **PDF output** — works fine. `Blob.toPdf()` resolves rtaImage URLs natively in PDF rendering. No special handling needed.
+
+### When extending to other unhandled image filters
+
+`docGenPdfImageExtractor.js` currently handles `DCTDecode` (JPEG) and passes through `JPXDecode` (JPEG 2000). For `FlateDecode` (zlib-compressed raw RGB pixels), it logs a warning and returns null. To add support: bundle pako (zlib inflate) + a minimal PNG encoder. Only justified if Flying Saucer ever switches from JPEG output, which hasn't happened in testing.
+
 ## HTML Template Pipeline (v1.61.0+)
 
 HTML templates are raw `.html` files (exported from Google Docs, Notion, Apple Pages, ChatGPT — anything that produces HTML) with merge tags inlined. Type `HTML` + Output Format `PDF`. Added in `feature/html-templates` branch.

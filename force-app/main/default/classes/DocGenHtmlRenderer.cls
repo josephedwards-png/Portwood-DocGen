@@ -170,12 +170,27 @@ public with sharing class DocGenHtmlRenderer {
         String bodyContent = extractBodyContent(mainXml);
         String html = processBodyContent(bodyContent, images);
 
+        // Also harvest watermark divs from body content (Word sometimes places
+        // <w:pict> watermarks in the document body, not just headers).
+        Map<String, String> bodyExtract = extractWatermarks(html);
+        html = bodyExtract.get('html');
+        String bodyWatermarkHtml = bodyExtract.get('watermarks');
+
         // Process header/footer HTML for Flying Saucer running elements
         String headerHtml = '';
         String footerHtml = '';
+        String watermarkHtml = bodyWatermarkHtml != null ? bodyWatermarkHtml : '';
         if (String.isNotBlank(headerXml) || String.isNotBlank(footerXml)) {
             headerHtml = String.isNotBlank(headerXml) ? processBodyContent(extractBodyContent(headerXml), images) : '';
             footerHtml = String.isNotBlank(footerXml) ? processBodyContent(extractBodyContent(footerXml), images) : '';
+
+            // Lift watermark divs out of header/footer so they render at body root.
+            Map<String, String> hExtract = extractWatermarks(headerHtml);
+            headerHtml = hExtract.get('html');
+            watermarkHtml += hExtract.get('watermarks');
+            Map<String, String> fExtract = extractWatermarks(footerHtml);
+            footerHtml = fExtract.get('html');
+            watermarkHtml += fExtract.get('watermarks');
 
             // Zero out paragraph margins inside header/footer for tight spacing
             headerHtml = headerHtml.replace('<p>', '<p style="margin:0;">');
@@ -249,7 +264,8 @@ public with sharing class DocGenHtmlRenderer {
             'sub { vertical-align: sub; font-size: 0.8em; }' +
             'sup { vertical-align: super; font-size: 0.8em; }' +
             '.docgen-page-num::before { content: counter(page); }' +
-            '.docgen-page-total::before { content: counter(pages); }';
+            '.docgen-page-total::before { content: counter(pages); }' +
+            '.docgen-body-content { position: relative; z-index: 2; }';
         String bodyTag = '<body>';
         String dynamicPrefix = '<html><head><meta charset="utf-8"/><style>' + dynamicCss + '</style></head>' + bodyTag;
 
@@ -260,15 +276,24 @@ public with sharing class DocGenHtmlRenderer {
         }
 
         // Insert running header/footer divs at top of body — Flying Saucer pulls them
-        // out of normal flow and places them in @page margin boxes on every page
+        // out of normal flow and places them in @page margin boxes on every page.
+        // Watermarks (position:fixed) at body root, content wrapped at z-index:2 so
+        // it sits above the watermark whitewash overlay.
         String bodyHtml = '';
+        if (String.isNotBlank(watermarkHtml)) {
+            bodyHtml += watermarkHtml;
+        }
         if (hasHeader) {
             bodyHtml += '<div id="docgen-header">' + headerHtml + '</div>';
         }
         if (hasFooter) {
             bodyHtml += '<div id="docgen-footer">' + footerHtml + '</div>';
         }
-        bodyHtml += html;
+        if (String.isNotBlank(watermarkHtml)) {
+            bodyHtml += '<div class="docgen-body-content">' + html + '</div>';
+        } else {
+            bodyHtml += html;
+        }
 
         return dynamicPrefix + bodyHtml + HTML_SUFFIX;
     }
@@ -834,6 +859,8 @@ public with sharing class DocGenHtmlRenderer {
             Integer runStart2 = pXml.indexOf('<w:r ', cursor);
             Integer drawingStart = pXml.indexOf('<w:drawing>', cursor);
             Integer drawingStart2 = pXml.indexOf('<w:drawing ', cursor);
+            Integer pictStart = pXml.indexOf('<w:pict>', cursor);
+            Integer pictStart2 = pXml.indexOf('<w:pict ', cursor);
             Integer hyperlinkStart = pXml.indexOf('<w:hyperlink', cursor);
 
             Integer nextRun = -1;
@@ -846,10 +873,16 @@ public with sharing class DocGenHtmlRenderer {
             else if (drawingStart != -1) { nextDrawing = drawingStart; }
             else if (drawingStart2 != -1) { nextDrawing = drawingStart2; }
 
+            Integer nextPict = -1;
+            if (pictStart != -1 && pictStart2 != -1) { nextPict = Math.min(pictStart, pictStart2); }
+            else if (pictStart != -1) { nextPict = pictStart; }
+            else if (pictStart2 != -1) { nextPict = pictStart2; }
+
             Integer nextElement = -1;
             String elementType = '';
             if (nextRun != -1) { nextElement = nextRun; elementType = 'run'; }
             if (nextDrawing != -1 && (nextElement == -1 || nextDrawing < nextElement)) { nextElement = nextDrawing; elementType = 'drawing'; }
+            if (nextPict != -1 && (nextElement == -1 || nextPict < nextElement)) { nextElement = nextPict; elementType = 'pict'; }
             if (hyperlinkStart != -1 && (nextElement == -1 || hyperlinkStart < nextElement)) { nextElement = hyperlinkStart; elementType = 'hyperlink'; }
             if (nextElement == -1) { break; }
 
@@ -861,6 +894,10 @@ public with sharing class DocGenHtmlRenderer {
                 Integer drawEnd = findClosingTag(pXml, nextDrawing, 'w:drawing');
                 if (drawEnd != -1) { parts.add(processDrawing(pXml.substring(nextDrawing, drawEnd), images)); cursor = drawEnd; }
                 else { cursor = nextDrawing + 1; }
+            } else if (elementType == 'pict') {
+                Integer pictEnd = findClosingTag(pXml, nextPict, 'w:pict');
+                if (pictEnd != -1) { parts.add(processPict(pXml.substring(nextPict, pictEnd), images)); cursor = pictEnd; }
+                else { cursor = nextPict + 1; }
             } else if (elementType == 'hyperlink') {
                 Integer hlEnd = findClosingTag(pXml, hyperlinkStart, 'w:hyperlink');
                 if (hlEnd != -1) { parts.add(processHyperlink(pXml.substring(hyperlinkStart, hlEnd), images)); cursor = hlEnd; }
@@ -978,6 +1015,7 @@ public with sharing class DocGenHtmlRenderer {
             Integer nextBr = rXml.indexOf('<w:br', cursor);
             Integer nextTab = rXml.indexOf('<w:tab', cursor);
             Integer nextDrawing = rXml.indexOf('<w:drawing', cursor);
+            Integer nextPict = rXml.indexOf('<w:pict', cursor);
             // Find <w:t> or <w:t  but NOT <w:tab — indexOf('<w:t') false-matches <w:tab
             Integer nextT = -1;
             Integer tSearch = cursor;
@@ -1000,7 +1038,8 @@ public with sharing class DocGenHtmlRenderer {
             if (nextBr != -1 && (nextPos == -1 || nextBr < nextPos)) { nextPos = nextBr; type = 'br'; }
             if (nextTab != -1 && (nextPos == -1 || nextTab < nextPos)) { nextPos = nextTab; type = 'tab'; }
             if (nextDrawing != -1 && (nextPos == -1 || nextDrawing < nextPos)) { nextPos = nextDrawing; type = 'drawing'; }
-            
+            if (nextPict != -1 && (nextPos == -1 || nextPict < nextPos)) { nextPos = nextPict; type = 'pict'; }
+
             if (nextPos == -1) { break; }
             
             if (type == 't') {
@@ -1051,6 +1090,12 @@ public with sharing class DocGenHtmlRenderer {
                     runContent += processDrawing(rXml.substring(nextDrawing, drawEnd), images);
                     cursor = drawEnd;
                 } else { cursor = nextDrawing + 1; }
+            } else if (type == 'pict') {
+                Integer pictEnd = findClosingTag(rXml, nextPict, 'w:pict');
+                if (pictEnd != -1) {
+                    runContent += processPict(rXml.substring(nextPict, pictEnd), images);
+                    cursor = pictEnd;
+                } else { cursor = nextPict + 1; }
             }
         }
 
@@ -1920,6 +1965,229 @@ public with sharing class DocGenHtmlRenderer {
 
         return '<img src="data:' + mimeType + ';base64,' + imageValue + '" ' +
                'style="max-width:' + widthPx + 'px;max-height:' + heightPx + 'px;height:auto;width:auto;image-orientation:from-image;" />';
+    }
+
+    /**
+     * Processes a <w:pict> element (VML — used by Word watermarks and legacy images).
+     * Extracts the image relationship from <v:imagedata r:id="..."/> and renders an <img>.
+     * Watermark detection: the pict's <v:shape> usually has style containing "rotation:" or
+     * "mso-position-horizontal:center" plus a <v:fill opacity=".5"/> child. When detected,
+     * we render the image as a centered, rotated, semi-transparent overlay so Flying Saucer
+     * approximates Word's watermark look.
+     */
+    private static String processPict(String pictXml, Map<String, String> images) {
+        String relId = extractAttr(pictXml, 'v:imagedata', 'r:id');
+        if (relId == null) { relId = extractAttr(pictXml, 'v:imagedata', 'r:pict'); }
+        if (relId == null) { return ''; }
+
+        String imageValue = images.get(relId);
+        if (imageValue == null) { return ''; }
+
+        String shapeStyle = extractAttr(pictXml, 'v:shape', 'style');
+        if (shapeStyle == null) { shapeStyle = ''; }
+        String shapeStyleLower = shapeStyle.toLowerCase();
+
+        Boolean isWatermark = shapeStyleLower.contains('rotation:') ||
+                              shapeStyleLower.contains('mso-position-horizontal:center') ||
+                              pictXml.contains('PowerPlusWaterMarkObject') ||
+                              pictXml.contains('WordPictureWatermark');
+
+        Decimal opacity = null;
+        Integer fillIdx = pictXml.indexOf('<v:fill ');
+        if (fillIdx != -1) {
+            Integer fillEnd = pictXml.indexOf('>', fillIdx);
+            if (fillEnd != -1) {
+                String fillTag = pictXml.substring(fillIdx, fillEnd);
+                Integer opIdx = fillTag.indexOf('opacity="');
+                if (opIdx != -1) {
+                    Integer opStart = opIdx + 9;
+                    Integer opEnd = fillTag.indexOf('"', opStart);
+                    if (opEnd != -1) {
+                        try { opacity = Decimal.valueOf(fillTag.substring(opStart, opEnd)); } catch (Exception e) {}
+                    }
+                }
+            }
+        }
+        // Note: Word's "Washout" markers (<v:imagedata gain="..." blacklevel="..."/>)
+        // are intentionally NOT translated into opacity. Flying Saucer's rendering
+        // can't approximate Word's gain/contrast adjustments, and the resulting
+        // values were too aggressive (showing the watermark at ~34% strength when
+        // a true washout looks more like 5–15%). Default opacity below produces a
+        // strong wash that matches what users expect from "Washout" in Word.
+
+        Integer rotation = 0;
+        Integer rotIdx = shapeStyleLower.indexOf('rotation:');
+        if (rotIdx != -1) {
+            Integer rotStart = rotIdx + 9;
+            Integer rotEnd = rotStart;
+            while (rotEnd < shapeStyle.length()) {
+                String ch = shapeStyle.substring(rotEnd, rotEnd + 1);
+                if (ch == ';' || ch == ' ') { break; }
+                rotEnd++;
+            }
+            String rotStr = shapeStyle.substring(rotStart, rotEnd).replace('deg', '').trim();
+            try { rotation = Integer.valueOf(Decimal.valueOf(rotStr).round()); } catch (Exception e) {}
+        }
+
+        Integer widthPx = 0;
+        Integer heightPx = 0;
+        Integer wIdx = shapeStyleLower.indexOf('width:');
+        if (wIdx != -1) {
+            Integer wStart = wIdx + 6;
+            Integer wEnd = shapeStyle.indexOf(';', wStart);
+            if (wEnd == -1) { wEnd = shapeStyle.length(); }
+            String wStr = shapeStyle.substring(wStart, wEnd).trim();
+            widthPx = parseVmlLengthToPx(wStr);
+        }
+        Integer hIdx = shapeStyleLower.indexOf('height:');
+        if (hIdx != -1) {
+            Integer hStart = hIdx + 7;
+            Integer hEnd = shapeStyle.indexOf(';', hStart);
+            if (hEnd == -1) { hEnd = shapeStyle.length(); }
+            String hStr = shapeStyle.substring(hStart, hEnd).trim();
+            heightPx = parseVmlLengthToPx(hStr);
+        }
+        if (widthPx <= 0) { widthPx = isWatermark ? 480 : 200; }
+        if (heightPx <= 0) { heightPx = isWatermark ? 240 : 150; }
+
+        // Word's VML watermark width is usually 4–5 inches — too small to feel like a
+        // page-filling watermark in PDF. For watermarks specifically, scale up to at
+        // least 7 inches wide while preserving the aspect ratio from Word's declared
+        // dimensions. Letter page is 8.5 in; 7 in covers the printable area nicely
+        // and at the 315° rotation Word uses, the diagonal spans most of the page.
+        if (isWatermark) {
+            Integer minWatermarkWidthPx = 672; // 7 inches at 96 DPI
+            if (widthPx < minWatermarkWidthPx) {
+                Integer originalW = widthPx;
+                Integer originalH = heightPx;
+                widthPx = minWatermarkWidthPx;
+                if (originalW > 0 && originalH > 0) {
+                    heightPx = Math.round((Decimal)minWatermarkWidthPx * originalH / originalW);
+                }
+            }
+        }
+
+        String src;
+        if (imageValue.startsWith('/sfc/') || imageValue.startsWith('/servlet/') ||
+            imageValue.startsWith('/apex/') || imageValue.startsWithIgnoreCase('http')) {
+            src = imageValue;
+        } else {
+            String mimeType = 'image/png';
+            if (imageValue.startsWith('/9j/') || imageValue.startsWith('/9J/')) { mimeType = 'image/jpeg'; }
+            src = 'data:' + mimeType + ';base64,' + imageValue;
+        }
+
+        if (isWatermark) {
+            // Restored to the version the user confirmed worked: position:fixed div
+            // with <img> inside, centered via top:50%/left:50% + negative margins.
+            // Whitewash overlay is added separately by extractWatermarks(). Image src
+            // uses relative /sfc/... path (Salesforce Blob.toPdf() resolves these).
+            Decimal effOpacity = (opacity != null) ? opacity : 0.05;
+            Decimal whiteAlpha = 1 - effOpacity;
+            if (whiteAlpha > 0.95) { whiteAlpha = 0.95; }
+            if (whiteAlpha < 0.85) { whiteAlpha = 0.85; }
+            Integer halfWPt = Math.round(widthPx * 72 / 96 / 2);
+            Integer halfHPt = Math.round(heightPx * 72 / 96 / 2);
+            return '<div class="docgen-watermark" data-wash="' + whiteAlpha + '" ' +
+                   'style="position:fixed;top:50%;left:50%;margin-left:-' + halfWPt + 'pt;margin-top:-' + halfHPt + 'pt;z-index:0;">' +
+                   '<img src="' + src + '" style="width:' + widthPx + 'px;height:' + heightPx + 'px;" />' +
+                   '</div>';
+        }
+
+        String style = 'max-width:' + widthPx + 'px;max-height:' + heightPx + 'px;height:auto;width:auto;image-orientation:from-image;';
+        if (opacity != null) { style += 'opacity:' + opacity + ';'; }
+        return '<img src="' + src + '" style="' + style + '" />';
+    }
+
+    /**
+     * Extracts an attribute value from a single tag string (no element search).
+     * E.g., extractAttrFromTag('<v:imagedata gain=".26" blacklevel="22938f"/>', 'gain') → '.26'.
+     */
+    private static String extractAttrFromTag(String tag, String attrName) {
+        if (String.isBlank(tag)) { return null; }
+        String marker = ' ' + attrName + '="';
+        Integer idx = tag.indexOf(marker);
+        if (idx == -1) {
+            marker = ' ' + attrName + '=\'';
+            idx = tag.indexOf(marker);
+            if (idx == -1) { return null; }
+        }
+        String quote = tag.substring(idx + marker.length() - 1, idx + marker.length());
+        Integer valStart = idx + marker.length();
+        Integer valEnd = tag.indexOf(quote, valStart);
+        if (valEnd == -1) { return null; }
+        return tag.substring(valStart, valEnd);
+    }
+
+    /**
+     * Pulls <!--DGWM:src=...|wash=...--> markers out of header/footer HTML and
+     * synthesizes the S-Docs-style background CSS:
+     *   html { background: url(SRC) center center fixed no-repeat; background-size: 70% auto; }
+     *   body { background-color: rgba(255,255,255, WASH); }
+     * Returns map: 'html' (cleaned input), 'htmlBg' (CSS for html selector), 'bodyBg' (CSS for body selector).
+     */
+    private static Map<String, String> extractWatermarks(String html) {
+        Map<String, String> result = new Map<String, String>{ 'html' => '', 'watermarks' => '' };
+        if (String.isBlank(html)) { result.put('html', html != null ? html : ''); return result; }
+
+        String marker = '<div class="docgen-watermark"';
+        String cleaned = '';
+        String marks = '';
+        Decimal washAlpha = 0;
+        Integer cursor = 0;
+        while (cursor < html.length()) {
+            Integer start = html.indexOf(marker, cursor);
+            if (start == -1) {
+                cleaned += html.substring(cursor);
+                break;
+            }
+            cleaned += html.substring(cursor, start);
+            // structure: <div data-wash="0.95" ...><img ... /></div>
+            Integer endDiv = html.indexOf('</div>', start);
+            if (endDiv == -1) { cleaned += html.substring(start); break; }
+            String block = html.substring(start, endDiv + 6);
+            marks += block;
+            Integer wIdx = block.indexOf('data-wash="');
+            if (wIdx != -1) {
+                Integer wStart = wIdx + 11;
+                Integer wEnd = block.indexOf('"', wStart);
+                if (wEnd != -1) {
+                    try {
+                        Decimal w = Decimal.valueOf(block.substring(wStart, wEnd));
+                        if (w > washAlpha) { washAlpha = w; }
+                    } catch (Exception e) {}
+                }
+            }
+            cursor = endDiv + 6;
+        }
+        // Page-spanning whitewash overlay above the watermark, below body content.
+        if (washAlpha > 0) {
+            marks += '<div class="docgen-watermark-wash" ' +
+                     'style="position:fixed;top:0;left:0;right:0;bottom:0;background-color:rgba(255,255,255,' + washAlpha + ');z-index:1;"></div>';
+        }
+        result.put('html', cleaned);
+        result.put('watermarks', marks);
+        return result;
+    }
+
+    /**
+     * Parses a VML length value like "468pt", "6.5in", "240px" into pixels.
+     */
+    private static Integer parseVmlLengthToPx(String val) {
+        if (String.isBlank(val)) { return 0; }
+        String unit = '';
+        String num = val;
+        for (String u : new List<String>{'pt', 'in', 'cm', 'mm', 'px', 'em'}) {
+            if (val.endsWith(u)) { unit = u; num = val.substring(0, val.length() - u.length()); break; }
+        }
+        Decimal n;
+        try { n = Decimal.valueOf(num.trim()); } catch (Exception e) { return 0; }
+        if (unit == 'pt') { return Math.round(n * 96 / 72); }
+        if (unit == 'in') { return Math.round(n * 96); }
+        if (unit == 'cm') { return Math.round(n * 96 / 2.54); }
+        if (unit == 'mm') { return Math.round(n * 96 / 25.4); }
+        if (unit == 'em') { return Math.round(n * 16); }
+        return Math.round(n);
     }
 
     // ===== XML PARSING UTILITIES =====

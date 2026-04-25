@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.62.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006q929AAA)
+**Current release:** v1.63.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qZmEAAU)
 
 ---
 
@@ -526,9 +526,26 @@ Pre-signing, tags are preserved in the output (not replaced). Post-signing, they
 
 When a field value contains HTML (`<p>`, `<div>`, `<br>`, `<b>`, `<i>`, `<u>`, `<strong>`, `<em>`, `<span>`, `<img>`, `<a>`), DocGen converts it to proper OOXML formatting preserving paragraphs, line breaks, bold/italic/underline, hyperlinks, and embedded images. Works in PDF and DOCX. PowerPoint strips HTML to plain text.
 
+**Inline images in DOCX:** Lightning rich text inline images (the kind you paste/insert directly into a Rich Text Area field) now render in DOCX output via the **Document Generator** runner on a record page. The platform stores these as ContentReference records (ID prefix `0EM`) which can't be fetched by Apex callouts or browser code, so DocGen renders a single-image PDF server-side via `Blob.toPdf()` (which has internal resolver privileges), then extracts the image bytes client-side and embeds them in the DOCX ZIP. Zero session ID exposure, zero persistent storage, AppExchange-clean.
+
+Limitations:
+- The **Generate Sample** button in the template builder produces server-side ZIP only — rich text inline images appear as broken placeholders there. Test rendering via the runner instead.
+- DOCX image quality: `Blob.toPdf()` may re-encode the source image as JPEG (visible quality difference vs. the original PNG). For pixel-perfect images, use the `{%Image:N}` merge tag with an attached File instead of inline rich text.
+- Rotation of inline images is not preserved — they render at the original orientation.
+
 ### 6.10 Multiline text
 
 Newlines in field values render as Word line breaks (`<w:br/>`) — no manual `<br/>` needed.
+
+### 6.10.1 Word watermarks (Word templates → PDF)
+
+Picture watermarks inserted into a Word template via **Design → Watermark → Custom → Picture** render in PDF output. The watermark image extracts during template save (alongside header/footer images), is positioned centered on every page via CSS `position: fixed`, and gets a 95% white wash overlay for the "washed-out" look (since the Salesforce PDF engine doesn't honor CSS `opacity`).
+
+Limitations:
+- **Rotation is not preserved** — Word's typical 315° diagonal angle isn't honored by the PDF engine. Watermarks render upright. If you need a rotated watermark, save your image pre-rotated as a PNG and insert that instead of using Word's Watermark dialog rotation.
+- **The Washout checkbox in Word is ignored** — Word stores washout as a render hint (VML `gain` / `blacklevel` attributes), not as faded image bytes. DocGen applies its own 95% white wash regardless.
+- **Text watermarks** ("DRAFT", "CONFIDENTIAL" via Word's text watermark option) are not supported. Use a picture watermark with the text rendered into a PNG.
+- **Word output preserves whatever watermark Word would render** — these limitations only apply to PDF output.
 
 ### 6.11 Built-in date/time tags
 

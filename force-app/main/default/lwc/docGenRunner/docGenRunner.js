@@ -26,6 +26,8 @@ import { NavigationMixin } from 'lightning/navigation';
 import { downloadBase64 as downloadBase64Util } from 'c/docGenUtils';
 import { buildDocx } from './docGenZipWriter';
 import { mergePdfs } from './docGenPdfMerger';
+import { extractFirstImageFromPdfBase64 } from './docGenPdfImageExtractor';
+import renderImageAsPdfBase64 from '@salesforce/apex/DocGenController.renderImageAsPdfBase64';
 import OUT_FMT_FIELD from '@salesforce/schema/DocGen_Template__c.Output_Format__c';
 import TYPE_FIELD from '@salesforce/schema/DocGen_Template__c.Type__c';
 import IS_DEFAULT_FIELD from '@salesforce/schema/DocGen_Template__c.Is_Default__c';
@@ -794,6 +796,22 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                 } catch (imgErr) { console.warn('DocGen: Failed to fetch image CV ' + cvId, imgErr); }
             }
         }
+        // Lightning rich text inline images (0EM ContentReference) — only path:
+        // server renders single-image PDF via Blob.toPdf (privileged URL resolver),
+        // client extracts the embedded JPEG XObject. PDF is in-memory only.
+        if (parts.imageUrlMap) {
+            for (const [mediaPath, url] of Object.entries(parts.imageUrlMap)) {
+                if (!/rtaImage/i.test(url)) continue;
+                try {
+                    const pdfB64 = await renderImageAsPdfBase64({ imageUrl: url });
+                    if (!pdfB64) continue;
+                    const extracted = extractFirstImageFromPdfBase64(pdfB64);
+                    if (extracted && extracted.base64) {
+                        allImages[mediaPath] = extracted.base64;
+                    }
+                } catch (urlErr) { console.warn('DocGen: rich text image extract failed for ' + url, urlErr); }
+            }
+        }
 
         const fileBytes = buildDocx(parts.allXmlParts, allImages);
         const fileBase64 = this._uint8ArrayToBase64(fileBytes);
@@ -889,6 +907,20 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                         const b64 = await getContentVersionBase64({ contentVersionId: cvId });
                         if (b64) { for (const mp of mediaPaths) { allImages[mp] = b64; } }
                     } catch (imgErr) { console.warn('DocGen: Failed to fetch image CV ' + cvId, imgErr); }
+                }
+            }
+            if (parts.imageUrlMap) {
+                for (const [mediaPath, url] of Object.entries(parts.imageUrlMap)) {
+                    if (!/rtaImage/i.test(url)) continue;
+                    try {
+                        // eslint-disable-next-line no-await-in-loop
+                        const pdfB64 = await renderImageAsPdfBase64({ imageUrl: url });
+                        if (!pdfB64) continue;
+                        const extracted = extractFirstImageFromPdfBase64(pdfB64);
+                        if (extracted && extracted.base64) {
+                            allImages[mediaPath] = extracted.base64;
+                        }
+                    } catch (urlErr) { console.warn('DocGen: rich text image extract failed for ' + url, urlErr); }
                 }
             }
 
@@ -1052,6 +1084,20 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
                         const b64 = await getContentVersionBase64({ contentVersionId: cvId });
                         if (b64) { for (const mp of mediaPaths) { allImages[mp] = b64; } }
                     } catch (imgErr) { console.warn('DocGen: Failed to fetch image CV ' + cvId, imgErr); }
+                }
+            }
+            if (parts.imageUrlMap) {
+                for (const [mediaPath, url] of Object.entries(parts.imageUrlMap)) {
+                    if (!/rtaImage/i.test(url)) continue;
+                    try {
+                        // eslint-disable-next-line no-await-in-loop
+                        const pdfB64 = await renderImageAsPdfBase64({ imageUrl: url });
+                        if (!pdfB64) continue;
+                        const extracted = extractFirstImageFromPdfBase64(pdfB64);
+                        if (extracted && extracted.base64) {
+                            allImages[mediaPath] = extracted.base64;
+                        }
+                    } catch (urlErr) { console.warn('DocGen: rich text image extract failed for ' + url, urlErr); }
                 }
             }
 

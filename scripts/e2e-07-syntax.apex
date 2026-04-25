@@ -372,6 +372,28 @@ try {
     else { fail++; System.debug('TEXTAREA NEWLINE RTL: FAIL — rtlCount=' + rtlCount); }
 } catch (Exception e) { fail++; System.debug('TEXTAREA NEWLINE RTL: FAIL — ' + e.getMessage()); }
 
+// ===== VML watermark detection in DocGenHtmlRenderer =====
+// Word inserts picture watermarks via <w:pict><v:shape><v:imagedata r:id="..."/></v:shape></w:pict>.
+// Renderer must recognize the pict element AND emit a watermark div with whitewash overlay.
+try {
+    String headerXml = '<w:hdr><w:p><w:r><w:pict>' +
+        '<v:shape id="PowerPlusWaterMarkObject" style="position:absolute;width:468pt;height:240pt;rotation:315;mso-position-horizontal:center" type="#_x0000_t75">' +
+        '<v:imagedata r:id="rIdImg1" o:title=""/>' +
+        '</v:shape>' +
+        '</w:pict></w:r></w:p></w:hdr>';
+    String docWithHdr = '<w:document><w:body><!-- DOCGEN_HEADER_START -->' + headerXml + '<!-- DOCGEN_HEADER_END --><w:p><w:r><w:t>Body text</w:t></w:r></w:p></w:body></w:document>';
+    Map<String, String> images = new Map<String, String>{'rIdImg1' => '/sfc/servlet.shepherd/version/download/068000000000000'};
+    String html = DocGenHtmlRenderer.convertToHtml(docWithHdr, images, null);
+    Boolean hasWatermarkDiv = html.contains('docgen-watermark');
+    Boolean hasWhitewash = html.contains('docgen-watermark-wash');
+    Boolean hasBodyContent = html.contains('Body text');
+    if (hasWatermarkDiv && hasWhitewash && hasBodyContent) {
+        pass++; System.debug('VML WATERMARK RENDER: PASS — pict converted to watermark + wash overlay');
+    } else {
+        fail++; System.debug('VML WATERMARK RENDER: FAIL — div=' + hasWatermarkDiv + ' wash=' + hasWhitewash + ' body=' + hasBodyContent);
+    }
+} catch (Exception e) { fail++; System.debug('VML WATERMARK RENDER: FAIL — ' + e.getMessage()); }
+
 System.debug('========================================');
 System.debug('E2E-07 SYNTAX — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

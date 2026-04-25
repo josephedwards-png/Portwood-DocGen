@@ -131,6 +131,7 @@
                                     <nav class="learning-nav">
                                         <a href="#cover-pages" class="nav-item">Cover Pages</a>
                                         <a href="#headers-footers" class="nav-item">Headers/Footers</a>
+                                        <a href="#watermarks" class="nav-item">Watermarks</a>
                                         <a href="#page-numbers" class="nav-item">Page Numbers</a>
                                         <a href="#pdf-vs-docx" class="nav-item">PDF vs DOCX</a>
                                         <a href="#pdf-fonts" class="nav-item">PDF Fonts</a>
@@ -831,7 +832,19 @@
                                         </tbody>
                                     </table>
 
-                                    <p>Works in both PDF and DOCX output. Images inside rich text fields render in PDFs. PowerPoint strips rich text to plain text.</p>
+                                    <p>Works in both PDF and DOCX output. PowerPoint strips rich text to plain text.</p>
+
+                                    <h4 style="margin-top:16px">Inline images in DOCX</h4>
+                                    <p>Images that you paste or insert directly into a Rich Text Area field now render in DOCX output when you generate via the <strong>Document Generator</strong> on a record page. The platform stores these as ContentReference records that can't be fetched directly from Apex or the browser, so DocGen renders a single-image PDF server-side, then extracts the embedded image bytes and embeds them in the DOCX. Works automatically -- no configuration needed.</p>
+
+                                    <div class="card-tip info">
+                                        <strong>Limitations to know:</strong>
+                                        <ul class="bullet-list" style="margin:6pt 0 0 0">
+                                            <li>The "Generate Sample" button in the template builder produces server-side ZIP and shows broken-image placeholders for inline images. Test rendering via the runner on a record page.</li>
+                                            <li>Image quality may differ from the source -- the platform PDF engine often re-encodes inline images as JPEG. For pixel-perfect rendering, use the <code>&#123;%Field&#125;</code> image tag with an attached File instead.</li>
+                                            <li>Inline image rotation isn't preserved.</li>
+                                        </ul>
+                                    </div>
                                 </section>
 
                                 <section id="page-breaks" class="content-section">
@@ -879,6 +892,23 @@
                                         <li>Images work in headers and footers (company logos, etc.)</li>
                                         <li>Add them in Word: Insert &gt; Header or Footer</li>
                                         <li>Use "Different First Page" to suppress headers on a cover page</li>
+                                    </ul>
+                                </section>
+
+                                <section id="watermarks" class="content-section">
+                                    <h3 class="section-heading">Watermarks (Word templates &rarr; PDF)</h3>
+                                    <p>Insert a picture watermark in your Word template via <strong>Design &gt; Watermark &gt; Custom Watermark &gt; Picture watermark</strong>. The image extracts when you save the template version, repeats on every page of the generated PDF, and gets a 95% white wash overlay for a "washed-out" look that doesn't compete with body text.</p>
+
+                                    <div class="card-tip info">
+                                        <strong>Why the wash overlay:</strong> the Salesforce PDF engine doesn't honor CSS opacity on images. We layer a semi-transparent white sheet over the watermark instead -- works in pure CSS 2.1 and matches the way enterprise PDF generators have done watermarks since the 2000s.
+                                    </div>
+
+                                    <p><strong>Important limitations</strong></p>
+                                    <ul class="bullet-list">
+                                        <li><strong>Rotation isn't preserved.</strong> Word's typical 315&deg; diagonal angle isn't honored. Watermarks render upright in PDF. Need a rotated look? Save your image pre-rotated as a transparent PNG and insert that.</li>
+                                        <li><strong>Word's "Washout" checkbox is ignored.</strong> Word stores washout as render hints (VML <code>gain</code>/<code>blacklevel</code> attributes), not as faded image bytes. DocGen applies its own 95% white wash regardless of whether you check that box.</li>
+                                        <li><strong>Text watermarks (DRAFT, CONFIDENTIAL) aren't supported.</strong> Word inserts these as VML text shapes; only image watermarks are converted. Workaround: render your text into a PNG (e.g., in a graphics tool) and insert as a picture watermark.</li>
+                                        <li><strong>DOCX output keeps Word's native rendering.</strong> These limitations only apply to PDF output; the original watermark renders correctly when you generate as DOCX.</li>
                                     </ul>
                                 </section>
 
@@ -1621,7 +1651,7 @@ Id contentDocId = portwoodglobal.DocGenService.generateDocument(
                                         </thead>
                                         <tbody>
                                             <tr><td>Barcodes and QR codes</td><td>These are rendered as CSS in the PDF pipeline only</td><td>Generate as PDF for barcodes/QR</td></tr>
-                                            <tr><td>Rich text images</td><td>Images inside Rich Text Area fields don't carry into DOCX</td><td>Use <code>&#123;%Field&#125;</code> image tags or generate as PDF</td></tr>
+                                            <tr><td>Rich text images in template builder Sample</td><td>Server-side preview can't extract Lightning ContentReference bytes</td><td>Test rendering via the Document Generator on a record page -- the runner path embeds inline images correctly</td></tr>
                                             <tr><td>Dynamic page numbers</td><td>PAGE/NUMPAGES are PDF-only features</td><td>Word handles page numbers natively -- add them in Word's header</td></tr>
                                         </tbody>
                                     </table>

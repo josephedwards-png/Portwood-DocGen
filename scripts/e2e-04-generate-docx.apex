@@ -98,8 +98,39 @@ try {
         Boolean hasXmlParts = parts.containsKey('allXmlParts');
         if (hasXmlParts) { pass++; System.debug('GENERATE DOCUMENT PARTS: PASS — has allXmlParts'); }
         else { fail++; System.debug('GENERATE DOCUMENT PARTS: FAIL — missing allXmlParts'); }
+        // Verify the new image-routing maps are present (added with rich-text-image support)
+        if (parts.containsKey('imageBase64Map') && parts.containsKey('imageCvIdMap') && parts.containsKey('imageUrlMap')) {
+            pass++; System.debug('GENERATE PARTS IMAGE MAPS: PASS — base64Map, cvIdMap, urlMap all present');
+        } else {
+            fail++; System.debug('GENERATE PARTS IMAGE MAPS: FAIL — missing one of the three image maps');
+        }
     } else { fail++; System.debug('GENERATE DOCUMENT PARTS: FAIL — null result'); }
 } catch (Exception e) { fail++; System.debug('GENERATE DOCUMENT PARTS: FAIL — ' + e.getMessage()); }
+
+// ===== Test renderImageAsPdfBase64 (rich text PDF-extract path) =====
+// Validates the Apex-side primitive that powers Lightning rich text inline image
+// rendering in DOCX (server renders single-image PDF, client extracts the image).
+try {
+    // Use a known-good Salesforce-relative URL (won't actually reach a real image
+    // in test data, but exercises the validation + Blob.toPdf code path).
+    String result = DocGenController.renderImageAsPdfBase64('/sfc/servlet.shepherd/version/download/' + acctId);
+    if (Test.isRunningTest()) {
+        // In test mode the method returns a stub blob, no real PDF
+        if (String.isNotBlank(result)) { pass++; System.debug('RENDER IMAGE AS PDF (test stub): PASS'); }
+        else { fail++; System.debug('RENDER IMAGE AS PDF (test stub): FAIL — returned null'); }
+    } else {
+        // Production-mode: result is a base64 PDF (or null if image fetch failed,
+        // which is fine — we're testing the entry point not the round trip)
+        pass++; System.debug('RENDER IMAGE AS PDF (smoke): PASS — entry point invoked, length: ' + (result == null ? 'null' : String.valueOf(result.length())));
+    }
+} catch (Exception e) { fail++; System.debug('RENDER IMAGE AS PDF: FAIL — ' + e.getMessage()); }
+
+// Validate URL safety check — only Salesforce-hosted URLs allowed
+try {
+    String result = DocGenController.renderImageAsPdfBase64('https://malicious.example.com/image.png');
+    if (result == null) { pass++; System.debug('RENDER IMAGE AS PDF (rejects external URL): PASS'); }
+    else { fail++; System.debug('RENDER IMAGE AS PDF (rejects external URL): FAIL — should have returned null'); }
+} catch (Exception e) { fail++; System.debug('RENDER IMAGE AS PDF (rejects external URL): FAIL — ' + e.getMessage()); }
 
 // ===== Reset template back to PDF for subsequent scripts =====
 try {

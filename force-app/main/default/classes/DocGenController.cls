@@ -299,6 +299,45 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
     }
 
     /**
+     * Renders a Salesforce-hosted image URL into a single-image PDF via Blob.toPdf,
+     * returns base64. Client parses the PDF to extract the embedded image bytes.
+     *
+     * Why this exists: Lightning rich text inline images (0EM ContentReference)
+     * cannot be fetched directly from LWC (CORS Allow-Credentials:false) and
+     * Apex callouts to those endpoints don't pass AppExchange security review
+     * (session ID exposure, even self-org). Blob.toPdf() however has internal
+     * resolver privileges and CAN fetch the URL — so we render an HTML wrapper
+     * containing just the image, hand the PDF to the client, and the client
+     * extracts the embedded image XObject. PDF is in-memory only, never persisted.
+     *
+     * @param imageUrl  Absolute or relative Salesforce URL (rtaImage, /sfc/, etc.)
+     * @return Base64-encoded PDF bytes, or null on failure
+     */
+    @AuraEnabled
+    public static String renderImageAsPdfBase64(String imageUrl) {
+        if (String.isBlank(imageUrl)) { return null; }
+        // Security: only allow Salesforce-hosted URLs
+        String lower = imageUrl.toLowerCase();
+        Boolean isSafe = imageUrl.startsWith('/') ||
+            lower.contains('.salesforce.com') ||
+            lower.contains('.force.com');
+        if (!isSafe) { return null; }
+        if (Test.isRunningTest()) { return EncodingUtil.base64Encode(Blob.valueOf('test-pdf')); }
+        try {
+            // Tight HTML — image fills the page, no margin, so the image XObject
+            // we extract on the client matches the source as closely as possible.
+            String html = '<html><body style="margin:0;padding:0">' +
+                          '<img src="' + imageUrl.escapeXml() + '" style="display:block" />' +
+                          '</body></html>';
+            Blob pdf = Blob.toPdf(html);
+            return EncodingUtil.base64Encode(pdf);
+        } catch (Exception e) {
+            String noop = e.getMessage(); // NOPMD UnusedLocalVariable
+        }
+        return null;
+    }
+
+    /**
      * Generates a document using Giant Query async pipeline for records with thousands of children.
      * Scouts child counts, and if any exceed the threshold (2000), creates a Job, extracts the
      * loop body, and launches the batch harvester. Falls through to normal generation otherwise.

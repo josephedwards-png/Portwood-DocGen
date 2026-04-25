@@ -695,18 +695,24 @@ public with sharing class DocGenService {
         }
 
         // Dynamic images: return mediaPath → CV ID mapping (not base64)
-        // Client calls getContentVersionBase64() for each unique CV in separate transactions
+        // Client calls getContentVersionBase64() for each unique CV in separate transactions.
+        // Server-fetched blobs (e.g., rta image callout for Lightning rich text inline
+        // images, ContentReference / 0EM prefix) are inlined as base64 — bytes are
+        // already in heap and we avoid a temp-CV + DML + cleanup round-trip.
         Map<String, String> imageCvIdMap = new Map<String, String>();
         Map<String, String> imageUrlMap = new Map<String, String>();
         for (Map<String, Object> img : pendingImages) {
             String fileName = (String) img.get('fileName');
             String mediaPath = 'word/media/' + fileName;
-            if (img.containsKey('url')) {
+            if (img.containsKey('blob')) {
+                imageBase64Map.put(mediaPath, EncodingUtil.base64Encode((Blob) img.get('blob')));
+            } else if (img.containsKey('url')) {
                 String url = (String) img.get('url');
                 if (url.contains('/version/download/')) {
                     imageCvIdMap.put(mediaPath, url.substringAfterLast('/'));
                 } else if (url.contains('/servlet/') || url.contains('/sfc/')) {
-                    // Salesforce servlet URLs (rtaImage, etc.) — pass to client for fetching
+                    // Client checks each URL: rtaImage URLs (rich text inline images)
+                    // route through PDF-extract; others are diagnostics-only.
                     imageUrlMap.put(mediaPath, url);
                 }
             }
@@ -1664,23 +1670,48 @@ public with sharing class DocGenService {
     }
 
     /**
-     * Rewrites r:embed="rIdX" to r:embed="prefix_rIdX" so header/footer
-     * image relIds don't collide with document or other part relIds.
+     * Rewrites image relationship IDs in header/footer XML so they don't collide
+     * with document or other part relIds. Handles two reference patterns:
+     *   - DrawingML:  <a:blip r:embed="rIdX"/>           → r:embed="prefix_rIdX"
+     *   - VML (used by Word watermarks): <v:imagedata r:id="rIdX"/> → r:id="prefix_rIdX"
+     * The VML rewrite is scoped to <v:imagedata ...> elements only — rewriting every
+     * r:id would also touch hyperlinks and other non-image relationships.
      */
     private static String namespaceImageRelIds(String xml, String partPrefix) {
+        String result = namespaceAttrInXml(xml, 'r:embed="', null, partPrefix);
+        result = namespaceAttrInXml(result, 'r:id="', '<v:imagedata', partPrefix);
+        return result;
+    }
+
+    /**
+     * Rewrites occurrences of attrMarker (e.g. 'r:embed="') by prepending partPrefix +'_'
+     * to the attribute value. If scopeTag is non-null, only rewrites occurrences whose
+     * nearest preceding '<' starts with scopeTag (e.g. only inside <v:imagedata ...>).
+     */
+    private static String namespaceAttrInXml(String xml, String attrMarker, String scopeTag, String partPrefix) {
         String result = xml;
         Integer cursor = 0;
-        String embedMarker = 'r:embed="';
         while (cursor < result.length()) {
-            Integer embedStart = result.indexOf(embedMarker, cursor);
-            if (embedStart == -1) { break; }
-            Integer valStart = embedStart + embedMarker.length();
+            Integer markerStart = result.indexOf(attrMarker, cursor);
+            if (markerStart == -1) { break; }
+            Integer valStart = markerStart + attrMarker.length();
             Integer valEnd = result.indexOf('"', valStart);
             if (valEnd == -1) { break; }
-            String relId = result.substring(valStart, valEnd);
-            String newRelId = partPrefix + '_' + relId;
-            result = result.substring(0, valStart) + newRelId + result.substring(valEnd);
-            cursor = valStart + newRelId.length() + 1;
+
+            Boolean inScope = true;
+            if (scopeTag != null) {
+                Integer tagOpen = result.lastIndexOf('<', markerStart);
+                inScope = (tagOpen != -1 && result.substring(tagOpen).startsWith(scopeTag));
+            }
+
+            if (inScope) {
+                String relId = result.substring(valStart, valEnd);
+                String newRelId = partPrefix + '_' + relId;
+                result = result.substring(0, valStart) + newRelId + result.substring(valEnd);
+                cursor = valStart + newRelId.length() + 1;
+            } else {
+                cursor = valEnd + 1;
+            }
         }
         return result;
     }
@@ -3248,6 +3279,74 @@ public with sharing class DocGenService {
             String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
         }
 
+        // Rich Text Field images come back as /servlet/rtaImage?...&refid=<id>.
+        // The refid varies: ContentDocument ID (069...) for File-based RTAs, or
+        // ContentVersion ID (068...) for some legacy/embedded forms. Try both.
+        // Then rewrite src to the /sfc/servlet.shepherd/version/download/<cvId> form
+        // that the existing image pipeline handles end-to-end. No HTTP callouts.
+        if (imageBlob == null && src != null && src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
+            Integer refStart = src.toLowerCase().indexOf('refid=') + 6;
+            Integer refEnd = src.indexOf('&', refStart);
+            if (refEnd == -1) { refEnd = src.length(); }
+            String refid = src.substring(refStart, refEnd);
+            if (String.isNotBlank(refid) && refid.length() >= 15) {
+                Id resolvedId = null;
+                try { resolvedId = (Id) refid; } catch (Exception parseE) {
+                    String noop = parseE.getMessage(); // NOPMD UnusedLocalVariable
+                }
+                if (resolvedId != null) {
+                    String idPrefix = ((String) resolvedId).substring(0, 3);
+                    // Server-side ZIP paths (preview generate, native PPTX) need the
+                    // actual bytes for assembleZip(). Client-side parts (DOCX download/
+                    // save) sets currentOutputFormat='PDF' as a heap-saving hint —
+                    // we then skip VersionData and let the client fetch it via
+                    // getContentVersionBase64. Same pattern as buildImageXml's
+                    // {%ImageField} CV path (CLAUDE.md).
+                    Boolean loadBytes = (currentOutputFormat != 'PDF');
+                    List<ContentVersion> rtaCvs = new List<ContentVersion>();
+                    try {
+                        if (idPrefix == '068') {
+                            // refid is already a ContentVersion ID
+                            rtaCvs = loadBytes
+                                ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1]
+                                : [SELECT Id, FileExtension FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1];
+                        } else {
+                            // Treat as ContentDocument ID (069 prefix)
+                            rtaCvs = loadBytes
+                                ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE ContentDocumentId = :resolvedId AND IsLatest = true WITH USER_MODE LIMIT 1]
+                                : [SELECT Id, FileExtension FROM ContentVersion WHERE ContentDocumentId = :resolvedId AND IsLatest = true WITH USER_MODE LIMIT 1];
+                            // Some refid prefixes (like 0EM or 005 — embedded inline images)
+                            // aren't ContentDocuments. If first lookup empty, try Id directly.
+                            if (rtaCvs.isEmpty()) {
+                                rtaCvs = loadBytes
+                                    ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1]
+                                    : [SELECT Id, FileExtension FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1];
+                            }
+                        }
+                    } catch (Exception qE) {
+                        String noop = qE.getMessage(); // NOPMD UnusedLocalVariable
+                    }
+                    if (!rtaCvs.isEmpty()) {
+                        src = '/sfc/servlet.shepherd/version/download/' + rtaCvs[0].Id;
+                        if (String.isNotBlank(rtaCvs[0].FileExtension)) {
+                            String fext = rtaCvs[0].FileExtension.toLowerCase();
+                            if (fext == 'jpg' || fext == 'jpeg') { ext = 'jpeg'; }
+                            else if (fext == 'gif' || fext == 'png' || fext == 'bmp') { ext = fext; }
+                        }
+                        // Server-side ZIP needs the binary for assembleZip()
+                        if (loadBytes && rtaCvs[0].VersionData != null) {
+                            imageBlob = rtaCvs[0].VersionData;
+                        }
+                    }
+                    // 0EM (Lightning ContentReference) inline rich text images keep
+                    // their original rtaImage URL as src. PDF rendering uses it via
+                    // Blob.toPdf's internal resolver. DOCX assembly detects the URL
+                    // pattern client-side and routes through PDF-extract path
+                    // (DocGenController.renderImageAsPdfBase64).
+                }
+            }
+        }
+
         // Register image — store blob for DOCX and URL for PDF rendering.
         imageCounter++;
         String relId = 'rIdImg' + imageCounter;
@@ -3265,8 +3364,6 @@ public with sharing class DocGenService {
             }
             pendingImages.add(imgData);
         } else if (String.isNotBlank(src) && !src.startsWith('data:')) {
-            // URL-only: store the URL. For PDF, Blob.toPdf() resolves Salesforce URLs natively.
-            // For DOCX, the client-side assembly path will fetch the blob via browser session.
             pendingImages.add(new Map<String, Object>{
                 'relId' => relId,
                 'fileName' => fileName,

@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.63.0 — Word watermarks in PDF + Lightning rich text inline images in DOCX
+
+Promoted package: `04tal000006qZmEAAU` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qZmEAAU)
+
+### Word watermarks render in PDF output
+
+Picture watermarks inserted in Word templates via Design → Watermark → Picture now extract during template save and render centered on every page of the generated PDF. Watermark image is layered with a 95% white wash overlay (`rgba(255,255,255,0.95)`) for the "washed-out" look — Salesforce's PDF engine doesn't honor CSS opacity, so we use a CSS 2.1 layered approach instead. Body text sits above via `z-index:2`.
+
+- **VML pict parsing in `DocGenHtmlRenderer`** — added `<w:pict>` recognition alongside `<w:drawing>` in both paragraph-level and run-level parsing loops.
+- **Header/footer image relId namespacing** — `DocGenService.namespaceImageRelIds` now rewrites `r:id="..."` on `<v:imagedata>` elements (in addition to `r:embed="..."` for DrawingML), scoped via `lastIndexOf('<')` so hyperlinks aren't clobbered.
+
+**Limitations** (see UserGuide §6.10.1, Learning Center "Watermarks", CLAUDE.md): rotation isn't preserved, Word's "Washout" checkbox is ignored (we apply our own 95% wash), text watermarks (DRAFT/CONFIDENTIAL via VML textpath) aren't supported.
+
+### Lightning rich text inline images render in DOCX output
+
+Images pasted/inserted directly into Lightning Rich Text Area fields (stored as `0EM` ContentReference records) now embed in DOCX output via the Document Generator runner. Salesforce architecturally blocks every direct way of fetching these bytes — Apex SOQL doesn't expose 0EM, Apex callouts to rtaImage redirect-loop, frontdoor.jsp redacts the bridged session from response headers, LWC fetch fails CORS `Allow-Credentials: false`, and `<img>`+canvas extraction taints the canvas. Only one path works:
+
+1. **Server (`DocGenController.renderImageAsPdfBase64`)** — wraps the rtaImage URL in minimal HTML, calls `Blob.toPdf()` (privileged internal resolver fetches the image), returns a single-image PDF as base64.
+2. **Client (`docGenPdfImageExtractor.js`)** — parses the PDF object stream, finds the first `/Subtype /Image` XObject with `/Filter /DCTDecode`, returns the JPEG bytes directly. Pure JS, no library deps, ~100 lines.
+3. **DOCX assembly** — bytes embed into `word/media/`, existing rels machinery references them.
+
+PDF is in-memory only at every step (Apex Blob → base64 across Aura → JS Uint8Array → garbage collected). Zero ContentDocument records, zero filesystem writes, zero session ID exposure in our code, zero AppExchange security review surface.
+
+**Limitations**: server-side preview ("Generate Sample" in template builder) still shows broken placeholders for inline rich text images — Apex has no PDF parser, only the client-side path can extract. PDF re-encodes inline images as JPEG; for pixel-perfect rendering use `{%Field}` with attached Files.
+
+### Cleanup
+
+- Removed deprecated `docGenImageFetcher.js` (browser fetch + canvas approach abandoned)
+- Removed unused `Enable_Rich_Text_Image_Fetch__c` setting field and associated Remote Site Settings (gated callout approach abandoned)
+- New `DocGenControllerTests.testRenderImageAsPdfBase64_*` unit tests (URL safety + entry-point)
+- New `DocGenHtmlRendererTest.testVmlPictWatermarkRendering` covers the VML pict → watermark + whitewash flow
+- E2E coverage in `e2e-04-generate-docx.apex` and `e2e-07-syntax.apex`
+
 ## v1.62.0 — HTML bulk merge fix, `{%Image:N}` HTML rendering, recursive deep-nesting stitch, Learning Center + UserGuide expansion
 
 Promoted package: `04tal000006q929AAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006q929AAA)

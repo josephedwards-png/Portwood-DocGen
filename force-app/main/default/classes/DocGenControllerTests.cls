@@ -4646,4 +4646,41 @@ private class DocGenControllerTests {
         System.assertEquals(false, (Boolean) noMatch.get('matched'));
         System.assertEquals(null, noMatch.get('error'));
     }
+
+    // ===== renderImageAsPdfBase64: rich text inline image PDF-extract path =====
+
+    @isTest
+    static void testRenderImageAsPdfBase64_rejectsExternalUrl() {
+        // Security: must reject non-Salesforce URLs
+        Test.startTest();
+        String result = DocGenController.renderImageAsPdfBase64('https://malicious.example.com/x.png');
+        Test.stopTest();
+        System.assertEquals(null, result, 'External URL should return null');
+    }
+
+    @isTest
+    static void testRenderImageAsPdfBase64_rejectsBlankUrl() {
+        Test.startTest();
+        System.assertEquals(null, DocGenController.renderImageAsPdfBase64(null));
+        System.assertEquals(null, DocGenController.renderImageAsPdfBase64(''));
+        Test.stopTest();
+    }
+
+    @isTest
+    static void testRenderImageAsPdfBase64_acceptsRelativeUrl() {
+        // Relative Salesforce URLs are allowed; in test mode the method returns
+        // a stub blob (no real PDF rendering). Just verify the entry is reached.
+        Test.startTest();
+        String result = DocGenController.renderImageAsPdfBase64('/sfc/servlet.shepherd/version/download/068000000000000');
+        Test.stopTest();
+        System.assertNotEquals(null, result, 'Relative Salesforce URL should be accepted in test stub mode');
+    }
+
+    @isTest
+    static void testRenderImageAsPdfBase64_acceptsForceComUrl() {
+        Test.startTest();
+        String result = DocGenController.renderImageAsPdfBase64('https://example.sandbox.file.force.com/servlet/rtaImage?eid=001000000000000');
+        Test.stopTest();
+        System.assertNotEquals(null, result, 'force.com hosted URL should be accepted in test stub mode');
+    }
 }
