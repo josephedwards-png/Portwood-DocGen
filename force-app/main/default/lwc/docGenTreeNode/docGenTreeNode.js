@@ -120,6 +120,14 @@ export default class DocGenTreeNode extends LightningElement {
     }
 
     // ── Clause changes ──────────────────────────────────────────
+    handleAliasChange(event) {
+        // Strip non-identifier chars to keep merge tags valid ([A-Za-z0-9_]+)
+        const cleaned = (event.target.value || '').trim().replace(/[^A-Za-z0-9_]/g, '');
+        this.dispatchEvent(new CustomEvent('clausechange', {
+            bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
+            detail: { path: this.nodeData.path, field: 'alias', value: cleaned }
+        }));
+    }
     handleWhereChange(event) {
         this.dispatchEvent(new CustomEvent('clausechange', {
             bubbles: true, composed: true, // NOPMD — composed required for recursive tree node events
@@ -166,6 +174,7 @@ export default class DocGenTreeNode extends LightningElement {
         return 'padding-left: ' + px + 'px;';
     }
 
+    get nodeAlias() { return this.nodeData ? this.nodeData.alias || '' : ''; }
     get nodeWhereClause() { return this.nodeData ? this.nodeData.whereClause || '' : ''; }
     get nodeOrderBy() { return this.nodeData ? this.nodeData.orderBy || '' : ''; }
     get nodeLimitAmount() { return this.nodeData ? this.nodeData.limitAmount || '' : ''; }
@@ -221,8 +230,17 @@ export default class DocGenTreeNode extends LightningElement {
     get filteredChildRels() {
         if (!this.nodeData || !this.nodeData.childRels) return [];
         const s = this._relPickerSearch;
+        // Dedupe by relationship value so each appears once in the picker.
+        // We always show every relationship (even ones already expanded) —
+        // clicking again creates a filtered-subset slot rather than toggling
+        // the existing one.
+        const seen = new Set();
         return this.nodeData.childRels
-            .filter(cr => !cr.expanded)
+            .filter(cr => {
+                if (seen.has(cr.value)) return false;
+                seen.add(cr.value);
+                return true;
+            })
             .filter(cr => !s || cr.displayLabel.toLowerCase().includes(s) || cr.value.toLowerCase().includes(s))
             .slice(0, 50);
     }
@@ -262,7 +280,10 @@ export default class DocGenTreeNode extends LightningElement {
             (rel.label && rel.label.toLowerCase().includes(search));
     }
 
-    // Child rel data for template — filtered by global search
+    // Child rel data for template — filtered by global search.
+    // Each rendered entry gets a unique `slotKey` (= _slotKey for filtered
+    // subsets, else cr.value) used as the LWC list key and as the data-rel
+    // discriminator for slot-aware operations like remove.
     get childRels() {
         if (!this.nodeData || !this.nodeData.childRels) return [];
         const gs = this.globalSearch;
@@ -272,6 +293,7 @@ export default class DocGenTreeNode extends LightningElement {
             const count = cr.nodeData ? this._countNodeFields(cr.nodeData) : 0;
             return {
                 ...cr,
+                slotKey: cr._slotKey || cr.value,
                 hasSelectedCount: count > 0,
                 selectedCount: count,
                 nextDepth: parseInt(this.depth, 10) + 1,

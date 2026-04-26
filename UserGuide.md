@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.65.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiG1AAI)
+**Current release:** v1.66.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)
 
 ---
 
@@ -52,10 +52,10 @@ Portwood DocGen is a native Salesforce document generation engine. It merges Sal
 ### Install the package
 
 ```bash
-sf package install --package 04tal000006q929AAA --wait 10 --target-org <your-org>
+sf package install --package 04tal000006qiUXAAY --wait 10 --target-org <your-org>
 ```
 
-Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006q929AAA) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006q929AAA)
+Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)
 
 ### Post-install checklist
 

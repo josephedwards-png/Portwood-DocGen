@@ -376,7 +376,9 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
 
             for (Object nodeObj : nodes) {
                 Map<String, Object> node = (Map<String, Object>) nodeObj;
-                if (giantRelationshipName.equals((String) node.get('relationshipName'))) {
+                String nodeAlias = (String) node.get('alias');
+                String effectiveKey = String.isNotBlank(nodeAlias) ? nodeAlias : (String) node.get('relationshipName');
+                if (giantRelationshipName.equals(effectiveKey)) {
                     String row = '<tr>';
                     // Parent fields first (e.g., Product2.Name → "Product Name")
                     List<Object> pFields = (List<Object>) node.get('parentFields');
@@ -702,7 +704,9 @@ public with sharing class DocGenGiantQueryAssembler implements Queueable {
                 if (nodes == null) { return html; }
                 for (Object nodeObj : nodes) {
                     Map<String, Object> node = (Map<String, Object>) nodeObj;
-                    if (giantRelationshipName.equalsIgnoreCase((String) node.get('relationshipName'))) {
+                    String nodeAlias = (String) node.get('alias');
+                    String effectiveKey = String.isNotBlank(nodeAlias) ? nodeAlias : (String) node.get('relationshipName');
+                    if (giantRelationshipName.equalsIgnoreCase(effectiveKey)) {
                         childObj = (String) node.get('object');
                         lookupFld = (String) node.get('lookupField');
                         whereCls = (String) node.get('where');

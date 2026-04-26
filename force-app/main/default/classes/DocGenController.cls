@@ -441,13 +441,17 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             if (giantRelationship != null) {
                 if (configVersion >= 3) {
-                    // V3: find the matching node in the JSON config
+                    // V3: find the matching node by alias if present (filtered subset),
+                    // else by relationshipName. The scout keys counts by the same effective
+                    // key, so giantRelationship === node.alias || node.relationshipName.
                     Map<String, Object> config = (Map<String, Object>) JSON.deserializeUntyped(queryConfig.trim());
                     List<Object> nodesJson = (List<Object>) config.get('nodes');
                     if (nodesJson != null) {
                         for (Object nodeObj : nodesJson) {
                             Map<String, Object> n = (Map<String, Object>) nodeObj;
-                            if (giantRelationship.equals((String) n.get('relationshipName'))) {
+                            String nodeAlias = (String) n.get('alias');
+                            String effectiveKey = String.isNotBlank(nodeAlias) ? nodeAlias : (String) n.get('relationshipName');
+                            if (giantRelationship.equals(effectiveKey)) {
                                 giantNodeConfig = n;
                                 break;
                             }

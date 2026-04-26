@@ -151,11 +151,17 @@
                 </div>
             </template>
 
-            <!-- ═══ WHERE / ORDER BY / LIMIT (child nodes only) ═══ -->
+            <!-- ═══ Tag name / WHERE / ORDER BY / LIMIT (child nodes only) ═══ -->
             <template if:true={isChild}>
                 <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <lightning-input label="Tag name" variant="label-inline"
+                        field-level-help="Optional. The merge-tag name for this loop, e.g. {#SubscriptionItems}. Defaults to the relationship name. Set a unique name when adding the same related list more than once with different filters."
+                        placeholder="e.g. SubscriptionItems"
+                        value={nodeAlias} onchange={handleAliasChange}
+                        style="flex: 1; min-width: 160px;">
+                    </lightning-input>
                     <lightning-input label="Filter (WHERE)" variant="label-inline"
-                        placeholder="e.g. StageName = 'Closed Won'"
+                        placeholder="e.g. Product2.Family = 'Subscription'"
                         value={nodeWhereClause} onchange={handleWhereChange}
                         style="flex: 2; min-width: 180px;">
                     </lightning-input>
@@ -177,12 +183,12 @@
         <template for:each={childRels} for:item="cr">
             <template if:true={cr.expanded}>
                 <template if:true={cr.hasNode}>
-                    <div key={cr.value} style="border-left: 2px solid #d1fae5; margin-left: 14px;">
+                    <div key={cr.slotKey} style="border-left: 2px solid #d1fae5; margin-left: 14px;">
                         <div style="padding: 4px 10px 2px; font-weight: 600; font-size: 0.78rem; color: #065f46; display: flex; align-items: center; gap: 4px;">
                             <lightning-icon icon-name="standard:related_list" size="xx-small"></lightning-icon>
                             {cr.displayLabel}
                             <span style="font-size: 0.65rem; color: #999; font-weight: 400; font-family: monospace;">{cr.value}</span>
-                            <a href="javascript:void(0)" data-rel={cr.value} onclick={handleRemoveChild}
+                            <a href="javascript:void(0)" data-rel={cr.slotKey} onclick={handleRemoveChild}
                                 style="color: #ccc; text-decoration: none; font-size: 0.85rem; margin-left: auto; padding: 0 4px;" title="Remove">&times;</a>
                         </div>
                         <c-doc-gen-tree-node

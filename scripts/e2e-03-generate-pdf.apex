@@ -134,6 +134,65 @@ try {
     delete hTmpl;
 } catch (Exception e) { fail++; System.debug('HTML TEMPLATE PDF: FAIL — ' + e.getMessage() + ' line ' + e.getLineNumber()); }
 
+// ===== Filtered subsets: two loops, same relationship, different WHEREs =====
+// V3 config with two child nodes against Contacts, each with its own alias +
+// WHERE clause. Verifies the data retriever keys results by alias and the
+// scout reports per-alias counts (so giant-query routing can target one).
+try {
+    Account fsAcct = new Account(Name = 'E2E Filtered Subsets ' + Datetime.now().getTime());
+    insert fsAcct;
+    insert new List<Contact>{
+        new Contact(LastName = 'Sub-A1', AccountId = fsAcct.Id, Department = 'Subscription'),
+        new Contact(LastName = 'Sub-A2', AccountId = fsAcct.Id, Department = 'Subscription'),
+        new Contact(LastName = 'Set-B1', AccountId = fsAcct.Id, Department = 'Setup'),
+        new Contact(LastName = 'Set-B2', AccountId = fsAcct.Id, Department = 'Setup')
+    };
+    String v3 = '{"v":3,"root":"Account","nodes":[' +
+        '{"id":"n0","object":"Account","fields":["Name"],"parentNode":null,"lookupField":null,"relationshipName":null},' +
+        '{"id":"n1","object":"Contact","fields":["LastName"],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Contacts","alias":"SubscriptionContacts","where":"Department = \'Subscription\'"},' +
+        '{"id":"n2","object":"Contact","fields":["LastName"],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Contacts","alias":"SetupContacts","where":"Department = \'Setup\'"}' +
+        ']}';
+    Map<String, Integer> counts = DocGenDataRetriever.scoutChildCounts(fsAcct.Id, v3);
+    Boolean countsByAlias = counts.containsKey('SubscriptionContacts') && counts.get('SubscriptionContacts') == 2
+                         && counts.containsKey('SetupContacts') && counts.get('SetupContacts') == 2;
+    if (countsByAlias) { pass++; System.debug('FILTERED SUBSET SCOUT: PASS — ' + counts); }
+    else { fail++; System.debug('FILTERED SUBSET SCOUT: FAIL — ' + counts); }
+
+    // End-to-end: build a DOCX template body that uses both aliases, generate,
+    // and confirm each loop renders only its filtered records.
+    DocGen_Template__c fsTmpl = new DocGen_Template__c(
+        Name = 'E2E Filtered Tmpl ' + Datetime.now().getTime(),
+        Type__c = 'HTML', Output_Format__c = 'PDF', Base_Object_API__c = 'Account',
+        Query_Config__c = v3
+    );
+    insert fsTmpl;
+    String body = '<html><body><h1>{Name}</h1>' +
+        '<table><tr>SUBS:{#SubscriptionContacts}<td>{LastName}</td>{/SubscriptionContacts}</tr></table>' +
+        '<table><tr>SETUP:{#SetupContacts}<td>{LastName}</td>{/SetupContacts}</tr></table>' +
+        '</body></html>';
+    ContentVersion fcv = new ContentVersion(Title = fsTmpl.Name, PathOnClient = 'b.html',
+        VersionData = Blob.valueOf(body), FirstPublishLocationId = fsTmpl.Id);
+    insert fcv;
+    fcv = [SELECT Id FROM ContentVersion WHERE Id = :fcv.Id];
+    insert new DocGen_Template_Version__c(Template__c = fsTmpl.Id, Content_Version_Id__c = fcv.Id, Is_Active__c = true);
+    DocGenService.generatePdfBlob(fsTmpl.Id, fsAcct.Id);
+    String fh = DocGenService.lastRenderedHtml;
+    Boolean subBlock = fh != null && fh.indexOf('SUBS') < fh.indexOf('SETUP');
+    Boolean subHasA = fh != null && fh.substring(fh.indexOf('SUBS'), fh.indexOf('SETUP')).contains('Sub-A1')
+                                  && fh.substring(fh.indexOf('SUBS'), fh.indexOf('SETUP')).contains('Sub-A2');
+    Boolean subLacksB = fh != null && !fh.substring(fh.indexOf('SUBS'), fh.indexOf('SETUP')).contains('Set-B');
+    Boolean setHasB = fh != null && fh.substring(fh.indexOf('SETUP')).contains('Set-B1')
+                                && fh.substring(fh.indexOf('SETUP')).contains('Set-B2');
+    Boolean setLacksA = fh != null && !fh.substring(fh.indexOf('SETUP')).contains('Sub-A');
+    if (subBlock && subHasA && subLacksB && setHasB && setLacksA) {
+        pass++; System.debug('FILTERED SUBSET RENDER: PASS — each loop has only its filtered records');
+    } else {
+        fail++; System.debug('FILTERED SUBSET RENDER: FAIL — subBlock=' + subBlock + ' subA=' + subHasA + ' subNoB=' + subLacksB + ' setB=' + setHasB + ' setNoA=' + setLacksA);
+    }
+    delete fsTmpl;
+    delete fsAcct;
+} catch (Exception e) { fail++; System.debug('FILTERED SUBSETS: FAIL — ' + e.getMessage() + ' line ' + e.getLineNumber()); }
+
 System.debug('========================================');
 System.debug('E2E-03 GENERATE PDF — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

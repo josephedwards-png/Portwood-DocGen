@@ -460,11 +460,20 @@ public with sharing class DocGenDataRetriever {
         String parentNodeId;
         String lookupField;
         String relationshipName;
+        // Optional. When present, this is the data-map key AND the merge-tag
+        // name (e.g. {#SubscriptionItems}). Lets the same parent→child
+        // relationship appear multiple times with different WHERE clauses.
+        String alias;
         String whereClause;
         String orderByClause;
         String limitClause;
         // Junction support
         Map<String, Object> junction;
+
+        // Effective data-map key: alias if present, else relationshipName.
+        String dataMapKey() {
+            return String.isNotBlank(alias) ? alias : relationshipName;
+        }
     }
 
     /**
@@ -499,6 +508,7 @@ public with sharing class DocGenDataRetriever {
             tn.parentNodeId = (String) n.get('parentNode');
             tn.lookupField = (String) n.get('lookupField');
             tn.relationshipName = (String) n.get('relationshipName');
+            tn.alias = (String) n.get('alias');
             tn.whereClause = (String) n.get('where');
             tn.orderByClause = (String) n.get('orderBy');
             tn.limitClause = (String) n.get('limit');
@@ -547,6 +557,17 @@ public with sharing class DocGenDataRetriever {
         }
         if (root == null) {
             throw new DocGenException('No root node found in query tree.');
+        }
+        // Filtered subsets (alias) must be unique among siblings — otherwise two
+        // nodes would write to the same parent data-map key and silently overwrite.
+        Set<String> seenKeysPerParent = new Set<String>();
+        for (TreeNode tn : allNodes) {
+            if (tn.parentNodeId == null) { continue; }
+            String key = (tn.parentNodeId == null ? '' : tn.parentNodeId) + '::' + tn.dataMapKey();
+            if (seenKeysPerParent.contains(key)) {
+                throw new DocGenException('Duplicate loop key under same parent: ' + tn.dataMapKey() + '. Set a unique alias on each filtered subset.');
+            }
+            seenKeysPerParent.add(key);
         }
 
         // Query root: SELECT fields, parentFields FROM object WHERE Id = :recordId
@@ -807,7 +828,7 @@ public with sharing class DocGenDataRetriever {
                 List<Map<String, Object>> childRecords = grouped.containsKey(parentRecId)
                     ? grouped.get(parentRecId) : new List<Map<String, Object>>();
 
-                parentDataMap.put(child.relationshipName, new Map<String, Object>{
+                parentDataMap.put(child.dataMapKey(), new Map<String, Object>{
                     'totalSize' => childRecords.size(),
                     'records' => childRecords
                 });
@@ -919,7 +940,7 @@ public with sharing class DocGenDataRetriever {
                 List<Map<String, Object>> childRecords = grouped.containsKey(parentRecId)
                     ? grouped.get(parentRecId) : new List<Map<String, Object>>();
 
-                parentData.put(child.relationshipName, new Map<String, Object>{
+                parentData.put(child.dataMapKey(), new Map<String, Object>{
                     'totalSize' => childRecords.size(),
                     'records' => childRecords
                 });
@@ -1574,18 +1595,25 @@ public with sharing class DocGenDataRetriever {
                 throw new DocGenException('Invalid ' + clauseType + ' clause: disallowed keyword detected.');
             }
         }
-        // Allowlist validation: ORDER BY field names verified against Schema.describeSObjects() field map
+        // Allowlist validation: ORDER BY field names verified against Schema.describeSObjects() field map.
+        // Accepts:
+        //   - Direct fields:                Name
+        //   - Custom relationship fields:   My_Lookup__r.Field   (resolved via My_Lookup__c)
+        //   - Standard relationship fields: Account.Name         (resolved via AccountId)
+        //                                   Product2.Name        (resolved via Product2Id)
+        //   - Polymorphic/owner:            Owner.Name           (resolved via OwnerId)
         if (clauseType == 'ORDER BY' && fieldMap != null) {
             for (String part : clause.split(',')) {
                 String fieldName = part.trim().split('\\s+')[0].toLowerCase();
-                // Handle relationship fields like Product2.Name
                 String baseField = fieldName.contains('.') ? fieldName.split('\\.')[0] : fieldName;
-                if (!fieldMap.containsKey(baseField)) {
-                    String asLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : baseField;
-                    if (!fieldMap.containsKey(asLookup)) {
-                        throw new DocGenException('Invalid field in ORDER BY: ' + fieldName);
-                    }
-                }
+                if (fieldMap.containsKey(baseField)) { continue; }
+                // Custom relationship: My_Lookup__r → My_Lookup__c
+                String asCustomLookup = baseField.endsWith('__r') ? baseField.substring(0, baseField.length() - 3) + '__c' : null;
+                if (asCustomLookup != null && fieldMap.containsKey(asCustomLookup)) { continue; }
+                // Standard relationship: RelName → RelNameId (Account → AccountId, Product2 → Product2Id, Owner → OwnerId)
+                String asStdLookup = baseField + 'id';
+                if (fieldMap.containsKey(asStdLookup)) { continue; }
+                throw new DocGenException('Invalid field in ORDER BY: ' + fieldName);
             }
         }
         return clause; // CxSAST: SOQL injection mitigated by keyword blocklist + Schema allowlist validation for ORDER BY fields
@@ -1759,6 +1787,12 @@ public with sharing class DocGenDataRetriever {
             String childObject = (String) n.get('object');
             String lookupField = (String) n.get('lookupField');
             String relationshipName = (String) n.get('relationshipName');
+            String alias = (String) n.get('alias');
+            String whereClause = (String) n.get('where');
+            // Counts must be keyed by the data-map key (alias when present) so
+            // filtered subsets of the same relationship show up as separate rows
+            // and the threshold check / giant routing can address each one.
+            String countsKey = String.isNotBlank(alias) ? alias : relationshipName;
 
             if (String.isBlank(childObject) || String.isBlank(lookupField) || String.isBlank(relationshipName)) {
                 continue;
@@ -1771,11 +1805,14 @@ public with sharing class DocGenDataRetriever {
             try {
                 String countQuery = 'SELECT COUNT() FROM ' + String.escapeSingleQuotes(childObject) +
                     ' WHERE ' + String.escapeSingleQuotes(lookupField) + ' = :recordId';
+                if (String.isNotBlank(whereClause)) {
+                    countQuery += ' AND ' + sanitizeClause(whereClause, 'WHERE');
+                }
                 Integer cnt = Database.countQuery(countQuery, AccessLevel.USER_MODE);
-                counts.put(relationshipName, cnt);
+                counts.put(countsKey, cnt);
             } catch (Exception e) {
                 // Intentionally swallowed — skip relationships that fail to count
-                counts.put(relationshipName, 0);
+                counts.put(countsKey, 0);
             }
         }
     }

@@ -51,7 +51,12 @@ public with sharing class DocGenGiantQueryBatch implements Database.Batchable<St
         this.isHtmlSource = innerXml == null || !innerXml.contains('<w:');
 
         this.relationshipName = (String) childNodeConfig.get('relationshipName');
-        this.giantRelationshipName = this.relationshipName;
+        // alias (when present) is the merge-tag name in the template — e.g. {#SubscriptionItems} —
+        // and may differ from the actual relationship name when a node is a filtered
+        // subset of an existing relationship. The relationship name still drives
+        // SOQL FROM / lookup; the alias drives tag matching only.
+        String aliasFromConfig = (String) childNodeConfig.get('alias');
+        this.giantRelationshipName = String.isNotBlank(aliasFromConfig) ? aliasFromConfig : this.relationshipName;
         this.childObjectName = (String) childNodeConfig.get('object');
         this.lookupField = (String) childNodeConfig.get('lookupField');
 

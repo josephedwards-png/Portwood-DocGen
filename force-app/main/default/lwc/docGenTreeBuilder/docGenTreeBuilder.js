@@ -26,6 +26,13 @@ export default class DocGenTreeBuilder extends LightningElement {
     @api
     get queryConfig() { return this._buildQueryString(); }
     set queryConfig(val) {
+        // Round-trip / interaction guard: skip parsing when (a) the parent is
+        // re-binding the same string we just emitted, or (b) the user is
+        // actively typing/clicking inside the builder. Without this, every
+        // keystroke triggers a parent re-bind that wipes _root and re-creates
+        // the input, blowing away cursor position.
+        if (val === this._lastEmittedConfig) { return; }
+        if (this._userInteracting) { return; }
         this._pendingConfig = val;
         if (this._rootLoaded) { this._parseIncoming(val); }
     }
@@ -91,6 +98,7 @@ export default class DocGenTreeBuilder extends LightningElement {
                 nodeData: null,  // lazy
                 hasNode: false
             })),
+            alias: '',           // optional override for the merge-tag name on this loop ({#Alias}…{/Alias})
             whereClause: '',
             orderBy: '',
             limitAmount: ''
@@ -140,9 +148,43 @@ export default class DocGenTreeBuilder extends LightningElement {
         const { path, relName } = event.detail;
         const node = this._resolveNode(path);
         if (!node) return;
+
+        // If any slot for this relationship is already expanded, picking it
+        // again from the picker spawns a NEW filtered-subset slot instead of
+        // toggling the existing one. The new slot inherits schema from the
+        // primary cr, gets a unique _slotKey, and is pre-expanded so the
+        // user lands directly in the editor for the new loop.
+        const alreadyExpanded = node.childRels.some(c => c.value === relName && c.expanded);
+        if (alreadyExpanded) {
+            const sourceCr = node.childRels.find(c => c.value === relName);
+            if (!sourceCr) return;
+            const existingCount = node.childRels.filter(c => c.value === relName).length;
+            const dupIdx = existingCount + 1;
+            const slotKey = relName + '#' + dupIdx;
+            const schema = await this._loadSchema(sourceCr.childObjectApiName);
+            const childPath = path + '.child:' + slotKey;
+            const newNodeData = this._makeNode(childPath, sourceCr.childObjectApiName, sourceCr.displayLabel, schema, true);
+            newNodeData.alias = relName + dupIdx; // suggested alias — user overwrites in Tag name input
+            node.childRels.push({
+                value: relName,
+                _slotKey: slotKey,           // unique within sibling set; primary slot has no _slotKey
+                displayLabel: sourceCr.displayLabel + ' (filtered #' + dupIdx + ')',
+                label: sourceCr.label,
+                childObjectApiName: sourceCr.childObjectApiName,
+                lookupField: sourceCr.lookupField,
+                icon: 'utility:chevrondown',
+                expanded: true,
+                nodeData: newNodeData,
+                hasNode: true
+            });
+            this._refresh();
+            this._notifyChange();
+            return;
+        }
+
+        // Primary expansion (or collapse) of an unexpanded slot.
         const cr = node.childRels.find(c => c.value === relName);
         if (!cr) return;
-
         if (cr.expanded) {
             cr.expanded = false;
             cr.icon = 'utility:chevronright';
@@ -192,13 +234,22 @@ export default class DocGenTreeBuilder extends LightningElement {
         const { path, relName } = event.detail;
         const node = this._resolveNode(path);
         if (!node) return;
-        const cr = node.childRels.find(c => c.value === relName);
+        // relName here is actually the slotKey from the rendered cr
+        // (= _slotKey for duplicates, cr.value for primary).
+        const cr = node.childRels.find(c => (c._slotKey || c.value) === relName);
         if (!cr) return;
-        // Collapse and discard all selections
-        cr.expanded = false;
-        cr.icon = 'utility:chevronright';
-        cr.nodeData = null;
-        cr.hasNode = false;
+        if (cr._slotKey) {
+            // Filtered-subset slot: pop entirely so the relationship can be
+            // re-duplicated without conflicting with the popped slotKey.
+            node.childRels = node.childRels.filter(c => c !== cr);
+        } else {
+            // Primary slot: collapse + clear (existing behavior — preserves the
+            // schema-derived entry so the relationship can be re-expanded).
+            cr.expanded = false;
+            cr.icon = 'utility:chevronright';
+            cr.nodeData = null;
+            cr.hasNode = false;
+        }
         this._refresh();
         this._notifyChange();
     }
@@ -225,7 +276,19 @@ export default class DocGenTreeBuilder extends LightningElement {
         const { path, field, value } = event.detail;
         const node = this._resolveNode(path);
         if (node) { node[field] = value; }
+        this._markInteracting();
         this._notifyChange();
+    }
+
+    // Set when the user is actively editing inside the builder. Cleared after
+    // a short idle window. While set, the @api queryConfig setter ignores
+    // round-trip rebinds from the parent — preserving input focus.
+    _markInteracting() {
+        this._userInteracting = true;
+        if (this._interactionTimer) { clearTimeout(this._interactionTimer); }
+        this._interactionTimer = setTimeout(() => {
+            this._userInteracting = false;
+        }, 600);
     }
 
     // ── Node resolution ─────────────────────────────────────────
@@ -236,8 +299,10 @@ export default class DocGenTreeBuilder extends LightningElement {
         for (let i = 1; i < parts.length; i++) {
             const part = parts[i];
             if (part.startsWith('child:')) {
-                const relName = part.substring(6);
-                const cr = node.childRels.find(c => c.value === relName);
+                const seg = part.substring(6);
+                // seg is either RelName (primary slot) or RelName#N (filtered subset).
+                // Match _slotKey first, then fall back to value for primaries.
+                const cr = node.childRels.find(c => (c._slotKey || c.value) === seg);
                 if (cr && cr.nodeData) { node = cr.nodeData; }
                 else return null;
             }
@@ -246,11 +311,92 @@ export default class DocGenTreeBuilder extends LightningElement {
     }
 
     // ── Build query string ──────────────────────────────────────
+    // Emits V1 flat SOQL by default. When ANY child node has an alias set
+    // (i.e. the user wants a custom merge-tag name for a loop), switches
+    // to V3 JSON since V1 SOQL has no place to store an alias.
     _buildQueryString() {
         if (!this._root) return '';
+        if (this._anyNodeHasAlias(this._root)) {
+            return this._buildV3Json();
+        }
         const parts = [];
         this._collectFields(this._root, parts);
         return parts.join(', ');
+    }
+
+    _anyNodeHasAlias(node) {
+        if (node.alias && node.alias.trim()) return true;
+        // Duplicate-slot relationships (filtered subsets) can't be expressed
+        // in V1 SOQL — flag them so emit switches to V3 JSON.
+        const seen = new Set();
+        for (const cr of node.childRels) {
+            if (!cr.nodeData) continue;
+            if (seen.has(cr.value)) return true;
+            seen.add(cr.value);
+            if (this._anyNodeHasAlias(cr.nodeData)) return true;
+        }
+        return false;
+    }
+
+    _buildV3Json() {
+        const nodes = [];
+        let nextId = 0;
+        const walk = (node, parentNodeId) => {
+            const myId = 'n' + (nextId++);
+            const fields = node.fields.filter(f => f.checked).map(f => f.apiName);
+            const parentFields = [];
+            for (const pr of node.parentRels) {
+                if (!pr.fields) continue;
+                for (const f of pr.fields) {
+                    if (f.checked) parentFields.push(pr.value + '.' + f.apiName);
+                }
+            }
+            const n = {
+                id: myId,
+                object: node.objectName,
+                fields,
+                parentFields,
+                parentNode: parentNodeId,
+                lookupField: null,
+                relationshipName: null
+            };
+            if (parentNodeId !== null) {
+                // Child node — derive relationship name from path. Path's last
+                // segment is "child:RelName" or "child:RelName#N" — strip the
+                // "#N" filtered-subset discriminator to get the actual rel name.
+                const lastSeg = node.path.split('.').pop();
+                const slotKey = lastSeg.startsWith('child:') ? lastSeg.substring(6) : lastSeg;
+                const relName = slotKey.split('#')[0];
+                n.relationshipName = relName;
+                // lookupField stored on the parent's childRels entry (primary or duplicate)
+                const parentNode = this._findParentByChildPath(this._root, node.path);
+                if (parentNode) {
+                    const cr = parentNode.childRels.find(c => (c._slotKey || c.value) === slotKey);
+                    if (cr && cr.lookupField) n.lookupField = cr.lookupField;
+                }
+                if (node.alias && node.alias.trim()) n.alias = node.alias.trim();
+                if (node.whereClause) n.where = node.whereClause;
+                if (node.orderBy) n.orderBy = node.orderBy;
+                if (node.limitAmount) n.limit = String(node.limitAmount);
+            }
+            nodes.push(n);
+            for (const cr of node.childRels) {
+                if (cr.nodeData) walk(cr.nodeData, myId);
+            }
+        };
+        walk(this._root, null);
+        return JSON.stringify({ v: 3, root: this._root.objectName, nodes });
+    }
+
+    _findParentByChildPath(searchNode, childPath) {
+        for (const cr of searchNode.childRels) {
+            if (cr.nodeData && cr.nodeData.path === childPath) return searchNode;
+            if (cr.nodeData) {
+                const found = this._findParentByChildPath(cr.nodeData, childPath);
+                if (found) return found;
+            }
+        }
+        return null;
     }
 
     _collectFields(node, parts) {
@@ -278,12 +424,14 @@ export default class DocGenTreeBuilder extends LightningElement {
         this._collectFields(node, fieldParts);
         if (fieldParts.length === 0) return null;
 
-        let sq = '(SELECT ' + fieldParts.join(', ') + ' FROM ' + node.path.split('.').pop().replace('child:', '');
-        // Use the relationship name from the last path segment
+        // Strip "child:" prefix and any "#N" filtered-subset suffix to get the
+        // actual relationship name. Filtered-subset slots can't be expressed in
+        // V1 SOQL, so duplicates rely on _anyNodeHasAlias triggering V3 emit upstream.
         const pathParts = node.path.split('.');
         const lastPart = pathParts[pathParts.length - 1];
-        const relName = lastPart.startsWith('child:') ? lastPart.substring(6) : lastPart;
-        sq = '(SELECT ' + fieldParts.join(', ') + ' FROM ' + relName;
+        const slotKey = lastPart.startsWith('child:') ? lastPart.substring(6) : lastPart;
+        const relName = slotKey.split('#')[0];
+        let sq = '(SELECT ' + fieldParts.join(', ') + ' FROM ' + relName;
         if (node.whereClause) sq += ' WHERE ' + node.whereClause;
         if (node.orderBy) sq += ' ORDER BY ' + node.orderBy;
         if (node.limitAmount) sq += ' LIMIT ' + node.limitAmount;
@@ -295,6 +443,114 @@ export default class DocGenTreeBuilder extends LightningElement {
     async _parseIncoming(configStr) {
         if (!configStr || !this._root) return;
         this._suppressNotify = true;
+
+        // V3 JSON: tree-shaped config. Walk nodes, expand each child's path,
+        // restore alias + WHERE + ORDER + LIMIT.
+        const trimmed = configStr.trim();
+        if (trimmed.startsWith('{') && trimmed.includes('"v":3')) {
+            try {
+                const cfg = JSON.parse(trimmed);
+                // Reset tree state so re-parsing the same config (e.g. when the
+                // parent round-trips queryConfig after our configchange event)
+                // doesn't keep spawning duplicate filtered-subset slots.
+                const resetTree = (node) => {
+                    if (!node) return;
+                    // Drop filtered-subset slots; collapse primaries so the
+                    // V3 walker re-claims them fresh.
+                    node.childRels = node.childRels.filter(cr => !cr._slotKey);
+                    for (const cr of node.childRels) {
+                        if (cr.nodeData) resetTree(cr.nodeData);
+                        cr.expanded = false;
+                        cr.icon = 'utility:chevronright';
+                        cr.nodeData = null;
+                        cr.hasNode = false;
+                    }
+                    node.alias = '';
+                };
+                resetTree(this._root);
+                this._uncheckAll(this._root);
+                const nodesById = {};
+                for (const n of (cfg.nodes || [])) nodesById[n.id] = n;
+                // Find root (parentNode null)
+                const rootNode = (cfg.nodes || []).find(n => !n.parentNode);
+                if (rootNode) {
+                    for (const fname of (rootNode.fields || [])) {
+                        const f = this._root.fields.find(ff => ff.apiName === fname);
+                        if (f) f.checked = true;
+                    }
+                    for (const pf of (rootNode.parentFields || [])) {
+                        const dotIdx = pf.indexOf('.');
+                        if (dotIdx === -1) continue;
+                        const relName = pf.substring(0, dotIdx);
+                        const fName = pf.substring(dotIdx + 1);
+                        const pr = this._root.parentRels.find(p => p.value === relName);
+                        if (pr) await this._expandAndCheckParentField(pr, fName);
+                    }
+                }
+                // Expand children depth-first
+                const expandChildren = async (parentJsonNode, parentTreeNode) => {
+                    const kids = (cfg.nodes || []).filter(n => n.parentNode === parentJsonNode.id);
+                    for (const kid of kids) {
+                        // Find an unclaimed slot for this relationship. Multiple kids
+                        // with the same relationshipName (filtered subsets) land in
+                        // separate slots — first claims primary, subsequent claim
+                        // freshly-spawned filtered-subset slots.
+                        let cr = parentTreeNode.childRels.find(c => c.value === kid.relationshipName && !c.expanded);
+                        if (!cr) {
+                            const baseRels = parentTreeNode.childRels.filter(c => c.value === kid.relationshipName);
+                            if (baseRels.length === 0) continue; // schema doesn't expose this relationship
+                            const tpl = baseRels[0];
+                            const dupIdx = baseRels.length + 1;
+                            cr = {
+                                value: kid.relationshipName,
+                                _slotKey: kid.relationshipName + '#' + dupIdx,
+                                displayLabel: tpl.displayLabel + ' (filtered #' + dupIdx + ')',
+                                label: tpl.label,
+                                childObjectApiName: tpl.childObjectApiName,
+                                lookupField: tpl.lookupField,
+                                icon: 'utility:chevronright',
+                                expanded: false,
+                                nodeData: null,
+                                hasNode: false
+                            };
+                            parentTreeNode.childRels.push(cr);
+                        }
+                        if (!cr.nodeData) {
+                            const schema = await this._loadSchema(cr.childObjectApiName);
+                            const slotKey = cr._slotKey || kid.relationshipName;
+                            const childPath = parentTreeNode.path + '.child:' + slotKey;
+                            cr.nodeData = this._makeNode(childPath, cr.childObjectApiName, cr.displayLabel, schema, true);
+                            cr.hasNode = true;
+                        }
+                        cr.expanded = true;
+                        cr.icon = 'utility:chevrondown';
+                        cr.nodeData.alias = kid.alias || '';
+                        cr.nodeData.whereClause = kid.where || '';
+                        cr.nodeData.orderBy = kid.orderBy || '';
+                        cr.nodeData.limitAmount = kid.limit || '';
+                        for (const fname of (kid.fields || [])) {
+                            const f = cr.nodeData.fields.find(ff => ff.apiName === fname);
+                            if (f) f.checked = true;
+                        }
+                        for (const pf of (kid.parentFields || [])) {
+                            const dotIdx = pf.indexOf('.');
+                            if (dotIdx === -1) continue;
+                            const relName = pf.substring(0, dotIdx);
+                            const fName = pf.substring(dotIdx + 1);
+                            const pr = cr.nodeData.parentRels.find(p => p.value === relName);
+                            if (pr) await this._expandAndCheckParentField(pr, fName);
+                        }
+                        await expandChildren(kid, cr.nodeData);
+                    }
+                };
+                await expandChildren(rootNode, this._root);
+                this._suppressNotify = false;
+                this._refresh();
+                return;
+            } catch (err) {
+                // Fall through to V1 parsing on JSON error
+            }
+        }
 
         const parsed = parseSOQLFields(configStr);
 
@@ -411,10 +667,14 @@ export default class DocGenTreeBuilder extends LightningElement {
 
     _notifyChange() {
         if (this._suppressNotify) return;
+        const cfg = this._buildQueryString();
+        // Record what we just emitted so the @api queryConfig setter can
+        // recognize a same-value round-trip from the parent and skip re-parsing.
+        this._lastEmittedConfig = cfg;
         this.dispatchEvent(new CustomEvent('configchange', {
             detail: {
                 objectName: this._selectedObject,
-                queryConfig: this._buildQueryString()
+                queryConfig: cfg
             }
         }));
     }

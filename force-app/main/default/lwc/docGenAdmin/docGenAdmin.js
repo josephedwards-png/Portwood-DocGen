@@ -796,8 +796,31 @@ const VERSION_COLUMNS = [
         try {
             const nodes = [];
             const data = this.sampleRecordData || {};
-            // Parse using nesting-aware SOQL parser
-            const parsed = parseSOQLFields(q);
+            // V3 JSON: convert to a parsed-like shape so the rest of the
+            // tree-builder works unchanged. Filtered-subset slots surface
+            // their alias on the loop label so they're distinguishable.
+            let parsed;
+            if (q.startsWith('{') && q.includes('"v":3')) {
+                const cfg = JSON.parse(q);
+                const root = (cfg.nodes || []).find(n => !n.parentNode) || {};
+                const buildSubs = (parentId) => {
+                    const kids = (cfg.nodes || []).filter(n => n.parentNode === parentId);
+                    return kids.map(k => ({
+                        relationshipName: k.alias || k.relationshipName,
+                        fields: [...(k.fields || []), ...(k.parentFields || [])],
+                        whereClause: k.where || '',
+                        children: buildSubs(k.id)
+                    }));
+                };
+                parsed = {
+                    baseFields: root.fields || [],
+                    parentFields: root.parentFields || [],
+                    subqueries: buildSubs(root.id),
+                    warnings: []
+                };
+            } else {
+                parsed = parseSOQLFields(q);
+            }
             this.queryWarnings = parsed.warnings.length > 0 ? parsed.warnings : null;
             const directFields = parsed.baseFields;
             const parentFields = parsed.parentFields;
@@ -947,13 +970,10 @@ const VERSION_COLUMNS = [
 
     handleManualQueryToggle(event) {
         this.isManualQuery = event.target.checked;
-        // Convert V3 JSON to V1 flat string when switching to manual mode (toggle OFF)
-        if (!this.isManualQuery && this.isEditV3Query) {
-            const v1 = this._formatQueryConfig(this.editTemplateQuery);
-            if (v1 && v1 !== this.editTemplateQuery) {
-                this.editTemplateQuery = v1;
-            }
-        }
+        // Keep editTemplateQuery as-is when toggling. Earlier behavior converted
+        // V3→V1 here, which silently dropped filtered-subset alias slots that V1
+        // SOQL can't express. Manual textarea uses the readable getter for
+        // display when the user wants a V1 view.
     }
 
     handleQueryStringChange(event) {
@@ -1013,11 +1033,14 @@ const VERSION_COLUMNS = [
                             }
                         }
                         const isLoop = !!node.parentNode;
+                        // Loop tag uses alias when present (filtered subset
+                        // distinguishes itself by alias, not relationshipName).
+                        const loopName = node.alias || node.relationshipName;
                         sections.push({
-                            name: node.object + (isLoop ? ' (loop)' : ''),
+                            name: node.object + (isLoop ? ' (loop' + (node.alias ? ' — ' + node.alias : '') + ')' : ''),
                             isLoop,
-                            loopStart: isLoop ? '{#' + node.relationshipName + '}' : '',
-                            loopEnd: isLoop ? '{/' + node.relationshipName + '}' : '',
+                            loopStart: isLoop ? '{#' + loopName + '}' : '',
+                            loopEnd: isLoop ? '{/' + loopName + '}' : '',
                             tags
                         });
                     }
@@ -1290,7 +1313,12 @@ const VERSION_COLUMNS = [
             this.editTemplateObject = row[F.BaseObject];
             this.editTemplateOutputFormat = row[F.OutputFormat] || 'Native';
             this.editTemplateDesc = row[F.Desc];
-            this.editTemplateQuery = this._formatQueryConfig(row[F.QueryConfig]);
+            // Pass the raw stored config to the visual builder. V3 JSON must
+            // NOT be flattened to V1 SOQL here — V1 can't represent filtered
+            // subsets (multiple subqueries against the same relationship), so
+            // flattening would silently drop alias slots. The readable textarea
+            // formats V3→V1 at display time via the readableEditQueryConfig getter.
+            this.editTemplateQuery = row[F.QueryConfig];
             this.editTemplateTestRecordId = row[F.TestRecordId];
             this.editTemplateTitleFormat = row[F.DocTitleFormat];
             this.editTemplateIsDefault = row[F.IsDefault] || false;
@@ -1405,7 +1433,7 @@ const VERSION_COLUMNS = [
 
                 this.showToast('Success', 'Version activated.', 'success');
 
-                this.editTemplateQuery = this._formatQueryConfig(row[F.QueryConfig]);
+                this.editTemplateQuery = row[F.QueryConfig]; // raw — preserves V3 alias slots
                 this.editTemplateCategory = row[F.Category];
                 this.editTemplateDesc = row[F.Desc];
                 this.editTemplateType = row[F.Type];
@@ -1505,7 +1533,7 @@ const VERSION_COLUMNS = [
                 // CxSAST: CSRF protection handled by Salesforce Aura/LWC framework
                 await activateVersion({ versionId: this.previewVersion.Id });
                 // Sync version config to local edit state
-                this.editTemplateQuery = this._formatQueryConfig(this.previewVersion[F.QueryConfig]);
+                this.editTemplateQuery = this.previewVersion[F.QueryConfig]; // raw — preserves V3 alias slots
                 this.editTemplateCategory = this.previewVersion[F.Category];
                 this.editTemplateDesc = this.previewVersion[F.Desc];
                 this.editTemplateType = this.previewVersion[F.Type];

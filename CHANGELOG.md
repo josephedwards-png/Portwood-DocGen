@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.66.0 — Filtered Subsets: multiple loops against the same relationship
+
+Promoted package: `04tal000006qiUXAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)
+
+### Filtered Subsets
+
+Templates can now declare multiple loops against the **same** child relationship with different filters. The classic example: an Opportunity quote with two tables — `{#Subscriptions}…{/Subscriptions}` and `{#Setup}…{/Setup}` — both reading from `OpportunityLineItems` but each with its own WHERE clause and field selection.
+
+- **V3 query config** gained an optional `alias` field on each child node. When set, the alias becomes the merge-tag name (`{#Alias}…{/Alias}`) and the data-map key. Multiple sibling nodes can share the same `relationshipName` if their aliases differ.
+- **Aggregates respect aliases**: `{SUM:Subscriptions.TotalPrice:currency}`, `{COUNT:Setup}`, `{AVG:Hardware.UnitPrice}` all scope to the alias's filtered records.
+- **Empty subsets render gracefully** — outer table markup, headers, totals all stay even when zero rows match the WHERE.
+- **Conditional visibility** on empty subsets via `{#IF Alias.totalSize > 0}…{:else}…{/IF}`. The data map for any alias is `{records:[…], totalSize:N}`, so IF branches cleanly off the count. Bare `{#X}{:else}{/X}` and `{^X}` don't fire for empty lists — wrap in IF to get that behavior.
+- **Visual builder** support: each expanded child relationship now has a **Tag name** input next to **Filter (WHERE)**. Clicking the same related list a second time in the picker spawns a new filtered-subset slot (auto-suggested alias, fully editable).
+- **Backward compatible**: existing templates with no aliases stay on V1 SOQL emit. V3 emit kicks in automatically when an alias is set or a relationship is duplicated.
+- **Giant-query path** routes correctly per alias — each filtered subset gets its own scout/batch/assembler pass.
+
+### Fixes
+
+- `sanitizeClause` ORDER BY validator now accepts standard parent-relationship fields (`Account.Name`, `Owner.Name`, `Product2.Name`). Previously rejected silently, causing child queries to return empty.
+- `editTemplateTags` getter emits `{#alias}…{/alias}` when alias is set, with section labels showing the alias for clarity.
+- `_updateQueryTree` now understands V3 JSON; loop labels surface aliases instead of going blank.
+- Stopped flattening V3 → V1 SOQL when loading templates for edit — preserves filtered-subset slots through the round-trip. Manual textarea formats V1 only at display time.
+
+### Demo
+
+Run `scripts/demo-filtered-subsets.apex` against any org with a Standard Pricebook. Builds an Opportunity with three product families, generates a quote PDF with subscription / setup / (empty) hardware tables and grand totals, attaches the PDF to the Opportunity. 11 assertions cover bleed, empty subsets, aggregates, parent tags, and currency formatting.
+
 ## v1.65.0 — First-class Watermark / Background Image tab + @page bleed rendering + signature watermark wiring
 
 Promoted package: `04tal000006qiG1AAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiG1AAI)

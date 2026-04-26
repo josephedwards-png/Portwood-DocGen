@@ -255,7 +255,8 @@
                 <template if:true={activeNode.isNotRoot}>
                     <div style="border-top: 1px solid #e5e5e5; padding-top: 0.75rem;">
                         <p style="font-size: 0.75rem; font-weight: 600; color: #706e6b; margin-bottom: 0.5rem;">Filters</p>
-                        <lightning-input label="WHERE" variant="label-inline" placeholder="e.g. StageName = 'Closed Won'" value={activeNode.whereClause} onchange={handleWhereChange}></lightning-input>
+                        <lightning-input label="Tag name" variant="label-inline" field-level-help="Optional. Defaults to the relationship name. Use a unique alias when adding multiple loops against the same relationship with different filters (e.g. SubscriptionItems vs SetupItems)." placeholder="e.g. SubscriptionItems" value={activeNode.alias} onchange={handleAliasChange}></lightning-input>
+                        <lightning-input label="WHERE" variant="label-inline" placeholder="e.g. Product2.Family = 'Subscription'" value={activeNode.whereClause} onchange={handleWhereChange} style="margin-top: 4px;"></lightning-input>
                         <lightning-input label="Sort by" variant="label-inline" placeholder="e.g. CreatedDate DESC" value={activeNode.orderByClause} onchange={handleOrderChange} style="margin-top: 4px;"></lightning-input>
                         <lightning-input label="Limit" variant="label-inline" type="number" value={activeNode.limitClause} onchange={handleLimitChange} min="1" max="2000" style="margin-top: 4px;"></lightning-input>
                     </div>

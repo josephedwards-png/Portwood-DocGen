@@ -157,12 +157,15 @@ export default class DocGenColumnBuilder extends LightningElement {
                 }
             }
         }
-        // Child loops
+        // Child loops — the merge tag uses the alias when set, so the user
+        // gets {#SubscriptionItems}...{/SubscriptionItems} instead of the raw
+        // relationship name when they've defined a filtered subset.
         const children = this.treeNodes.filter(n => n.parentNodeId === node.id);
         for (const child of children) {
+            const key = this._nodeKey(child);
             tags.push({
-                label: child.relationshipName,
-                code: '{#' + child.relationshipName + '}...{/' + child.relationshipName + '}',
+                label: key,
+                code: '{#' + key + '}...{/' + key + '}',
                 type: 'loop'
             });
         }
@@ -211,6 +214,7 @@ export default class DocGenColumnBuilder extends LightningElement {
                 lookupField: node.lookupField || null,
                 relationshipName: node.relationshipName || null
             };
+            if (node.alias && node.alias.trim()) n.alias = node.alias.trim();
             if (node.parentGroups) {
                 for (const pg of node.parentGroups) {
                     for (const f of pg.fields) n.parentFields.push(pg.relationshipName + '.' + f);
@@ -579,6 +583,11 @@ export default class DocGenColumnBuilder extends LightningElement {
             parentNodeId: parentNodeId || null,
             lookupField: lookupField || null,
             relationshipName: relationshipName || null,
+            // Optional override of the merge-tag name. Lets two nodes share the
+            // same relationshipName + lookupField but expose different filtered
+            // subsets (e.g. {#SubscriptionItems} and {#SetupItems}, both
+            // OpportunityLineItems with different WHERE).
+            alias: '',
             junctionConfig: junctionConfig || null,
             selectedFields: [],
             parentGroups: [],
@@ -588,6 +597,12 @@ export default class DocGenColumnBuilder extends LightningElement {
             availableFields: [],
             filteredFields: []
         };
+    }
+
+    // Effective merge-tag key for a node — alias when set, else relationshipName.
+    _nodeKey(node) {
+        if (!node) return null;
+        return (node.alias && node.alias.trim()) ? node.alias.trim() : node.relationshipName;
     }
 
     _loadNodeFields(node) {
@@ -637,10 +652,18 @@ export default class DocGenColumnBuilder extends LightningElement {
         const parentNode = this.treeNodes.find(n => n.id === this.addNodeParentId);
         if (!parentNode) return;
 
-        // Don't add duplicates
-        if (this.treeNodes.find(n => n.relationshipName === relName && n.parentNodeId === this.addNodeParentId)) {
-            this.dispatchEvent(new ShowToastEvent({ title: 'Already Added', message: opt.label + ' is already connected.', variant: 'warning' }));
-            return;
+        // Don't add bare duplicates (same relationship, no alias) — but allow
+        // the second add if the user wants a filtered subset; we auto-suggest
+        // an alias and they can edit it. If an existing node uses the
+        // relationship name unaliased AND another adds the same relationship,
+        // give them a starter alias instead of refusing.
+        const existingSiblings = this.treeNodes.filter(n =>
+            n.relationshipName === relName && n.parentNodeId === this.addNodeParentId
+        );
+        let suggestedAlias = '';
+        if (existingSiblings.length > 0) {
+            // Suggest "RelName2", "RelName3", … so saving without editing still works.
+            suggestedAlias = relName + (existingSiblings.length + 1);
         }
 
         // Use the actual lookup field from schema describe (not guessed from object name)
@@ -650,6 +673,10 @@ export default class DocGenColumnBuilder extends LightningElement {
         const lookupField = opt.lookupField || this._guessLookupField(parentNode.objectApiName, relName);
         const newNode = this._createNode(childObjName, opt.label, false, this.addNodeParentId,
             lookupField, relName);
+        if (suggestedAlias) {
+            newNode.alias = suggestedAlias;
+            newNode.label = newNode.label + ' (' + suggestedAlias + ')';
+        }
 
         this.showAddNodeModal = false;
         this.treeNodes = [...this.treeNodes, newNode];
@@ -769,6 +796,16 @@ export default class DocGenColumnBuilder extends LightningElement {
         }
     }
 
+    handleAliasChange(event) {
+        const node = this.activeNode;
+        if (!node) return;
+        // Strip whitespace and disallow characters that would break the merge-tag
+        // regex on the Apex side ([A-Za-z0-9_]+). Empty alias = use relationship name.
+        const raw = (event.detail.value || '').trim();
+        node.alias = raw.replace(/[^A-Za-z0-9_]/g, '');
+        this.treeNodes = [...this.treeNodes];
+        this._notifyChange();
+    }
     handleWhereChange(event) {
         const node = this.activeNode;
         if (node) { node.whereClause = event.detail.value; this._notifyChange(); }
@@ -1114,6 +1151,7 @@ export default class DocGenColumnBuilder extends LightningElement {
                 n.lookupField, n.relationshipName, n.junction);
             node.id = n.id;
             node.selectedFields = n.fields || [];
+            node.alias = n.alias || '';
             node.whereClause = n.where || '';
             node.orderByClause = n.orderBy || '';
             node.limitClause = n.limit || '';

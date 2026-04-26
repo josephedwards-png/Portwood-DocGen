@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.66.0 — NEXT",
-      "versionNumber": "1.66.0.NEXT",
-      "ancestorId": "04tal000006qiG1AAI",
+      "versionName": "1.67.0 — NEXT",
+      "versionNumber": "1.67.0.NEXT",
+      "ancestorId": "04tal000006qiUXAAY",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -102,6 +102,7 @@
     "Portwood DocGen Managed@1.63.0-1": "04tal000006qZmEAAU",
     "Portwood DocGen Managed@1.64.0-1": "04tal000006qhYTAAY",
     "Portwood DocGen Managed@1.65.0-1": "04tal000006qiG1AAI",
-    "Portwood DocGen Managed@1.65.0-3": "04tal000006qiG1AAI"
+    "Portwood DocGen Managed@1.65.0-3": "04tal000006qiG1AAI",
+    "Portwood DocGen Managed@1.66.0-1": "04tal000006qiUXAAY"
   }
 }

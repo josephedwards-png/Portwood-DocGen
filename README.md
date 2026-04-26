@@ -413,7 +413,8 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.65.0 | **Latest (Released)** | `04tal000006qiG1AAI` |
+| v1.66.0 | **Latest (Released)** | `04tal000006qiUXAAY` |
+| v1.65.0 | Previous | `04tal000006qiG1AAI` |
 | v1.64.0 | Previous | `04tal000006qhYTAAY` |
 | v1.63.0 | Previous | `04tal000006qZmEAAU` |
 | v1.62.0 | Previous | `04tal000006q929AAA` |
