@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.66.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)
+**Current release:** v1.67.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qqOrAAI)
 
 ---
 
@@ -15,7 +15,7 @@
 2. [Install & first-run setup](#2-install--first-run-setup)
 3. [Permission sets](#3-permission-sets)
 4. [Templates](#4-templates)
-5. [Query builder](#5-query-builder)
+5. [Query builder](#5-query-builder) — including [Apex Data Provider (V4)](#54-apex-data-provider-v4--class-backed-templates)
 6. [Merge tag reference](#6-merge-tag-reference)
 7. [Document generation](#7-document-generation)
 8. [Bulk generation](#8-bulk-generation)
@@ -52,10 +52,10 @@ Portwood DocGen is a native Salesforce document generation engine. It merges Sal
 ### Install the package
 
 ```bash
-sf package install --package 04tal000006qiUXAAY --wait 10 --target-org <your-org>
+sf package install --package 04tal000006qqOrAAI --wait 10 --target-org <your-org>
 ```
 
-Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)
+Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qqOrAAI) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qqOrAAI)
 
 ### Post-install checklist
 
@@ -283,6 +283,108 @@ Each V3 child node supports:
 - `limit`: optional `LIMIT`
 
 Applies to both sync and giant-query paths.
+
+### 5.4 Apex Data Provider (V4 — class-backed templates)
+
+When the data you need to render isn't an SObject — external API responses, computed totals, cross-object aggregations, anything SOQL can't reach — implement the `portwoodglobal.DocGenDataProvider` interface in your org and bind a template to that class. The merge engine calls your class at render time and uses whatever Map you return.
+
+#### Step 1 — write the provider class in your org
+
+```apex
+global with sharing class MyAccountBriefProvider implements portwoodglobal.DocGenDataProvider {
+
+    global Map<String, Object> getData(Id recordId) {
+        // recordId is whatever the caller passes at generate time (an Account
+        // here, but it could be any SObject — or you can ignore it entirely
+        // and assemble data from somewhere else).
+        Account a = [SELECT Id, Name, Industry, AnnualRevenue, Owner.Name
+                     FROM Account WHERE Id = :recordId LIMIT 1];
+
+        // Compute / call out / aggregate — anything Apex can do.
+        Decimal score = a.AnnualRevenue == null ? 0
+                       : Math.min(100, Math.log(a.AnnualRevenue.doubleValue() + 1) * 6);
+
+        // Pull child collections.
+        List<Object> contacts = new List<Object>();
+        for (Contact c : [SELECT FirstName, LastName, Email, Title
+                          FROM Contact WHERE AccountId = :recordId]) {
+            contacts.add(new Map<String, Object>{
+                'FullName' => c.FirstName + ' ' + c.LastName,
+                'Title' => c.Title,
+                'Email' => c.Email
+            });
+        }
+
+        // Return the Map<String, Object> the merge engine consumes.
+        // The shape mirrors what every other DocGen path produces.
+        return new Map<String, Object>{
+            // Simple fields → {Name}, {Industry}, {AnnualRevenue}
+            'Name' => a.Name,
+            'Industry' => a.Industry,
+            'AnnualRevenue' => a.AnnualRevenue,
+
+            // Computed field — no SOQL equivalent → {CustomerScore}
+            'CustomerScore' => score,
+
+            // Parent lookup → {Owner.Name}
+            'Owner' => new Map<String, Object>{
+                'Name' => a.Owner.Name
+            },
+
+            // Child loop → {#Contacts}…{/Contacts} + {COUNT:Contacts}
+            'Contacts' => new Map<String, Object>{
+                'records' => contacts,
+                'totalSize' => contacts.size()
+            }
+        };
+    }
+
+    global List<String> getFieldNames() {
+        // Powers the field-pill cheat sheet in the template wizard.
+        // Use dot-notation for parent lookups; '#'/'/' wrap loop boundaries.
+        return new List<String>{
+            'Name', 'Industry', 'AnnualRevenue',
+            'CustomerScore',
+            'Owner.Name',
+            '#Contacts', 'Contacts.FullName', 'Contacts.Title', 'Contacts.Email', '/Contacts'
+        };
+    }
+}
+```
+
+Two methods are required, both `global`. `getData` returns a `Map<String, Object>`; `getFieldNames` returns the list of merge tags shown in the wizard.
+
+The interface lives in the managed package — reference it with the full namespace: `portwoodglobal.DocGenDataProvider`.
+
+#### Step 2 — bind a template to the class
+
+In the DocGen app → New Template:
+
+1. **Step 1 — Data Source**: pick **Apex Class (Data Provider)** instead of Salesforce Record.
+2. **Data Provider Class**: search for your class name (e.g., `MyAccountBriefProvider`). The picker filters to classes implementing `portwoodglobal.DocGenDataProvider`. Select yours.
+3. The wizard validates the class, calls `getFieldNames()`, and displays the available merge tags.
+4. **Step 2** lands directly on the connected-provider view. Compose your template body using the merge tags as you would for any other template.
+5. **Step 3** — review and save.
+
+Behind the scenes the template's `Query_Config__c` becomes `{"v":4,"provider":"MyAccountBriefProvider"}`. You can also flip an existing SOQL-backed template to v4 from the **Edit modal → Query Configuration → Use Apex data provider** link.
+
+#### Step 3 — generate
+
+Same as any template. The DocGen app's Generate button, the **Generate Document** Flow action, the Apex `DocGenService.generateDocument()` API — all of them detect the v4 binding automatically and call your class.
+
+```apex
+// From Apex — exactly the same call shape as a SOQL-backed template
+Id contentDocId = portwoodglobal.DocGenService.generateDocument(templateId, accountId, null);
+```
+
+#### Common patterns
+
+- **External callout**: do the callout in `getData`, parse the response, return the parsed Map. Bear in mind callouts subject to governor limits and DML-before-callout rules.
+- **Cross-object aggregations**: query whatever you need, build aggregates in Apex, expose them as merge tags.
+- **Custom Metadata-driven**: read Custom Metadata Type records to resolve the data shape dynamically.
+- **Standalone (no recordId)**: ignore the `recordId` parameter and return data assembled from elsewhere. Useful for "render a report for the current user" templates.
+
+If you don't want template-side binding at all — the data is already in a Flow variable or an Apex wrapper — use **runtime data injection** instead: the **Generate Document** Flow action accepts a `JSON Data` invocable variable, and `DocGenService.generatePdfBlobFromData(templateId, dataMap)` accepts an Apex Map directly. Same merge engine, same tags, no class to write.
 
 ---
 

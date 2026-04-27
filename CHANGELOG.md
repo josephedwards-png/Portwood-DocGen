@@ -1,5 +1,53 @@
 # Changelog
 
+## v1.67.0 — V4 Apex Data Provider wizard, watermark carry-forward, IP capture hardening
+
+Promoted package: `04tal000006qqOrAAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qqOrAAI)
+
+### V4 Apex Data Provider — wizard + edit modal + Copy-Paste Tags
+
+The V4 `DocGenDataProvider` interface (class-backed templates that bypass SOQL) now has full UI parity with the visual query builder:
+
+- **New template wizard, Step 1** introduces a "Data source" radio: **Salesforce records** (existing path) or **Apex class (V4 provider)**. The Apex path lets admins pick any class implementing `portwoodglobal.DocGenDataProvider`, validates it server-side, and stamps `{"v":4,"provider":"ClassName"}` into `Query_Config__c`.
+- **Edit modal** auto-detects v4 templates from their Query Config and switches the Query Configuration tab into provider-picker mode without flattening config back to a default.
+- **Copy-Paste Tags section** now understands v4: groups bare names under "Provider — fields", dotted-with-loop-prefix into loop sections, dotted-without into parent lookup sections — same UX customers expect for V3 query trees.
+- **Save Details** and **Save as New Version** both preserve the v4 binding through round-trip — the previous code path collapsed v4 configs back to V3 default on the standard "Save Details" button.
+- New `DocGenService.generatePdfBlobFromData(templateId, dataMap)` and `generateAndSaveFromData(templateId, attachmentRecordId, dataMap, outputFormatOverride)` overloads expose the runtime DTO injection path to Apex callers; both go through the same merge engine the SOQL paths use.
+- See [UserGuide.md §5.4](UserGuide.md#54-apex-data-provider-v4--class-backed-templates) for the interface skeleton, walkthrough, and common patterns.
+
+### Bulk Flow action — ID collection input
+
+`DocGenBulkFlowAction` now accepts a `recordIds: List<String>` invocable input. When supplied, the action validates each ID (15- or 18-char Salesforce ID pattern) and AND-combines an `Id IN ('aaa','bbb',…)` clause with any existing `Where Clause`. Lets a Flow pass a Get Records collection straight into bulk generation without hand-rolling a SOQL fragment.
+
+### `DocGenFlowAction` — JSON Data input
+
+`DocGenFlowAction` (single-doc invocable) gained an optional **JSON Data** input. Supplying it bypasses the SOQL data retrieval entirely — the merge engine consumes the parsed Map directly. Three routing modes coexist:
+1. JSON Data only → standalone PDF as ContentVersion
+2. JSON Data + Record ID → render with custom data, attach to the supplied record
+3. Record ID only (existing path) → SOQL retrieve + render
+
+Unblocks Flows that need to render documents from external API responses, computed values, or cross-object aggregations without persisting to records first.
+
+### Watermark carry-forward fix (Nathan's report)
+
+Save as New Version was dropping the template-level watermark. `DocGenController.saveTemplate` now captures the prior active version's `Watermark_Image_CV_Id__c` in the same SELECT that deactivates it, then stamps it onto the new version. Regression test added (`testSaveTemplateWithVersion_carriesForwardWatermark`).
+
+### Signature flow — IP capture hardening
+
+Two distinct gaps closed:
+
+- **Server side** — `DocGenSignatureController.saveSignature` and `declineSignature` were ignoring the `ipAddress` parameter the page was supposed to send. New `resolveClientIp(supplied)` helper validates the supplied value via IPv4/IPv6 regex (length ≤ 45) and falls back to `captureClientIp()` for guest users where `Auth.SessionManagement.getCurrentSession()` is unreachable.
+- **Client side** — `DocGenSignature.page` now fetches the signer's IP from `https://api.ipify.org?format=json` on page load and threads `capturedIp` into the three remoting calls (`saveSignature`, `saveSignature` legacy fallback, `declineSignature`). Browser IP fetch happens once at session start, no per-action overhead.
+
+### Free-text role input + suggestions
+
+The signer-row role picker was a closed `lightning-combobox` that customers couldn't extend without re-packaging. Replaced with a `lightning-input` (free text) plus a suggestion-pills row below it: template-detected roles + curated picklist values, deduped, capped at 14. Anything typed is accepted as-is.
+
+### Cleanup
+
+- HTML/Excel templates no longer log the harmless `ZipFile unknown archive` warning during save. `extractAndSaveTemplateImages` now short-circuits for non-Word/PowerPoint types instead of attempting a ZIP read.
+- 0 High / 0 Critical Code Analyzer violations (re-scanned post-changes).
+
 ## v1.66.0 — Filtered Subsets: multiple loops against the same relationship
 
 Promoted package: `04tal000006qiUXAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qiUXAAY)

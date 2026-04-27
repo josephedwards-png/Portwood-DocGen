@@ -225,6 +225,133 @@ private class DocGenMiscTests {
         System.assertEquals('test error', res.errorMessage, 'Error message should match assigned value');
     }
 
+    // ─── Apex DTO / JSON Data inputs ────────────────────────────────────────
+    // The new path lets a Flow build merge data in-memory (external API responses,
+    // computed totals, anything SOQL can't reach) and render directly without
+    // implementing DocGenDataProvider or persisting to records first.
+
+    @IsTest
+    static void testFlowAction_jsonData_withoutRecordId_inserts_standalone_cv() {
+        TestDataFactory.attachRealDocxToTestTemplate();
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+
+        DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+        req.templateId = tpl.Id;
+        req.recordId = null; // No record context — pure data-driven render.
+        req.jsonData = '{"Name":"In-Memory Co","Amount":98765,"Industry":"Synthetic"}';
+
+        Test.startTest();
+        List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+            new List<DocGenFlowAction.Request>{ req }
+        );
+        Test.stopTest();
+
+        System.assertEquals(1, responses.size());
+        System.assertEquals(true, responses[0].success, 'Data-only render should succeed: ' + responses[0].errorMessage);
+        System.assertNotEquals(null, responses[0].contentDocumentId, 'ContentDocumentId should be returned');
+        System.assertNotEquals(null, responses[0].contentVersionId, 'ContentVersionId should be returned');
+    }
+
+    @IsTest
+    static void testFlowAction_jsonData_withRecordId_attaches_to_record() {
+        TestDataFactory.attachRealDocxToTestTemplate();
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        Account acc = TestDataFactory.getTestAccount();
+
+        DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+        req.templateId = tpl.Id;
+        req.recordId = acc.Id;
+        req.jsonData = '{"Name":"Hybrid","Amount":1}';
+
+        Test.startTest();
+        List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+            new List<DocGenFlowAction.Request>{ req }
+        );
+        Test.stopTest();
+
+        System.assertEquals(true, responses[0].success, 'Hybrid path should succeed: ' + responses[0].errorMessage);
+        // FirstPublishLocationId = recordId means the CV is linked to the Account.
+        Integer linkCount = [SELECT COUNT() FROM ContentDocumentLink
+                             WHERE LinkedEntityId = :acc.Id
+                               AND ContentDocumentId = :responses[0].contentDocumentId];
+        System.assert(linkCount > 0, 'Document should be linked to the supplied recordId');
+    }
+
+    @IsTest
+    static void testFlowAction_neither_recordId_nor_jsonData_errors() {
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+        req.templateId = tpl.Id;
+        // Both recordId and jsonData omitted — should produce a clear error, not a stack trace.
+
+        List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+            new List<DocGenFlowAction.Request>{ req }
+        );
+
+        System.assertEquals(false, responses[0].success);
+        System.assert(responses[0].errorMessage != null && responses[0].errorMessage.contains('Record ID or JSON Data'),
+            'Expected guidance message, got: ' + responses[0].errorMessage);
+    }
+
+    @IsTest
+    static void testFlowAction_jsonData_array_root_rejected() {
+        // Top-level array isn't a valid merge data shape — must be an object.
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        DocGenFlowAction.Request req = new DocGenFlowAction.Request();
+        req.templateId = tpl.Id;
+        req.jsonData = '[{"Name":"oops"}]';
+
+        List<DocGenFlowAction.Response> responses = DocGenFlowAction.generateDocument(
+            new List<DocGenFlowAction.Request>{ req }
+        );
+
+        System.assertEquals(false, responses[0].success);
+        System.assert(responses[0].errorMessage != null && responses[0].errorMessage.contains('object'),
+            'Should reject array roots, got: ' + responses[0].errorMessage);
+    }
+
+    @IsTest
+    static void testService_generatePdfBlobFromData_directApi() {
+        TestDataFactory.attachRealDocxToTestTemplate();
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+
+        Map<String, Object> wrapper = new Map<String, Object>{
+            'Name' => 'Direct Apex Caller',
+            'Amount' => 42000
+        };
+
+        Test.startTest();
+        Map<String, Object> result = DocGenService.generatePdfBlobFromData(tpl.Id, wrapper);
+        Test.stopTest();
+
+        Blob pdf = (Blob) result.get('blob');
+        System.assertNotEquals(null, pdf, 'PDF blob should be returned');
+        System.assert(pdf.size() > 0, 'PDF should not be empty');
+    }
+
+    @IsTest
+    static void testService_generatePdfBlobFromData_nullDataMapThrows() {
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        try {
+            DocGenService.generatePdfBlobFromData(tpl.Id, null);
+            System.assert(false, 'Should have thrown');
+        } catch (DocGenException e) {
+            System.assert(e.getMessage().contains('dataMap cannot be null'), 'Got: ' + e.getMessage());
+        }
+    }
+
+    @IsTest
+    static void testService_generateAndSaveFromData_nullRecordIdThrows() {
+        DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+        try {
+            DocGenService.generateAndSaveFromData(tpl.Id, null,
+                new Map<String, Object>{ 'Name' => 'x' }, null);
+            System.assert(false, 'Should have thrown');
+        } catch (DocGenException e) {
+            System.assert(e.getMessage().contains('attachmentRecordId is required'), 'Got: ' + e.getMessage());
+        }
+    }
+
     // =========================================================================
     // DocGenException
     // =========================================================================

@@ -9,7 +9,7 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
         @InvocableVariable(label='Template ID' required=true description='The DocGen Template record ID')
         global Id templateId;
 
-        @InvocableVariable(label='Record ID' required=true description='The source record ID to merge data from')
+        @InvocableVariable(label='Record ID' required=false description='The source record ID to merge data from. Required unless JSON Data is supplied.')
         global Id recordId;
 
         @InvocableVariable(label='Save to Record' description='If true, attach the generated file to the source record via ContentDocumentLink. Default: false')
@@ -20,6 +20,9 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
 
         @InvocableVariable(label='Output Format Override' description='Optional. Override the template Output Format at runtime. Allowed: PDF, Word, PowerPoint. Word templates can render to PDF or DOCX. PowerPoint templates render only to PPTX. Leave blank to use the template default. Throws if the template has Lock Output Format = true.')
         global String outputFormatOverride;
+
+        @InvocableVariable(label='JSON Data' required=false description='Optional. Pre-built merge data as a JSON string — bypasses the SOQL data retrieval entirely. Use this when a Flow has assembled custom data from external APIs, computed values, or cross-object aggregations and wants to render directly without persisting to records first. Shape mirrors the merge engine: {"Name":"Acme","Amount":50000,"Items":{"records":[{"Product":"Widget","Qty":2}]}}. When supplied, this takes precedence over Record ID for data — but Record ID is still used as the file attachment target if Save to Record is true.')
+        global String jsonData;
     }
 
     global class Response {
@@ -46,7 +49,47 @@ global with sharing class DocGenFlowAction { // NOPMD AvoidGlobalModifier — gl
             Request req = requests[i];
             Response res = new Response();
             try {
-                Id docId = DocGenService.generateDocument(req.templateId, req.recordId, req.outputFormatOverride);
+                Boolean useDataMap = String.isNotBlank(req.jsonData);
+                if (!useDataMap && req.recordId == null) {
+                    throw new DocGenException('Either Record ID or JSON Data must be supplied.');
+                }
+
+                Id docId;
+                if (useDataMap) {
+                    // Parse the supplied JSON into the merge engine's expected Map shape.
+                    // JSON.deserializeUntyped returns Map<String,Object> for objects, List<Object>
+                    // for arrays — matches what DocGenDataRetriever's other paths produce.
+                    Object parsed = JSON.deserializeUntyped(req.jsonData);
+                    if (!(parsed instanceof Map<String, Object>)) {
+                        throw new DocGenException('JSON Data must deserialize to an object (Map), not an array or scalar.');
+                    }
+                    Map<String, Object> dataMap = (Map<String, Object>) parsed;
+
+                    if (req.recordId != null) {
+                        // Caller wants the file attached to the supplied record (FirstPublishLocationId).
+                        // saveToRecord=true adds an extra ContentDocumentLink in Phase 3.
+                        docId = DocGenService.generateAndSaveFromData(req.templateId, req.recordId, dataMap, req.outputFormatOverride);
+                    } else {
+                        // No record context — render PDF and insert as a standalone ContentVersion.
+                        // Caller can pick it up via the returned ContentDocumentId / ContentVersionId.
+                        Map<String, Object> result = DocGenService.generatePdfBlobFromData(req.templateId, dataMap);
+                        Blob pdfBlob = (Blob) result.get('blob');
+                        String title = String.isNotBlank(req.documentTitle) ? req.documentTitle : (String) result.get('title');
+                        if (String.isBlank(title)) { title = 'Generated_Document'; }
+                        ContentVersion cv = new ContentVersion();
+                        cv.Title = title;
+                        cv.PathOnClient = title + '.pdf';
+                        cv.VersionData = pdfBlob;
+                        SObjectAccessDecision dec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
+                        insert dec.getRecords(); // NOPMD ApexCRUDViolation - FLS enforced via stripInaccessible
+                        Id newCvId = ((ContentVersion) dec.getRecords()[0]).Id;
+                        ContentVersion saved = [SELECT Id, ContentDocumentId FROM ContentVersion WHERE Id = :newCvId WITH USER_MODE LIMIT 1];
+                        docId = saved.ContentDocumentId;
+                        res.contentVersionId = saved.Id;
+                    }
+                } else {
+                    docId = DocGenService.generateDocument(req.templateId, req.recordId, req.outputFormatOverride);
+                }
                 res.contentDocumentId = docId;
                 res.success = true;
                 docIdsByIndex.put(i, docId);

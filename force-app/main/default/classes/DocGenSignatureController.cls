@@ -28,6 +28,26 @@ public without sharing class DocGenSignatureController {
     }
 
     /**
+     * Prefers the client-supplied IP (browser fetched it from a public service)
+     * over header inspection. The client path is more reliable for guest signers
+     * because Sites/Site CDNs don't always set X-Forwarded-For consistently.
+     * Validates input is a sane IPv4/IPv6 string before trusting it; falls back
+     * to captureClientIp() otherwise.
+     */
+    @TestVisible
+    private static String resolveClientIp(String supplied) {
+        if (String.isNotBlank(supplied)) {
+            String trimmed = supplied.trim();
+            // Cheap sanity: length cap + only chars valid in IPv4/IPv6.
+            // (Not a strict parse — just rejects obvious garbage/injection.)
+            if (trimmed.length() <= 45 && Pattern.matches('[0-9a-fA-F\\.:]+', trimmed)) {
+                return trimmed;
+            }
+        }
+        return captureClientIp();
+    }
+
+    /**
      * Captures the client IP address from the current request context.
      * Checks X-Forwarded-For (load balancer/proxy) first, falls back to
      * Salesforce session info, then to True-Client-IP.
@@ -706,7 +726,7 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = captureClientIp();
+        audit.IP_Address__c = resolveClientIp(ipAddress);
         audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = true;
         audit.PIN_Verified_At__c = signer.PIN_Verified_At__c;
@@ -1148,7 +1168,7 @@ public without sharing class DocGenSignatureController {
     @AuraEnabled
     @RemoteAction
     // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
-    public static Map<String, Object> declineSignature(String token, String reason) {
+    public static Map<String, Object> declineSignature(String token, String reason, String ipAddress, String userAgent) {
         Map<String, Object> result = new Map<String, Object>();
 
         if (String.isBlank(token) || token.length() != 64 || !Pattern.matches('[a-fA-F0-9]{64}', token)) {
@@ -1210,7 +1230,8 @@ public without sharing class DocGenSignatureController {
         audit.Signer_Email__c = signer.Signer_Email__c;
         audit.Contact__c = signer.Contact__c;
         audit.Signed_Date__c = System.now();
-        audit.IP_Address__c = captureClientIp();
+        audit.IP_Address__c = resolveClientIp(ipAddress);
+        audit.User_Agent__c = String.isNotBlank(userAgent) ? userAgent.left(255) : 'Unknown';
         audit.Consent_Captured__c = false;
         /* code-analyzer-suppress ApexFlsViolation, DatabaseOperationsMustUseWithSharing */
         Database.insert(new List<DocGen_Signature_Audit__c>{ audit }, false, AccessLevel.SYSTEM_MODE);

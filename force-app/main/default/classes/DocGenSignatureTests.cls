@@ -3810,18 +3810,37 @@ private class DocGenSignatureTests {
         String signerToken = [SELECT Secure_Token__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Secure_Token__c;
 
         Test.startTest();
-        Map<String, Object> result = DocGenSignatureController.declineSignature(signerToken, 'Not agreed with terms');
+        Map<String, Object> result = DocGenSignatureController.declineSignature(signerToken, 'Not agreed with terms', '203.0.113.7', 'TestAgent/1.0');
         Test.stopTest();
 
         System.assertEquals(true, result.get('success'));
         DocGen_Signer__c updated = [SELECT Status__c, Decline_Reason__c FROM DocGen_Signer__c WHERE Id = :signer.Id];
         System.assertEquals('Declined', updated.Status__c);
         System.assertEquals('Not agreed with terms', updated.Decline_Reason__c);
+
+        // Verify the supplied IP + UA actually landed on the audit row.
+        // resolveClientIp() should have accepted '203.0.113.7' as valid IPv4.
+        DocGen_Signature_Audit__c au = [SELECT IP_Address__c, User_Agent__c FROM DocGen_Signature_Audit__c
+                                        WHERE Signer__c = :signer.Id ORDER BY CreatedDate DESC LIMIT 1];
+        System.assertEquals('203.0.113.7', au.IP_Address__c, 'Client-supplied IP should win over header inspection');
+        System.assertEquals('TestAgent/1.0', au.User_Agent__c, 'Client-supplied User-Agent should be persisted');
+    }
+
+    @isTest
+    static void testResolveClientIp_rejectsGarbage() {
+        // Garbage / injection attempts must NOT be persisted as the IP — fall through to captureClientIp().
+        // (captureClientIp returns 'Unknown' in test context since no VF page or session is available.)
+        System.assertEquals('Unknown', DocGenSignatureController.resolveClientIp('<script>alert(1)</script>'));
+        System.assertEquals('Unknown', DocGenSignatureController.resolveClientIp(''));
+        System.assertEquals('Unknown', DocGenSignatureController.resolveClientIp(null));
+        // Valid IPv4 + IPv6 should round-trip cleanly.
+        System.assertEquals('192.0.2.42',           DocGenSignatureController.resolveClientIp('  192.0.2.42  '));
+        System.assertEquals('2001:db8::1',          DocGenSignatureController.resolveClientIp('2001:db8::1'));
     }
 
     @isTest
     static void testDeclineSignature_invalidToken() {
-        Map<String, Object> result = DocGenSignatureController.declineSignature('bad', 'reason');
+        Map<String, Object> result = DocGenSignatureController.declineSignature('bad', 'reason', null, null);
         System.assertEquals(false, result.get('success'));
     }
 
@@ -3833,7 +3852,7 @@ private class DocGenSignatureTests {
         update signer;
 
         String signerToken = [SELECT Secure_Token__c FROM DocGen_Signer__c WHERE Id = :signer.Id].Secure_Token__c;
-        Map<String, Object> result = DocGenSignatureController.declineSignature(signerToken, 'reason');
+        Map<String, Object> result = DocGenSignatureController.declineSignature(signerToken, 'reason', null, null);
         System.assertEquals(false, result.get('success'));
     }
 
@@ -4125,7 +4144,7 @@ private class DocGenSignatureTests {
     static void testDeclineSignature_expiredToken() {
         // Create a signer, then try to decline with bad token
         Map<String, Object> result = DocGenSignatureController.declineSignature(
-            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'reason'
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'reason', null, null
         );
         System.assertEquals(false, result.get('success'));
     }

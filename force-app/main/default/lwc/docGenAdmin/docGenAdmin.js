@@ -23,6 +23,8 @@ import getParentRelationships from '@salesforce/apex/DocGenController.getParentR
 import previewRecordData from '@salesforce/apex/DocGenController.previewRecordData';
 import saveWatermarkImage from '@salesforce/apex/DocGenController.saveWatermarkImage';
 import clearWatermarkImage from '@salesforce/apex/DocGenController.clearWatermarkImage';
+import searchDataProviders from '@salesforce/apex/DocGenController.searchDataProviders';
+import validateDataProvider from '@salesforce/apex/DocGenController.validateDataProvider';
 
 // Schema
 import DOCGEN_TEMPLATE_OBJECT from '@salesforce/schema/DocGen_Template__c';
@@ -186,6 +188,22 @@ const VERSION_COLUMNS = [
     // Visual builder toggle (wizard + edit modal)
     @track useVisualBuilder = false;
     @track editUseVisualBuilder = false;
+
+    // Apex Data Provider mode (V4 — class-backed templates).
+    // Wizard + edit modal both feed the same picker state via the _editContext flag.
+    @track useApexProvider = false;
+    @track editUseApexProvider = false;
+
+    // Step 1 data-source choice. 'record' = pick a base SObject (default, classic
+    // path); 'apex' = bind to a DocGenDataProvider class right from the start so
+    // the wizard skips the base-object/sample-record requirements.
+    @track dataSourceMode = 'record';
+    @track providerSearchTerm = '';
+    @track providerOptions = [];
+    @track showProviderPicker = false;
+    @track selectedProviderClassName = '';
+    @track providerFields = [];
+    @track isValidatingProvider = false;
 
     // Edit modal manual query toggle (for backward compat with existing V3 configs)
     @track isManualQuery = false;
@@ -582,11 +600,31 @@ const VERSION_COLUMNS = [
                 this.showToast('Error', 'Please fill in the template name and type.', 'error');
                 return;
             }
+            // Apex Data Provider data source bypasses the base-object requirement —
+            // the provider class supplies its own data shape. We require a class to
+            // be selected and validated before advancing, and stamp the v4 config
+            // so Step 2 lands directly on the connected-provider view.
+            if (this.dataSourceMode === 'apex') {
+                if (!this.selectedProviderClassName || !this.hasProviderFields) {
+                    this.showToast('Error', 'Please select an Apex Data Provider class first.', 'error');
+                    return;
+                }
+                // Set a sentinel base object — the engine ignores it for v4 configs
+                // but the field is non-nullable downstream. 'ApexProvider' is what
+                // docGenColumnBuilder also emits for this path.
+                this.newTemplateObject = 'ApexProvider';
+                this.useApexProvider = true;
+                this.useVisualBuilder = false;
+                this.newTemplateQuery = JSON.stringify({ v: 4, provider: this.selectedProviderClassName });
+                this.currentWizardStep = '2';
+                return;
+            }
             if (!this.newTemplateObject) {
                 this.showToast('Error', 'Please select a base object.', 'error');
                 return;
             }
-            // Load metadata for step 2 before transitioning
+            // Salesforce Record path — load metadata for step 2 before transitioning.
+            this.useApexProvider = false;
             this._loadObjectMetadata(this.newTemplateObject);
             this.currentWizardStep = '2';
         } else if (this.currentWizardStep === '2') {
@@ -657,6 +695,176 @@ const VERSION_COLUMNS = [
     get editVisualBuilderToggleIcon() {
         return this.editUseVisualBuilder ? 'utility:edit' : 'utility:builder';
     }
+
+    // ===== APEX DATA PROVIDER (V4) — wizard + edit modal =====
+
+    toggleApexProvider() {
+        this.useApexProvider = !this.useApexProvider;
+        if (this.useApexProvider) {
+            // Mutually exclusive with the visual builder.
+            this.useVisualBuilder = false;
+            this._loadProviderStateFromQuery(this.newTemplateQuery);
+        } else {
+            // Switching off clears the v4 binding so the user starts fresh on
+            // the manual/visual paths instead of editing a stale provider config.
+            this._clearApexProviderState();
+            this.newTemplateQuery = '';
+        }
+    }
+
+    toggleEditApexProvider() {
+        this.editUseApexProvider = !this.editUseApexProvider;
+        if (this.editUseApexProvider) {
+            this.editUseVisualBuilder = false;
+            this._loadProviderStateFromQuery(this.editTemplateQuery);
+        } else {
+            this._clearApexProviderState();
+            this.editTemplateQuery = '';
+        }
+    }
+
+    _loadProviderStateFromQuery(query) {
+        // Auto-detect when an existing template already has a v4 config so the
+        // picker shows the bound class on first render.
+        try {
+            const cfg = query ? JSON.parse(query) : null;
+            if (cfg && cfg.v === 4 && cfg.provider) {
+                this.selectedProviderClassName = cfg.provider;
+                this.providerSearchTerm = cfg.provider;
+                this._validateAndLoadProviderFields(cfg.provider);
+                return;
+            }
+        } catch (e) { /* not JSON — manual or v1 */ }
+        this._clearApexProviderState();
+    }
+
+    _clearApexProviderState() {
+        this.selectedProviderClassName = '';
+        this.providerSearchTerm = '';
+        this.providerOptions = [];
+        this.providerFields = [];
+        this.showProviderPicker = false;
+        this.isValidatingProvider = false;
+    }
+
+    handleApexProviderSearch(event) {
+        const term = event.target.value || '';
+        this.providerSearchTerm = term;
+        if (term.length < 2) {
+            this.showProviderPicker = false;
+            this.providerOptions = [];
+            return;
+        }
+        this.showProviderPicker = true;
+        searchDataProviders({ searchTerm: term })
+            .then(data => { this.providerOptions = data || []; })
+            .catch(() => { this.providerOptions = []; });
+    }
+
+    handleApexProviderSelect(event) {
+        const className = event.currentTarget.dataset.value;
+        if (!className) { return; }
+        this.providerSearchTerm = className;
+        this.showProviderPicker = false;
+        this._validateAndLoadProviderFields(className);
+    }
+
+    _validateAndLoadProviderFields(className) {
+        this.isValidatingProvider = true;
+        validateDataProvider({ className })
+            .then(result => {
+                this.isValidatingProvider = false;
+                if (result && result.valid) {
+                    this.selectedProviderClassName = className;
+                    this.providerFields = result.fields || [];
+                    const v4Config = JSON.stringify({ v: 4, provider: className });
+                    // Drive whichever query field is in scope (wizard vs edit modal).
+                    if (this._editContext) {
+                        this.editTemplateQuery = v4Config;
+                    } else {
+                        this.newTemplateQuery = v4Config;
+                    }
+                    this.dispatchEvent(new ShowToastEvent({
+                        title: 'Provider Connected',
+                        message: className + ' — ' + this.providerFields.length + ' fields available',
+                        variant: 'success'
+                    }));
+                } else {
+                    this.providerFields = [];
+                    this.selectedProviderClassName = '';
+                    const msg = (result && result.error) ? result.error : 'Class is not a valid DocGenDataProvider.';
+                    this.dispatchEvent(new ShowToastEvent({ title: 'Invalid Provider', message: msg, variant: 'error' }));
+                }
+            })
+            .catch(err => {
+                this.isValidatingProvider = false;
+                const msg = (err && err.body && err.body.message) ? err.body.message : (err && err.message) || 'Validation failed';
+                this.dispatchEvent(new ShowToastEvent({ title: 'Error', message: msg, variant: 'error' }));
+            });
+    }
+
+    handleClearApexProvider() {
+        this._clearApexProviderState();
+        if (this._editContext) {
+            this.editTemplateQuery = '';
+        } else {
+            this.newTemplateQuery = '';
+        }
+    }
+
+    get apexProviderToggleLabel() {
+        return this.useApexProvider ? 'Switch to manual / visual' : 'Use Apex data provider';
+    }
+
+    get editApexProviderToggleLabel() {
+        return this.editUseApexProvider ? 'Switch to manual / visual' : 'Use Apex data provider';
+    }
+
+    get hasProviderFields() {
+        return this.providerFields && this.providerFields.length > 0;
+    }
+
+    get providerTagPills() {
+        return (this.providerFields || []).map(f => ({ tag: '{' + f + '}', raw: f }));
+    }
+
+    get isProviderConnected() {
+        return Boolean(this.selectedProviderClassName) && this.hasProviderFields;
+    }
+
+    // ===== Step 1 data-source choice =====
+
+    handleDataSourceModeChange(event) {
+        const mode = event.target.value;
+        this.dataSourceMode = mode;
+        if (mode === 'apex') {
+            // Reset record-related state so the wizard's mental model is clean.
+            this.newTemplateObject = '';
+            this.newTemplateSampleRecordId = '';
+            this.sampleRecordData = null;
+            // Pre-flip Apex Provider mode so Step 2 lands on the right pane.
+            this.useApexProvider = true;
+            this.useVisualBuilder = false;
+        } else {
+            this.useApexProvider = false;
+            this._clearApexProviderState();
+            // Restore default object so the next "advance to Step 2" doesn't error
+            // out before the user re-picks one.
+            if (!this.newTemplateObject) {
+                this.newTemplateObject = 'Account';
+            }
+        }
+    }
+
+    get dataSourceModeOptions() {
+        return [
+            { label: 'Salesforce Record (SOQL)', value: 'record' },
+            { label: 'Apex Class (Data Provider)', value: 'apex' }
+        ];
+    }
+
+    get isRecordDataSource() { return this.dataSourceMode === 'record'; }
+    get isApexDataSource() { return this.dataSourceMode === 'apex'; }
 
     get readableQueryConfig() {
         return this._formatQueryConfig(this.newTemplateQuery);
@@ -1015,9 +1223,18 @@ const VERSION_COLUMNS = [
         if (!qc) return null;
 
         try {
-            // Try JSON v3
+            // Try JSON v3 / v4
             if (qc.trim().startsWith('{')) {
                 const config = JSON.parse(qc);
+
+                // V4 (Apex Data Provider) — fields come from the bound class's
+                // getFieldNames(), which we cached in providerFields when the
+                // modal opened. The list uses '#Foo'/'/Foo' to mark loop
+                // boundaries and 'Foo.Field' for parent / loop-row fields.
+                if (config.v === 4 && config.provider) {
+                    return this._buildV4TagSections(config.provider, this.providerFields || []);
+                }
+
                 if (config.v >= 3 && config.nodes) {
                     const sections = [];
                     for (const node of config.nodes) {
@@ -1082,6 +1299,90 @@ const VERSION_COLUMNS = [
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Builds Copy-Paste Tags sections for a v4 Apex Data Provider template.
+     * Walks the provider's getFieldNames() output and groups by:
+     *   - Bare names (e.g. "Name", "Industry") → "Provider fields"
+     *   - Dotted names (e.g. "Owner.Name") → grouped by parent → "Owner"
+     *   - "#Foo" / "/Foo" markers + "Foo.Field" → loop section "Foo"
+     * Falls back gracefully if providerFields hasn't loaded yet.
+     */
+    _buildV4TagSections(providerName, fields) {
+        if (!fields || fields.length === 0) {
+            // Provider not yet validated — show a placeholder so the tab isn't
+            // empty. The fields populate after _validateAndLoadProviderFields runs.
+            return [{
+                name: providerName + ' (loading…)',
+                isLoop: false,
+                tags: []
+            }];
+        }
+
+        const baseTags = [];           // Bare field tags
+        const parentSections = {};     // 'Owner' → { tags: [...] }
+        const loopSections = {};       // 'Contacts' → { tags: [...] }
+        const loopOrder = [];          // preserve order of first appearance
+
+        // First pass: detect explicit loop boundaries '#Foo' so we know which
+        // dotted prefixes are loop-rows vs parent-lookups.
+        const declaredLoops = new Set();
+        for (const f of fields) {
+            if (typeof f !== 'string') { continue; }
+            if (f.startsWith('#')) { declaredLoops.add(f.substring(1)); }
+        }
+
+        for (const f of fields) {
+            if (typeof f !== 'string' || !f) { continue; }
+            // Loop boundary markers — used only to declare loop sections;
+            // emitted as loopStart/loopEnd, not as click-to-copy tags.
+            if (f.startsWith('#') || f.startsWith('/')) { continue; }
+
+            const dotIdx = f.indexOf('.');
+            if (dotIdx > 0) {
+                const prefix = f.substring(0, dotIdx);
+                if (declaredLoops.has(prefix)) {
+                    if (!loopSections[prefix]) {
+                        loopSections[prefix] = { tags: [] };
+                        loopOrder.push(prefix);
+                    }
+                    // Inside a loop, render as the bare field name (loop scope rewrites it)
+                    loopSections[prefix].tags.push({ code: '{' + f.substring(dotIdx + 1) + '}' });
+                } else {
+                    if (!parentSections[prefix]) { parentSections[prefix] = { tags: [] }; }
+                    parentSections[prefix].tags.push({ code: '{' + f + '}' });
+                }
+            } else {
+                baseTags.push({ code: '{' + f + '}' });
+            }
+        }
+
+        const sections = [];
+        if (baseTags.length > 0) {
+            sections.push({
+                name: providerName + ' — fields',
+                isLoop: false,
+                tags: baseTags
+            });
+        }
+        for (const parent of Object.keys(parentSections)) {
+            sections.push({
+                name: parent + ' (parent lookup)',
+                isLoop: false,
+                tags: parentSections[parent].tags
+            });
+        }
+        for (const loop of loopOrder) {
+            sections.push({
+                name: loop + ' (loop)',
+                isLoop: true,
+                loopStart: '{#' + loop + '}',
+                loopEnd: '{/' + loop + '}',
+                tags: loopSections[loop].tags
+            });
+        }
+        return sections.length > 0 ? sections : null;
     }
 
     async handleCopyEditTag(event) {
@@ -1306,6 +1607,7 @@ const VERSION_COLUMNS = [
     // --- Edit Modal ---
     openEditModal(row, activeTab) {
         try {
+            this._editContext = true;
             this.editTemplateId = row.Id;
             this.editTemplateName = row.Name;
             this.editTemplateCategory = row[F.Category];
@@ -1319,6 +1621,18 @@ const VERSION_COLUMNS = [
             // flattening would silently drop alias slots. The readable textarea
             // formats V3→V1 at display time via the readableEditQueryConfig getter.
             this.editTemplateQuery = row[F.QueryConfig];
+            // Auto-detect v4 (Apex Data Provider) bindings so admins re-opening
+            // a provider-backed template land in the right mode immediately.
+            this.editUseApexProvider = false;
+            this._clearApexProviderState();
+            try {
+                const cfg = row[F.QueryConfig] ? JSON.parse(row[F.QueryConfig]) : null;
+                if (cfg && cfg.v === 4 && cfg.provider) {
+                    this.editUseApexProvider = true;
+                    this.editUseVisualBuilder = false;
+                    this._validateAndLoadProviderFields(cfg.provider);
+                }
+            } catch (e) { /* not JSON — manual or v1 */ }
             this.editTemplateTestRecordId = row[F.TestRecordId];
             this.editTemplateTitleFormat = row[F.DocTitleFormat];
             this.editTemplateIsDefault = row[F.IsDefault] || false;
@@ -1378,6 +1692,8 @@ const VERSION_COLUMNS = [
         this.queryTreeNodes = [];
         this.sampleRecordData = null;
         this.showSuggestions = false;
+        this.editUseApexProvider = false;
+        this._clearApexProviderState();
     }
 
     // --- Versions Logic ---
@@ -1896,6 +2212,10 @@ const VERSION_COLUMNS = [
         this.newTemplateObject = 'Account';
         this.createdTemplateId = null;
         this.isCreating = true;
+        this._editContext = false;
+        this.useApexProvider = false;
+        this.dataSourceMode = 'record';
+        this._clearApexProviderState();
         this.queryTreeNodes = [];
         this.builderTab = 'fields';
         this.builderSearchTerm = '';

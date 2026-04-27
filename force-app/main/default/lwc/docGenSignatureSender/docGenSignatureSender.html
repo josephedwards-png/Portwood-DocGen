@@ -85,15 +85,32 @@
                     <div key={signer.id} class="slds-box slds-theme_shade slds-var-m-bottom_x-small slds-var-p-around_small">
                         <div class="slds-grid slds-gutters_x-small slds-wrap">
                             <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
-                                <lightning-combobox
+                                <lightning-input
+                                    type="text"
                                     name="role"
                                     label="Role"
+                                    placeholder="Type or pick below"
                                     value={signer.roleName}
-                                    options={roleOptions}
                                     data-index={index}
                                     onchange={handleRoleChange}
                                     required>
-                                </lightning-combobox>
+                                </lightning-input>
+                                <template if:true={hasRoleSuggestions}>
+                                    <div class="slds-var-m-top_xx-small slds-text-body_small slds-text-color_weak"
+                                         style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+                                        <span style="font-size:11px;">Suggestions:</span>
+                                        <template for:each={roleSuggestions} for:item="opt">
+                                            <button key={opt.value}
+                                                    type="button"
+                                                    class="slds-badge"
+                                                    style="cursor:pointer;border:1px solid #c9c9c9;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;"
+                                                    data-index={index}
+                                                    data-role={opt.value}
+                                                    onclick={handleRoleSuggestionClick}
+                                                    title={opt.title}>{opt.label}</button>
+                                        </template>
+                                    </div>
+                                </template>
                             </div>
                             <div class="slds-col slds-size_1-of-1 slds-medium-size_3-of-12">
                                 <lightning-record-picker

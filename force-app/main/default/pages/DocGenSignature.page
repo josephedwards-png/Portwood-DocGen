@@ -469,6 +469,22 @@
         var resendTimer = null;
         var placements = [];
         var currentStepIndex = 0;
+        var capturedIp = '';
+
+        // ===== CLIENT-SIDE IP CAPTURE =====
+        // The signing page is hosted on a Salesforce Site, so signers are Guest users.
+        // Auth.SessionManagement.getCurrentSession() is blocked for Guest, and
+        // X-Forwarded-For headers aren't always set by Salesforce's edge for VF requests.
+        // Asking the browser to fetch its own public IP is the most reliable path —
+        // the third-party service only sees the signer's IP (which they'd see anyway
+        // by virtue of the request), no other PII flows. Server-side resolveClientIp()
+        // falls back to header inspection if this fetch fails.
+        try {
+            fetch('https://api.ipify.org?format=json', { cache: 'no-store' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(j) { if (j && j.ip) capturedIp = j.ip; })
+                .catch(function() { /* fallback to server-side capture */ });
+        } catch (e) { /* fetch unavailable — fall back to server-side capture */ }
 
         // ===== STEP 1: VALIDATE TOKEN =====
         Visualforce.remoting.Manager.invokeAction(
@@ -868,7 +884,7 @@
 
             Visualforce.remoting.Manager.invokeAction(
                 '{!$RemoteAction.DocGenSignatureController.saveSignature}',
-                token, typedName, true, '', userAgent,
+                token, typedName, true, capturedIp, userAgent,
                 function(result, event) {
                     if (!event.status) { showError('Save failed: ' + (event.message || 'Unknown error')); return; }
                     if (result.isComplete) {
@@ -893,9 +909,10 @@
             btn.disabled = true;
             btn.textContent = 'Declining...';
 
+            var ua = navigator.userAgent || 'Unknown';
             Visualforce.remoting.Manager.invokeAction(
                 '{!$RemoteAction.DocGenSignatureController.declineSignature}',
-                token, reason,
+                token, reason, capturedIp, ua,
                 function(result, event) {
                     btn.disabled = false;
                     btn.textContent = 'Confirm Decline';
@@ -980,7 +997,7 @@
                 document.getElementById('processing-status').textContent = 'Saving your signature...';
                 Visualforce.remoting.Manager.invokeAction(
                     '{!$RemoteAction.DocGenSignatureController.saveSignature}',
-                    token, typedName, consentGiven, '', userAgent,
+                    token, typedName, consentGiven, capturedIp, userAgent,
                     function(result, event) {
                         if (!event.status) { showError('Save failed: ' + (event.message || 'Unknown error')); return; }
                         if (result.isComplete) {

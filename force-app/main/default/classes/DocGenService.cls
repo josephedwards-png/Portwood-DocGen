@@ -1173,6 +1173,15 @@ public with sharing class DocGenService {
         }
         String templateType = templates[0].Type__c;
 
+        // Word + PowerPoint files are zipped OOXML archives we can decompose.
+        // HTML templates are plain text bodies and Excel templates aren't packaged
+        // here either — neither path has a ZIP to extract media from. Short-circuit
+        // before we hand the bytes to ZipReader, which otherwise throws
+        // "Error on ZipFile unknown archive" on every HTML save.
+        if (templateType != 'Word' && templateType != 'PowerPoint') {
+            return;
+        }
+
         Blob templateBlob = EncodingUtil.base64Decode(fileContent);
         Compression.ZipReader reader = new Compression.ZipReader(templateBlob);
 
@@ -1645,6 +1654,55 @@ public with sharing class DocGenService {
     public static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
         preloadedRecordDataOverride = preloadedRecordData;
         return generateDocument(templateId, recordId);
+    }
+
+    /**
+     * Renders a PDF directly from a caller-supplied data map — no SOQL, no recordId required.
+     * Lets Flows/Apex assemble custom data wrappers (external API responses, computed totals,
+     * cross-object aggregations) and render them straight into a template without persisting
+     * to records first or implementing the DocGenDataProvider interface.
+     *
+     * The dataMap follows the same shape DocGen merge expects:
+     *   - Simple fields: 'Name' => 'Acme'
+     *   - Parent lookups: 'Account' => Map<String,Object>{ 'Name' => 'Acme' }
+     *   - Child loops: 'Items' => Map<String,Object>{ 'records' => List<Object>{ ... } }
+     *
+     * @param templateId The DocGen_Template__c record ID (must be a Word or HTML template producing PDF output)
+     * @param dataMap The pre-built data map to merge — must not be null
+     * @return Map with keys: blob (PDF Blob), title (String)
+     */
+    public static Map<String, Object> generatePdfBlobFromData(Id templateId, Map<String, Object> dataMap) {
+        if (dataMap == null) {
+            throw new DocGenException('dataMap cannot be null. Use generatePdfBlob(templateId, recordId) for SOQL-based merge.');
+        }
+        preloadedRecordDataOverride = dataMap;
+        // recordId is null — safe because the override short-circuits SOQL data retrieval and
+        // renderPdf() never dereferences recordId. The PDF blob is returned to the caller, who
+        // decides what to do with it (attach to an arbitrary parent, return via Flow, etc.).
+        return generatePdfBlob(templateId, null);
+    }
+
+    /**
+     * Renders a document (PDF, DOCX, PPTX) from a caller-supplied data map and saves it as
+     * a ContentVersion linked to attachmentRecordId. Unlike generatePdfBlobFromData, this
+     * path performs the file-attachment step too — convenient for Flows that want a single
+     * "build wrapper → render → attach" call.
+     *
+     * @param templateId The DocGen_Template__c record ID
+     * @param attachmentRecordId Record to attach the generated file to (must be non-null)
+     * @param dataMap The pre-built data map to merge — must not be null
+     * @param outputFormatOverride 'PDF', 'Word', or 'PowerPoint'; null = template default
+     * @return ContentDocumentId of the saved file
+     */
+    public static Id generateAndSaveFromData(Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride) {
+        if (dataMap == null) {
+            throw new DocGenException('dataMap cannot be null.');
+        }
+        if (attachmentRecordId == null) {
+            throw new DocGenException('attachmentRecordId is required for save-to-record. Use generatePdfBlobFromData if you only want the blob.');
+        }
+        preloadedRecordDataOverride = dataMap;
+        return generateDocument(templateId, attachmentRecordId, outputFormatOverride);
     }
 
     /**

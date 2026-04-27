@@ -225,6 +225,67 @@ private class DocGenControllerTests {
     }
 
     // -----------------------------------------------------------------------
+    // saveTemplate — Save as New Version must carry forward the watermark CV
+    // (regression for the bug Nathan Mathews hit in 1.65: watermark tab went
+    // empty + zoomed-in image rendered after a new version was saved.)
+    // -----------------------------------------------------------------------
+    @IsTest
+    static void testSaveTemplateWithVersion_carriesForwardWatermark() {
+        User u = [SELECT Id FROM User WHERE Id = :UserInfo.getUserId()];
+        System.runAs(u) {
+            createTestFile();
+            DocGen_Template__c tpl = TestDataFactory.getTestTemplate();
+
+            // Stamp a watermark CV ID on the current active version. Use any
+            // 18-char ContentVersion-shaped Id — we never dereference it,
+            // we just verify the *string* survives the new-version transition.
+            DocGen_Template_Version__c origActive = [
+                SELECT Id FROM DocGen_Template_Version__c
+                WHERE Template__c = :tpl.Id AND Is_Active__c = true LIMIT 1
+            ];
+            String fakeWatermarkCvId = '068000000000001AAA';
+            origActive.Watermark_Image_CV_Id__c = fakeWatermarkCvId;
+            update origActive;
+
+            Map<String, Object> fields = new Map<String, Object>{
+                'Id' => tpl.Id,
+                'Name' => 'Watermark Carry-Forward Test',
+                'Category__c' => 'Test',
+                'Type__c' => 'Word',
+                'Base_Object_API__c' => 'Account',
+                'Description__c' => 'regression for watermark loss',
+                'Query_Config__c' => 'Name',
+                'Test_Record_Id__c' => null,
+                'Document_Title_Format__c' => null
+            };
+
+            Test.startTest();
+            DocGenController.saveTemplate(fields, true, null); // createVersion = true
+            Test.stopTest();
+
+            // The new active version should have inherited the watermark CV ID.
+            // Pre-fix: this query came back with Watermark_Image_CV_Id__c = null
+            // because the carry-forward block ran AFTER deactivation.
+            DocGen_Template_Version__c newActive = [
+                SELECT Watermark_Image_CV_Id__c FROM DocGen_Template_Version__c
+                WHERE Template__c = :tpl.Id AND Is_Active__c = true LIMIT 1
+            ];
+            System.assertEquals(fakeWatermarkCvId, newActive.Watermark_Image_CV_Id__c,
+                'Save as New Version must carry forward Watermark_Image_CV_Id__c from the prior active version');
+
+            // The previously-active version should be deactivated and still
+            // hold its own watermark CV ID (we don't strip it on the old row).
+            DocGen_Template_Version__c oldNowDeactivated = [
+                SELECT Is_Active__c, Watermark_Image_CV_Id__c FROM DocGen_Template_Version__c
+                WHERE Id = :origActive.Id LIMIT 1
+            ];
+            System.assertEquals(false, oldNowDeactivated.Is_Active__c, 'Prior version should be deactivated');
+            System.assertEquals(fakeWatermarkCvId, oldNowDeactivated.Watermark_Image_CV_Id__c,
+                'Prior version retains its own watermark CV (we copy, not move)');
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // deleteTemplate
     // -----------------------------------------------------------------------
     @IsTest

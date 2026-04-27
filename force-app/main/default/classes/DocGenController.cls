@@ -1506,12 +1506,20 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
 
             // 2. Create Version if requested
             if (createVersion == true) {
-                // Deactivate current active versions
+                // Deactivate current active versions. We pull Watermark_Image_CV_Id__c
+                // here too so we can carry it forward to the new version below —
+                // without that, querying for "active" versions AFTER deactivation
+                // returns an empty list and the watermark silently gets dropped on
+                // every Save as New Version. That's the bug Nathan hit in 1.65.
                 /* code-analyzer-suppress ApexFlsViolation */
-                List<DocGen_Template_Version__c> activeVersions = [SELECT Id FROM DocGen_Template_Version__c
+                List<DocGen_Template_Version__c> activeVersions = [SELECT Id, Watermark_Image_CV_Id__c FROM DocGen_Template_Version__c
                     WHERE Template__c = :templateId AND Is_Active__c = true
                     WITH SYSTEM_MODE];
+                String priorWatermarkCvId = null;
                 for (DocGen_Template_Version__c av : activeVersions) {
+                    if (priorWatermarkCvId == null && String.isNotBlank(av.Watermark_Image_CV_Id__c)) {
+                        priorWatermarkCvId = av.Watermark_Image_CV_Id__c;
+                    }
                     av.Is_Active__c = false;
                 }
                 if (!activeVersions.isEmpty()) {
@@ -1555,14 +1563,11 @@ public with sharing class DocGenController { // NOPMD ExcessivePublicCount — c
                 // template re-save (or any new version) doesn't silently lose the
                 // watermark the admin uploaded earlier. Watermark is conceptually
                 // tied to the template, not the version — auto-inheriting matches
-                // user expectation.
-                List<DocGen_Template_Version__c> prevActive = [
-                    SELECT Watermark_Image_CV_Id__c FROM DocGen_Template_Version__c
-                    WHERE Template__c = :templateId AND Is_Active__c = true
-                    WITH SYSTEM_MODE ORDER BY CreatedDate DESC LIMIT 1
-                ];
-                if (!prevActive.isEmpty() && String.isNotBlank(prevActive[0].Watermark_Image_CV_Id__c)) {
-                    version.Watermark_Image_CV_Id__c = prevActive[0].Watermark_Image_CV_Id__c;
+                // user expectation. We captured priorWatermarkCvId BEFORE the
+                // deactivation update above; querying after deactivation returns
+                // empty (the bug fixed in this method).
+                if (String.isNotBlank(priorWatermarkCvId)) {
+                    version.Watermark_Image_CV_Id__c = priorWatermarkCvId;
                 }
 
                 /* code-analyzer-suppress ApexFlsViolation */

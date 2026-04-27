@@ -105,6 +105,35 @@ export default class DocGenSignatureSender extends LightningElement {
         return this.signers.length <= 1;
     }
 
+    /**
+     * Merged role suggestions: roles auto-detected from the selected template(s)
+     * (rendered first since they're the live, document-specific signal) plus the
+     * curated picklist values from Role_Name__c. Deduped, capped at ~14 to keep
+     * the UI tidy. The role field itself is free-text — these are convenience
+     * pills so admins don't have to retype "Buyer" every time.
+     */
+    get roleSuggestions() {
+        const seen = new Set();
+        const merged = [];
+        for (const p of this.detectedPlacements || []) {
+            if (p.role && !seen.has(p.role)) {
+                seen.add(p.role);
+                merged.push({ label: p.role, value: p.role, title: 'From template tag' });
+            }
+        }
+        for (const opt of this.roleOptions || []) {
+            if (opt.value && !seen.has(opt.value)) {
+                seen.add(opt.value);
+                merged.push({ label: opt.label, value: opt.value, title: 'Common role' });
+            }
+        }
+        return merged.slice(0, 14);
+    }
+
+    get hasRoleSuggestions() {
+        return this.roleSuggestions.length > 0;
+    }
+
     get previousRequestsLabel() {
         return this.showPreviousRequests ? 'Hide Previous Requests' : 'Show Previous Requests';
     }
@@ -341,6 +370,14 @@ export default class DocGenSignatureSender extends LightningElement {
         const index = parseInt(event.currentTarget.dataset.index, 10);
         this.signers = this.signers.map((s, i) =>
             i === index ? { ...s, roleName: event.detail.value } : s
+        );
+    }
+
+    handleRoleSuggestionClick(event) {
+        const index = parseInt(event.currentTarget.dataset.index, 10);
+        const role = event.currentTarget.dataset.role;
+        this.signers = this.signers.map((s, i) =>
+            i === index ? { ...s, roleName: role } : s
         );
     }
 
