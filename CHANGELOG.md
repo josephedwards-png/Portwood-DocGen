@@ -1,5 +1,51 @@
 # Changelog
 
+## v1.70.0 — Word Table Fidelity (widths, spacing, source margins)
+
+Promoted package: `04tal000006qyhNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ)
+
+PDF rendering now honors Word's table layout the way Word does — fixes a family of related symptoms (tables blowing up in landscape, totals tables stretching full-width, multi-column tables overflowing margins, flabby paragraph spacing in tight address blocks).
+
+### Table widths now respect `<w:tblW>` types
+
+`processTable` previously only handled `w:type="pct"`. Tables authored with `w:type="dxa"` (twips, by far the most common case) and `w:type="auto"` (shrink-wrap to content, used for right-aligned totals) silently fell through to the global `table { width: 100% }` default. In portrait that coincidentally looked right because 100% of a 6.5" container ≈ a 6.5" authored table. In landscape with a 9–10" container, tables expanded ~50% beyond their authored width, cells widened, paragraphs reflowed, rows visually grew taller. Now both branches emit the correct CSS (`width:Xpt` for dxa, `width:auto` for auto). Also fixed a latent scientific-notation bug on the `pct` branch where `50.0` serialized as `5E+1%`.
+
+### `box-sizing: border-box` on `td`, `th`
+
+Word's `<w:tcW>` is the OUTER cell width (including its tcMar padding). HTML's default `content-box` adds padding ON TOP of the declared width. With Word's default 5.4pt left/right tcMar, every cell rendered ~10.8pt wider than authored — multi-column tables overflowed margins by `(N cells × 10.8pt)`. Switching to `border-box` makes declared widths inclusive of padding, matching Word's semantics exactly.
+
+### `max-width: 100%` clamp on tables
+
+Tables authored slightly wider than the page content area (e.g. 14696 twips / 10.21" on a 10" landscape area with 0.5" margins) now shrink-to-fit instead of getting clipped at the page edge. Word silently does this; Flying Saucer didn't. The clamp is one-way — tables narrower than the container keep their authored width.
+
+### Tight defaults: paragraph and list margins
+
+Was: `p { margin: 0 0 8pt 0 }`, `li { margin: 0 0 2pt 0 }`, `ul, ol { margin: 0 0 8pt 0 }`. Now: all zero. Word source is authoritative — when authors want spacing between paragraphs, Word emits explicit `<w:spacing w:before/after>` (or it's resolved through styles.xml). The implicit 8pt-after default produced "flabby" output in tight address blocks and quote tables where the author had explicitly set zero spacing in Word. Templates that rely on Word's "Normal" style for spacing will continue to render with that style's spacing if it's emitted inline; templates authored tight will now render tight.
+
+### `Page_Margins__c = 'FromSource'` honored when admin sets orientation override
+
+When `Page_Orientation__c` is set on the template (forcing canonical landscape/portrait dims), the renderer can now honor the source DOCX's `<w:pgMar>` for margin values via the existing "From source DOCX margins" preset. Avoids the "I have to set custom 0.2,0.2,0.2,0.2 to match my Word doc's Narrow margins" workaround.
+
+### Tests
+
+3 new regression tests in `scripts/e2e-07-syntax.apex`: `<w:tblW>` for `dxa`, `auto`, and `pct`. Locks the widths-honored behavior across all three OOXML width types.
+
+---
+
+## v1.69.0 — IF Operators in Word Templates
+
+Promoted package: `04tal000006qyB7AAI` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyB7AAI)
+
+### Bug fix: `{#IF Field > 0}` always evaluated false in Word templates
+
+`DocGenService.evaluateIfExpression()` parsed the operator without HTML-decoding the expression first. Word/OOXML stores `>`, `<`, `&` in text runs as `&gt;`, `&lt;`, `&amp;`. The expression `Step_Count__c > 0` arrived as `Step_Count__c &gt; 0`. The operator loop walked `!=`, `>=`, `<=` (no match), tried `=`, and matched the `=` *inside `&gt;`* — producing a mangled "field part / value part" split that always fell through to a false string comparison. Affected operators: `<`, `>`, `<=`, `>=`. `=` and `!=` were unaffected (no reserved XML chars in their syntax).
+
+Fix is one block at the top of `evaluateIfExpression`: decode `&gt;`, `&lt;`, `&apos;`, `&quot;`, `&amp;` before parsing. Reported by Joe with a complete repro and root-cause writeup; the fix matched his suggestion exactly.
+
+3 new regression tests in `scripts/e2e-07-syntax.apex` covering entity-encoded `>`, `<`, `>=` forms.
+
+---
+
 ## v1.68.0 — Page Setup (Size, Orientation, Margins) + Save-as-New-Version persistence fix
 
 Promoted package: `04tal000006qt1lAAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qt1lAAA)

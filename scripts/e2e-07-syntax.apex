@@ -127,6 +127,27 @@ try {
     else { fail++; System.debug('IF ELSE (false branch): FAIL — ' + r); }
 } catch (Exception e) { fail++; System.debug('IF ELSE: FAIL — ' + e.getMessage()); }
 
+// ===== IF with HTML-entity-encoded > (Word/OOXML stores > as &gt;) =====
+try {
+    r = DocGenService.processXmlForTest('<w:t>{#IF Amount &gt; 10000}Big{/IF}</w:t>', new Map<String, Object>{'Amount'=>75000});
+    if (r.contains('Big')) { pass++; System.debug('IF ENCODED &gt;: PASS'); }
+    else { fail++; System.debug('IF ENCODED &gt;: FAIL — ' + r); }
+} catch (Exception e) { fail++; System.debug('IF ENCODED &gt;: FAIL — ' + e.getMessage()); }
+
+// ===== IF with HTML-entity-encoded < =====
+try {
+    r = DocGenService.processXmlForTest('<w:t>{#IF Amount &lt; 100}Tiny{/IF}</w:t>', new Map<String, Object>{'Amount'=>50});
+    if (r.contains('Tiny')) { pass++; System.debug('IF ENCODED &lt;: PASS'); }
+    else { fail++; System.debug('IF ENCODED &lt;: FAIL — ' + r); }
+} catch (Exception e) { fail++; System.debug('IF ENCODED &lt;: FAIL — ' + e.getMessage()); }
+
+// ===== IF with HTML-entity-encoded >= =====
+try {
+    r = DocGenService.processXmlForTest('<w:t>{#IF Qty &gt;= 10}Stocked{/IF}</w:t>', new Map<String, Object>{'Qty'=>10});
+    if (r.contains('Stocked')) { pass++; System.debug('IF ENCODED &gt;=: PASS'); }
+    else { fail++; System.debug('IF ENCODED &gt;=: FAIL — ' + r); }
+} catch (Exception e) { fail++; System.debug('IF ENCODED &gt;=: FAIL — ' + e.getMessage()); }
+
 // ===== Checkbox true =====
 try {
     r = DocGenService.processXmlForTest('<w:t>{Active:checkbox}</w:t>', new Map<String, Object>{'Active'=>true});
@@ -393,6 +414,40 @@ try {
         fail++; System.debug('VML WATERMARK RENDER: FAIL — div=' + hasWatermarkDiv + ' wash=' + hasWhitewash + ' body=' + hasBodyContent);
     }
 } catch (Exception e) { fail++; System.debug('VML WATERMARK RENDER: FAIL — ' + e.getMessage()); }
+
+// ===== Table width <w:tblW w:type="dxa"> emits absolute pt =====
+// 9360 twips = 6.5". Without the dxa branch the table fell back to width:100%, which
+// over-stretched on landscape pages. Authored width must survive into the HTML.
+try {
+    String tblXml = '<w:document><w:body><w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/></w:tblPr>' +
+        '<w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>';
+    String html = DocGenHtmlRenderer.convertToHtml(tblXml, new Map<String, String>(), null);
+    if (Pattern.matches('(?s).*width:468(\\.0+)?pt.*', html)) {
+        pass++; System.debug('TABLE WIDTH dxa: PASS — 9360 twips → 468pt');
+    } else { fail++; System.debug('TABLE WIDTH dxa: FAIL — expected width:468pt, got: ' + html.substring(html.indexOf('<table'), Math.min(html.indexOf('<table') + 200, html.length()))); }
+} catch (Exception e) { fail++; System.debug('TABLE WIDTH dxa: FAIL — ' + e.getMessage()); }
+
+// ===== Table width <w:tblW w:type="auto"> emits width:auto (shrink-wrap) =====
+// Without this branch a right-aligned auto-width totals table falls through to
+// global table{width:100%} and stretches the full content area.
+try {
+    String tblXml = '<w:document><w:body><w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+        '<w:tr><w:tc><w:p><w:r><w:t>Total</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>';
+    String html = DocGenHtmlRenderer.convertToHtml(tblXml, new Map<String, String>(), null);
+    if (html.contains('width:auto')) {
+        pass++; System.debug('TABLE WIDTH auto: PASS — w:type=auto → width:auto');
+    } else { fail++; System.debug('TABLE WIDTH auto: FAIL — got: ' + html.substring(html.indexOf('<table'), Math.min(html.indexOf('<table') + 200, html.length()))); }
+} catch (Exception e) { fail++; System.debug('TABLE WIDTH auto: FAIL — ' + e.getMessage()); }
+
+// ===== Table width <w:tblW w:type="pct"> still emits percentage =====
+try {
+    String tblXml = '<w:document><w:body><w:tbl><w:tblPr><w:tblW w:w="2500" w:type="pct"/></w:tblPr>' +
+        '<w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>';
+    String html = DocGenHtmlRenderer.convertToHtml(tblXml, new Map<String, String>(), null);
+    if (Pattern.matches('(?s).*width:50(\\.0+)?%.*', html)) {
+        pass++; System.debug('TABLE WIDTH pct: PASS — 2500 → 50%');
+    } else { fail++; System.debug('TABLE WIDTH pct: FAIL — got: ' + html.substring(html.indexOf('<table'), Math.min(html.indexOf('<table') + 200, html.length()))); }
+} catch (Exception e) { fail++; System.debug('TABLE WIDTH pct: FAIL — ' + e.getMessage()); }
 
 System.debug('========================================');
 System.debug('E2E-07 SYNTAX — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));

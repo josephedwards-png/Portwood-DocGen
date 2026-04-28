@@ -2416,6 +2416,19 @@ public with sharing class DocGenService {
      * Credit: conditional logic approach inspired by @ssk42 (PR #15)
      */
     private static Boolean evaluateIfExpression(String expression, Map<String, Object> data) {
+        // Word/OOXML escapes >, <, &, ', " in text runs, so expressions arrive
+        // here with &gt;/&lt;/&amp;/&apos;/&quot; instead of literal chars.
+        // Without decoding, the operator parser matches the `=` inside `&gt;`
+        // and produces a mangled (always-false) expression.
+        if (expression != null) {
+            expression = expression
+                .replace('&gt;', '>')
+                .replace('&lt;', '<')
+                .replace('&apos;', '\'')
+                .replace('&quot;', '"')
+                .replace('&amp;', '&');
+        }
+
         // Parse: "Field op Value" — find the operator
         String[] operators = new String[]{ '!=', '>=', '<=', '=', '>', '<' };
         String op = null;

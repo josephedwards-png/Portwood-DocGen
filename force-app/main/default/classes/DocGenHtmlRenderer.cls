@@ -17,11 +17,15 @@ public with sharing class DocGenHtmlRenderer {
         'h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }' +
         'table { border-collapse: collapse; width: 100%; page-break-inside: auto; }' +
         'tr { page-break-inside: avoid; page-break-after: auto; }' +
-        'td, th { padding: 4pt; vertical-align: top; }' +
-        'p { margin: 0 0 8pt 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
+        // Tight defaults: Word always emits explicit <w:spacing>/<w:tcMar> when authors
+        // want padding, so a non-zero default ends up "flabby" (extra space the author
+        // never asked for). Keep horizontal cell padding because Word's tcMar defaults
+        // to ~108 twips (~5.4pt) on each side and zeroing it makes tables visually fuse.
+        'td, th { padding: 0 4pt; vertical-align: top; }' +
+        'p { margin: 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
         'img { max-width: 100%; }' +
-        'ul, ol { margin: 0 0 8pt 0; padding-left: 36pt; }' +
-        'li { margin: 0 0 2pt 0; page-break-inside: avoid; }' +
+        'ul, ol { margin: 0; padding-left: 36pt; }' +
+        'li { margin: 0; page-break-inside: avoid; }' +
         'hr { border: none; border-top: 1px solid #000; margin: 6pt 0; }' +
         'sub { vertical-align: sub; font-size: 0.8em; }' +
         'sup { vertical-align: super; font-size: 0.8em; }' +
@@ -300,13 +304,24 @@ public with sharing class DocGenHtmlRenderer {
             'h5 { font-size: 11pt; font-weight: bold; margin: 0 0 4pt 0; }' +
             'h6 { font-size: 10pt; font-weight: bold; margin: 0 0 4pt 0; }' +
             'h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }' +
-            'table { border-collapse: collapse; width: 100%; page-break-inside: auto; }' +
+            // max-width: 100% clamps tables whose authored <w:tblW> is slightly wider
+            // than the page content area (e.g. 14696tw / 10.21" on a 10" landscape area
+            // with 0.5" margins). Word silently shrink-to-fits; without this clamp the
+            // overflow gets clipped by Flying Saucer at the page edge.
+            'table { border-collapse: collapse; width: 100%; max-width: 100%; page-break-inside: auto; }' +
             'tr { page-break-inside: avoid; page-break-after: auto; }' +
-            'td, th { padding: ' + cellPadding + '; vertical-align: top; }' +
-            'p { margin: 0 0 8pt 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
+            // box-sizing: border-box matches Word's <w:tcW> semantics — the declared cell
+            // width is the OUTER width (including tcMar padding). Without this the default
+            // content-box adds padding on top of width, so each cell renders ~10.8pt wider
+            // than authored and multi-column tables overflow the page margins.
+            'td, th { padding: ' + cellPadding + '; vertical-align: top; box-sizing: border-box; }' +
+            // Tight defaults: Word always emits explicit <w:spacing> when authors want
+            // paragraph spacing — letting it default to 8pt produces "flabby" output the
+            // author never asked for (especially noticeable in tight address blocks).
+            'p { margin: 0; orphans: 2; widows: 2; page-break-inside: avoid; }' +
             'img { max-width: 100%; }' +
-            'ul, ol { margin: 0 0 8pt 0; padding-left: 36pt; }' +
-            'li { margin: 0 0 2pt 0; page-break-inside: avoid; }' +
+            'ul, ol { margin: 0; padding-left: 36pt; }' +
+            'li { margin: 0; page-break-inside: avoid; }' +
             'hr { border: none; border-top: 1px solid #000; margin: 6pt 0; }' +
             'sub { vertical-align: sub; font-size: 0.8em; }' +
             'sup { vertical-align: super; font-size: 0.8em; }' +
@@ -1294,9 +1309,24 @@ public with sharing class DocGenHtmlRenderer {
             // Table width
             String tblW = extractAttr(tblPr, 'w:tblW', 'w:w');
             String tblWType = extractAttr(tblPr, 'w:tblW', 'w:type');
-            if (tblW != null && tblWType == 'pct') {
-                Decimal pct = Integer.valueOf(tblW) / 50.0; // OOXML pct is in 50ths of a percent
-                tableStyle = 'border-collapse:collapse;width:' + pct + '%';
+            if (tblWType == 'auto') {
+                // Word's "auto" = shrink-wrap to sum of cell widths. Without explicitly
+                // overriding, the global `table { width: 100% }` default makes auto tables
+                // (typically right-aligned totals/summary tables) stretch full-width.
+                tableStyle = 'border-collapse:collapse;width:auto';
+            } else if (tblW != null && tblW.isNumeric()) {
+                if (tblWType == 'pct') {
+                    // OOXML pct is in 50ths of a percent. setScale avoids Decimal's
+                    // scientific-notation toString (e.g. 50.0 → "5E+1") in CSS output.
+                    Decimal pct = (Integer.valueOf(tblW) / 50.0).setScale(2);
+                    tableStyle = 'border-collapse:collapse;width:' + pct + '%';
+                } else if (tblWType == 'dxa' || tblWType == null) {
+                    // dxa = twips. Without this branch the global `table { width: 100% }`
+                    // default kicks in, which over-stretches authored tables on landscape
+                    // pages (cells widen, paragraphs reflow, rows appear taller).
+                    Decimal pt = twipsToPt(Integer.valueOf(tblW)).setScale(2);
+                    tableStyle = 'border-collapse:collapse;width:' + pt + 'pt';
+                }
             }
 
             // Table borders — check inline borders first, then style reference

@@ -4,7 +4,7 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 
 [Join the Community Channel](https://portwoodglobalsolutions.com/DocGenCommunity) | [Website](https://portwoodglobalsolutions.com) | [Roadmap](https://portwoodglobalsolutions.com/DocGenRoadmap)
 
-[![Version](https://img.shields.io/badge/version-1.68.0-blue.svg)](#install)
+[![Version](https://img.shields.io/badge/version-1.70.0-blue.svg)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Salesforce-00A1E0.svg)](https://www.salesforce.com)
 [![Namespace](https://img.shields.io/badge/namespace-portwoodglobal-purple.svg)](#install)
@@ -18,10 +18,10 @@ Generate PDFs and Word docs from any Salesforce record. Merge PDFs, add barcodes
 ## Install
 
 ```bash
-sf package install --package 04tal000006qt1lAAA --wait 10 --target-org <your-org>
+sf package install --package 04tal000006qyhNAAQ --wait 10 --target-org <your-org>
 ```
 
-[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qt1lAAA) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qt1lAAA)
+[Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ) | [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ)
 
 **Then:** Assign **DocGen Admin** permission set | Enable **Blob.toPdf() Release Update** | Open the **DocGen** app
 
@@ -413,7 +413,9 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md).
 
 | Version | Channel | Package ID |
 |---------|---------|------------|
-| v1.68.0 | **Latest (Released)** | `04tal000006qt1lAAA` |
+| v1.70.0 | **Latest (Released)** | `04tal000006qyhNAAQ` |
+| v1.69.0 | Previous | `04tal000006qyB7AAI` |
+| v1.68.0 | Previous | `04tal000006qt1lAAA` |
 | v1.67.0 | Previous | `04tal000006qqOrAAI` |
 | v1.66.0 | Previous | `04tal000006qiUXAAY` |
 | v1.65.0 | Previous | `04tal000006qiG1AAI` |
