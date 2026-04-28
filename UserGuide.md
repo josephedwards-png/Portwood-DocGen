@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.70.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ)
+**Current release:** v1.71.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)
 
 ---
 
@@ -52,10 +52,10 @@ Portwood DocGen is a native Salesforce document generation engine. It merges Sal
 ### Install the package
 
 ```bash
-sf package install --package 04tal000006qyhNAAQ --wait 10 --target-org <your-org>
+sf package install --package 04tal000006r0jBAAQ --wait 10 --target-org <your-org>
 ```
 
-Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ)
+Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)
 
 ### Post-install checklist
 
@@ -681,7 +681,95 @@ Two special merge tags resolve to the current date/time without needing a formul
 
 Case-insensitive for the keyword itself (`{today}` works). Works in sync, giant-query, bulk, and signature-stamped documents. All format suffixes from §6.2 apply.
 
-### 6.12 Not implemented
+### 6.12 Checkmarks & symbols (PDF-safe)
+
+Salesforce's PDF engine (Flying Saucer) only ships with four fonts (Helvetica, Times, Courier, Arial Unicode MS) and **cannot load Wingdings, Symbol, or any custom font**. Most "decorative" Word symbols (Wingdings checkboxes, custom dingbats) silently render as a blank box.
+
+DocGen handles this for you in two ways:
+
+1. **Word checkbox glyphs** (Insert → Symbol → Wingdings 0xFE / 0xA8, or Word content-control checkboxes) are auto-translated to their Unicode equivalents at PDF render time.
+2. **Unicode symbols** typed directly in Word, Google Docs, Notion, or any HTML template are auto-wrapped in an Arial Unicode MS span so they render instead of dropping to tofu.
+
+#### Copy-paste symbol palette
+
+These all render reliably in PDF and DOCX. Highlight + copy any of them into your template:
+
+**Checkboxes**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ☐ | Empty checkbox | U+2610 |
+| ☑ | Checked checkbox | U+2611 |
+| ☒ | Crossed checkbox | U+2612 |
+
+**Checks & crosses**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ✓ | Check mark | U+2713 |
+| ✔ | Heavy check mark | U+2714 |
+| ✗ | Ballot X | U+2717 |
+| ✘ | Heavy ballot X | U+2718 |
+
+**Bullets & arrows**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| • | Bullet | U+2022 |
+| ▪ | Black square | U+25AA |
+| ▶ | Right-pointing triangle | U+25B6 |
+| ► | Right-pointing pointer | U+25BA |
+| → | Right arrow | U+2192 |
+| ← | Left arrow | U+2190 |
+| ↑ | Up arrow | U+2191 |
+| ↓ | Down arrow | U+2193 |
+| ⇒ | Heavy right arrow | U+21D2 |
+
+**Stars & rating**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| ★ | Filled star | U+2605 |
+| ☆ | Empty star | U+2606 |
+| ♥ | Heart | U+2665 |
+| ♦ | Diamond | U+2666 |
+
+**Punctuation & misc**
+| Symbol | Name | Codepoint |
+|---|---|---|
+| § | Section | U+00A7 |
+| ¶ | Pilcrow | U+00B6 |
+| † | Dagger | U+2020 |
+| ‡ | Double dagger | U+2021 |
+| … | Ellipsis | U+2026 |
+| — | Em dash | U+2014 |
+| – | En dash | U+2013 |
+| © | Copyright | U+00A9 |
+| ® | Registered | U+00AE |
+| ™ | Trademark | U+2122 |
+| ° | Degree | U+00B0 |
+| ± | Plus-minus | U+00B1 |
+| × | Multiplication | U+00D7 |
+| ÷ | Division | U+00F7 |
+
+#### Conditional checkbox pattern
+
+Combine the checkbox glyphs with `{Field:checkbox}` or `{#IF}` to render dynamic checked/unchecked state from a Salesforce checkbox field:
+
+```
+Approved: {#IF IsApproved}☑{/IF}{#IFNOT IsApproved}☐{/IFNOT}
+```
+
+Or in tabular form for surveys / inspection forms:
+
+| Item | Status |
+|---|---|
+| Pre-flight check | {#IF Preflight_Complete__c}☑{/IF}{#IFNOT Preflight_Complete__c}☐{/IFNOT} |
+| Safety briefing | {#IF Safety_Done__c}☑{/IF}{#IFNOT Safety_Done__c}☐{/IFNOT} |
+
+#### What does NOT work
+
+- **Wingdings / Webdings glyphs** other than checkboxes — Flying Saucer can't render them at all. DocGen translates the common checkbox/check codepoints (Wingdings F0A8, F0FE, F0FD, F0FB, F0FC, F0A2; Wingdings 2 F050–F053, F0A3, F0A4); anything else falls back to a neutral □ placeholder.
+- **Emoji** (😀 🎉 etc.) — out of Arial Unicode MS coverage, render as tofu in PDF. Use the Unicode symbols above instead.
+- **Custom decorative fonts** (script, brand, etc.) — generate as DOCX and open in Word. See [§13.2](#132-pdf-font-limitations).
+
+### 6.13 Not implemented
 
 - **Custom fonts in PDF** — the Salesforce PDF engine only supports Helvetica, Times, Courier, and Arial Unicode MS. `@font-face` is not supported. See [§13.2](#132-pdf-font-limitations). For custom fonts, generate as DOCX and open in Word — DOCX preserves template fonts.
 

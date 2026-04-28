@@ -135,6 +135,7 @@
                                         <a href="#page-numbers" class="nav-item">Page Numbers</a>
                                         <a href="#pdf-vs-docx" class="nav-item">PDF vs DOCX</a>
                                         <a href="#pdf-fonts" class="nav-item">PDF Fonts</a>
+                                        <a href="#symbols-checkmarks" class="nav-item">Symbols &amp; Checkmarks</a>
                                         <a href="#pdf-limitations" class="nav-item">PDF Limitations</a>
                                         <a href="#rtl" class="nav-item">RTL Languages</a>
                                     </nav>
@@ -1004,6 +1005,99 @@
                                     </table>
 
                                     <p>Custom fonts from your Word template (Calibri, Cambria, branded typefaces) <strong>fall back to Helvetica</strong> in PDF output. If custom fonts matter, generate as DOCX -- Word preserves the original fonts.</p>
+                                </section>
+
+                                <section id="symbols-checkmarks" class="content-section">
+                                    <h3 class="section-heading">Symbols &amp; Checkmarks</h3>
+                                    <p>Salesforce's PDF engine can't load Wingdings or any custom symbol font, so most decorative glyphs render as blank tofu boxes. DocGen handles this for you in two ways:</p>
+                                    <ul class="bullet-list">
+                                        <li><strong>Word checkbox glyphs</strong> (Insert &rarr; Symbol &rarr; Wingdings 0xFE / 0xA8, or Word content-control checkboxes) are auto-translated to their Unicode equivalents at PDF render time.</li>
+                                        <li><strong>Unicode symbols</strong> typed directly in your template (Word, Google Docs, Notion, HTML) are auto-wrapped in Arial Unicode MS so they render reliably.</li>
+                                    </ul>
+
+                                    <h4 class="subsection-heading">Copy-paste symbol palette</h4>
+                                    <p>These all render reliably in PDF and DOCX. Click any cell to copy and paste into your template.</p>
+
+                                    <p><strong>Checkboxes</strong></p>
+                                    <table class="doc-table">
+                                        <thead><tr><th>Symbol</th><th>Name</th><th>Codepoint</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>&#9744;</td><td>Empty checkbox</td><td>U+2610</td></tr>
+                                            <tr><td>&#9745;</td><td>Checked checkbox</td><td>U+2611</td></tr>
+                                            <tr><td>&#9746;</td><td>Crossed checkbox</td><td>U+2612</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <p><strong>Checks &amp; crosses</strong></p>
+                                    <table class="doc-table">
+                                        <thead><tr><th>Symbol</th><th>Name</th><th>Codepoint</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>&#10003;</td><td>Check mark</td><td>U+2713</td></tr>
+                                            <tr><td>&#10004;</td><td>Heavy check mark</td><td>U+2714</td></tr>
+                                            <tr><td>&#10007;</td><td>Ballot X</td><td>U+2717</td></tr>
+                                            <tr><td>&#10008;</td><td>Heavy ballot X</td><td>U+2718</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <p><strong>Bullets &amp; arrows</strong></p>
+                                    <table class="doc-table">
+                                        <thead><tr><th>Symbol</th><th>Name</th><th>Codepoint</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>&#8226;</td><td>Bullet</td><td>U+2022</td></tr>
+                                            <tr><td>&#9642;</td><td>Black square</td><td>U+25AA</td></tr>
+                                            <tr><td>&#9654;</td><td>Right-pointing triangle</td><td>U+25B6</td></tr>
+                                            <tr><td>&#9658;</td><td>Right-pointing pointer</td><td>U+25BA</td></tr>
+                                            <tr><td>&#8594;</td><td>Right arrow</td><td>U+2192</td></tr>
+                                            <tr><td>&#8592;</td><td>Left arrow</td><td>U+2190</td></tr>
+                                            <tr><td>&#8593;</td><td>Up arrow</td><td>U+2191</td></tr>
+                                            <tr><td>&#8595;</td><td>Down arrow</td><td>U+2193</td></tr>
+                                            <tr><td>&#8658;</td><td>Heavy right arrow</td><td>U+21D2</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <p><strong>Stars &amp; rating</strong></p>
+                                    <table class="doc-table">
+                                        <thead><tr><th>Symbol</th><th>Name</th><th>Codepoint</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>&#9733;</td><td>Filled star</td><td>U+2605</td></tr>
+                                            <tr><td>&#9734;</td><td>Empty star</td><td>U+2606</td></tr>
+                                            <tr><td>&#9829;</td><td>Heart</td><td>U+2665</td></tr>
+                                            <tr><td>&#9830;</td><td>Diamond</td><td>U+2666</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <p><strong>Punctuation &amp; misc</strong></p>
+                                    <table class="doc-table">
+                                        <thead><tr><th>Symbol</th><th>Name</th><th>Codepoint</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>&#167;</td><td>Section</td><td>U+00A7</td></tr>
+                                            <tr><td>&#182;</td><td>Pilcrow</td><td>U+00B6</td></tr>
+                                            <tr><td>&#8224;</td><td>Dagger</td><td>U+2020</td></tr>
+                                            <tr><td>&#8225;</td><td>Double dagger</td><td>U+2021</td></tr>
+                                            <tr><td>&#8230;</td><td>Ellipsis</td><td>U+2026</td></tr>
+                                            <tr><td>&#8212;</td><td>Em dash</td><td>U+2014</td></tr>
+                                            <tr><td>&#8211;</td><td>En dash</td><td>U+2013</td></tr>
+                                            <tr><td>&#169;</td><td>Copyright</td><td>U+00A9</td></tr>
+                                            <tr><td>&#174;</td><td>Registered</td><td>U+00AE</td></tr>
+                                            <tr><td>&#8482;</td><td>Trademark</td><td>U+2122</td></tr>
+                                            <tr><td>&#176;</td><td>Degree</td><td>U+00B0</td></tr>
+                                            <tr><td>&#177;</td><td>Plus-minus</td><td>U+00B1</td></tr>
+                                            <tr><td>&#215;</td><td>Multiplication</td><td>U+00D7</td></tr>
+                                            <tr><td>&#247;</td><td>Division</td><td>U+00F7</td></tr>
+                                        </tbody>
+                                    </table>
+
+                                    <h4 class="subsection-heading">Conditional checkbox pattern</h4>
+                                    <p>Combine the checkbox glyphs with <code>&#123;#IF&#125;</code> to render dynamic checked / unchecked state from a Salesforce checkbox field:</p>
+                                    <pre class="code-block">Approved: &#123;#IF IsApproved&#125;&#9745;&#123;/IF&#125;&#123;#IFNOT IsApproved&#125;&#9744;&#123;/IFNOT&#125;</pre>
+                                    <p>Or in tabular form for inspection / survey forms — drop one row per checklist item.</p>
+
+                                    <h4 class="subsection-heading">What does NOT work</h4>
+                                    <ul class="bullet-list">
+                                        <li><strong>Wingdings / Webdings glyphs</strong> other than checkboxes — Flying Saucer can't render them. DocGen translates the common checkbox / check codepoints; anything else falls back to a neutral &#9633; placeholder.</li>
+                                        <li><strong>Emoji</strong> (&#128512; &#127881;) — out of Arial Unicode MS coverage, render as tofu in PDF. Use the Unicode symbols above instead.</li>
+                                        <li><strong>Custom decorative fonts</strong> (script, brand, etc.) — generate as DOCX and open in Word.</li>
+                                    </ul>
                                 </section>
 
                                 <section id="pdf-limitations" class="content-section">

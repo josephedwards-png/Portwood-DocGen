@@ -1071,6 +1071,7 @@ public with sharing class DocGenHtmlRenderer {
             Integer nextTab = rXml.indexOf('<w:tab', cursor);
             Integer nextDrawing = rXml.indexOf('<w:drawing', cursor);
             Integer nextPict = rXml.indexOf('<w:pict', cursor);
+            Integer nextSym = rXml.indexOf('<w:sym', cursor);
             // Find <w:t> or <w:t  but NOT <w:tab — indexOf('<w:t') false-matches <w:tab
             Integer nextT = -1;
             Integer tSearch = cursor;
@@ -1094,6 +1095,7 @@ public with sharing class DocGenHtmlRenderer {
             if (nextTab != -1 && (nextPos == -1 || nextTab < nextPos)) { nextPos = nextTab; type = 'tab'; }
             if (nextDrawing != -1 && (nextPos == -1 || nextDrawing < nextPos)) { nextPos = nextDrawing; type = 'drawing'; }
             if (nextPict != -1 && (nextPos == -1 || nextPict < nextPos)) { nextPos = nextPict; type = 'pict'; }
+            if (nextSym != -1 && (nextPos == -1 || nextSym < nextPos)) { nextPos = nextSym; type = 'sym'; }
 
             if (nextPos == -1) { break; }
             
@@ -1120,7 +1122,7 @@ public with sharing class DocGenHtmlRenderer {
                                 }
                             }
                             if (isRtlRun) { text = reverseRtlText(text); }
-                            runContent += text.escapeHtml4();
+                            runContent += wrapUnicodeCheckmarks(text.escapeHtml4());
                         }
                         cursor = tEnd + 6;
                     } else { cursor = tagEnd + 1; }
@@ -1151,6 +1153,12 @@ public with sharing class DocGenHtmlRenderer {
                     runContent += processPict(rXml.substring(nextPict, pictEnd), images);
                     cursor = pictEnd;
                 } else { cursor = nextPict + 1; }
+            } else if (type == 'sym') {
+                Integer tagEnd = rXml.indexOf('>', nextPos);
+                if (tagEnd != -1) {
+                    runContent += processSym(rXml.substring(nextPos, tagEnd + 1));
+                    cursor = tagEnd + 1;
+                } else { cursor = nextPos + 1; }
             }
         }
 
@@ -1160,6 +1168,52 @@ public with sharing class DocGenHtmlRenderer {
             return '<span style="' + style + '">' + openTags + runContent + closeTags + '</span>';
         }
         return openTags + runContent + closeTags;
+    }
+
+    // Wingdings/Symbol → Unicode for checkbox/check glyphs. Flying Saucer can't render
+    // Wingdings at all, but Arial Unicode MS covers the equivalent Unicode codepoints.
+    private static final Map<String, String> SYM_MAP = new Map<String, String>{
+        'Wingdings|F0A8' => '☐',     // empty box
+        'Wingdings|F0FE' => '☑',     // checked box
+        'Wingdings|F0FD' => '☒',     // x'd box
+        'Wingdings|F0A2' => '✗',     // ballot x
+        'Wingdings|F0FC' => '✓',     // check
+        'Wingdings|F0FB' => '✔',     // heavy check
+        'Wingdings 2|F050' => '✗',
+        'Wingdings 2|F051' => '✘',
+        'Wingdings 2|F052' => '✓',
+        'Wingdings 2|F053' => '✔',
+        'Wingdings 2|F0A3' => '☐',
+        'Wingdings 2|F0A4' => '☑',
+        'Symbol|F0FC' => '✓'
+    };
+
+    private static final String[] CHECKMARK_CHARS = new String[]{
+        '☐', '☑', '☒', '✓', '✔', '✗', '✘'
+    };
+
+    private static String processSym(String symXml) {
+        String font = extractAttr(symXml, 'w:sym', 'w:font');
+        String ch = extractAttr(symXml, 'w:sym', 'w:char');
+        if (String.isBlank(ch)) return '';
+        ch = ch.toUpperCase();
+        String key = (String.isBlank(font) ? '' : font) + '|' + ch;
+        String mapped = SYM_MAP.get(key);
+        if (mapped == null) {
+            // Unknown Wingdings glyph — emit a neutral placeholder rather than tofu
+            return '<span style="font-family:\'Arial Unicode MS\', sans-serif;">□</span>';
+        }
+        return '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' + mapped + '</span>';
+    }
+
+    private static String wrapUnicodeCheckmarks(String s) {
+        if (String.isBlank(s)) return s;
+        for (String c : CHECKMARK_CHARS) {
+            if (s.contains(c)) {
+                s = s.replace(c, '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' + c + '</span>');
+            }
+        }
+        return s;
     }
 
     /**

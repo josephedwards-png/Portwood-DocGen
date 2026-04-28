@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.70.0 — Word Table Fidelity (widths, spacing, source margins)",
-      "versionNumber": "1.70.0.NEXT",
-      "ancestorId": "04tal000006qyB7AAI",
+      "versionName": "1.71.0 — Checkmarks & Symbols (Wingdings → Unicode auto-translate)",
+      "versionNumber": "1.71.0.NEXT",
+      "ancestorId": "04tal000006qyhNAAQ",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -107,6 +107,7 @@
     "Portwood DocGen Managed@1.67.0-1": "04tal000006qqOrAAI",
     "Portwood DocGen Managed@1.68.0-1": "04tal000006qt1lAAA",
     "Portwood DocGen Managed@1.69.0-1": "04tal000006qyB7AAI",
-    "Portwood DocGen Managed@1.70.0-1": "04tal000006qyhNAAQ"
+    "Portwood DocGen Managed@1.70.0-1": "04tal000006qyhNAAQ",
+    "Portwood DocGen Managed@1.71.0-1": "04tal000006r0jBAAQ"
   }
 }

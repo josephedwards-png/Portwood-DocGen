@@ -5024,9 +5024,26 @@ public with sharing class DocGenService {
         if (String.isNotBlank(footer) && !footerHasCounters) {
             html += '<div class="docgen-running-footer">' + footer + '</div>';
         }
-        html += (body == null ? '' : body);
+        html += wrapHtmlCheckmarks(body == null ? '' : body);
         html += '</body></html>';
         return html;
+    }
+
+    // Flying Saucer's default fonts (Helvetica/Times/Courier) lack checkbox/check
+    // glyphs — Arial Unicode MS has them. Wrap any checkmark Unicode chars in
+    // body text with a font span. Skips substrings already inside a <span style=...>
+    // by doing a direct char replace; double-wrapping is harmless (inner span wins).
+    private static final String[] HTML_CHECKMARK_CHARS = new String[]{
+        '☐', '☑', '☒', '✓', '✔', '✗', '✘'
+    };
+    private static String wrapHtmlCheckmarks(String s) {
+        if (String.isBlank(s)) return s;
+        for (String c : HTML_CHECKMARK_CHARS) {
+            if (s.contains(c)) {
+                s = s.replace(c, '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' + c + '</span>');
+            }
+        }
+        return s;
     }
 
     private static Boolean hasPageCounterTokens(String html) {

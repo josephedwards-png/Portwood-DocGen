@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.71.0 — Checkmarks & Symbols (Wingdings → Unicode auto-translate)
+
+Promoted package: `04tal000006r0jBAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)
+
+Word checkboxes and Unicode symbols now render reliably in PDF instead of dropping to tofu boxes.
+
+### What changed
+
+Salesforce's PDF engine (Flying Saucer) ships with four fonts — Helvetica, Times, Courier, Arial Unicode MS — and **cannot load Wingdings, Symbol, or any custom symbol font**. That's a platform constraint we can't move. Two parts of the rendering pipeline now work around it:
+
+1. **Word `<w:sym>` elements** (Insert → Symbol → Wingdings 0xFE / 0xA8, Word content-control checkboxes) are translated to their Unicode equivalents (☐ ☑ ☒ ✓ ✔ ✗ ✘) at PDF render time and wrapped in an Arial Unicode MS span. Previously these silently dropped — the rels existed, the runs rendered, but no glyph appeared.
+2. **Unicode symbols typed directly into templates** (Word, Google Docs, Notion, ChatGPT, raw HTML) are auto-wrapped in the same Arial Unicode MS span on output. A literal ✓ in your template now actually renders in PDF — without users having to know which font carries which glyph.
+
+The HTML-template path (`DocGenService.wrapHtmlForPdf`) gets the same treatment, so symbols typed into Google Docs / Notion exports render the same way.
+
+### Symbol palette
+
+DocGen ships with a curated copy-paste palette in the User Guide and Learning Center — checkboxes, checks/crosses, bullets, arrows, stars, and common punctuation. All entries verified to render in both PDF and DOCX.
+
+### What still doesn't work
+
+- **Wingdings glyphs other than checkboxes** — translated codepoints cover Wingdings F0A8/F0FE/F0FD/F0FB/F0FC/F0A2 and Wingdings 2 F050–F053/F0A3/F0A4. Anything else falls back to a neutral □ placeholder rather than tofu.
+- **Emoji** (😀 🎉) — out of Arial Unicode MS coverage. Not a regression; just not supported in PDF.
+- **Custom decorative fonts** — same as before; generate as DOCX and open in Word.
+
+### Files changed
+
+- `DocGenHtmlRenderer.cls` — `<w:sym>` walker case in `processRun`, `processSym()` translator with Wingdings/Symbol map, `wrapUnicodeCheckmarks()` post-process on every text run.
+- `DocGenService.cls` — `wrapHtmlCheckmarks()` applied inside `wrapHtmlForPdf` body.
+- `UserGuide.md`, `docGenCommandHub.html` — new "Checkmarks & symbols (PDF-safe)" section with copy-paste palette, conditional checkbox pattern, and what-doesn't-work table.
+
+---
+
 ## v1.70.0 — Word Table Fidelity (widths, spacing, source margins)
 
 Promoted package: `04tal000006qyhNAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006qyhNAAQ)
