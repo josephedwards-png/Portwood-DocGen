@@ -32,6 +32,7 @@ This pre-extraction is essential — it creates committed ContentVersion records
 ### How template images are rendered (on generate)
 
 At PDF generation time, `buildPdfImageMap()` queries for these pre-committed CVs:
+
 - Finds the active template version
 - Queries `ContentVersion WHERE Title LIKE 'docgen_tmpl_img_<versionId>_%'`
 - Builds relative URLs: `/sfc/servlet.shepherd/version/download/<cvId>`
@@ -50,8 +51,8 @@ At PDF generation time, `buildPdfImageMap()` queries for these pre-committed CVs
 ## Key Architecture
 
 - PDF rendering has two paths in `mergeTemplate()`:
-  1. **Pre-decomposed (preferred)**: Loads XML parts from ContentVersions saved during template version creation. Skips ZIP decompression entirely. ~75% heap savings. Used for PDF output when XML CVs exist.
-  2. **ZIP path (fallback)**: Full base64 decode + ZIP decompression. Used for DOCX/PPTX output, or PDF when pre-decomposed parts don't exist (older templates not yet re-saved).
+    1. **Pre-decomposed (preferred)**: Loads XML parts from ContentVersions saved during template version creation. Skips ZIP decompression entirely. ~75% heap savings. Used for PDF output when XML CVs exist.
+    2. **ZIP path (fallback)**: Full base64 decode + ZIP decompression. Used for DOCX/PPTX output, or PDF when pre-decomposed parts don't exist (older templates not yet re-saved).
 - After merge: `buildPdfImageMap()` → `DocGenHtmlRenderer.convertToHtml()` → `Blob.toPdf()` with VF page fallback
 - The Spring '26 Release Update "Use the Visualforce PDF Rendering Service for Blob.toPdf() Invocations" is REQUIRED
 
@@ -126,16 +127,16 @@ PDF is in-memory only at every step (Blob in Apex → base64 across Aura → JS 
 
 ### Dead-end matrix (don't re-attempt these)
 
-| Approach | Why it fails |
-|---|---|
-| Apex SOQL on 0EM | Not exposed via `Schema.getGlobalDescribe()` — no SObject token |
-| Apex callout to `/servlet/rtaImage` with `UserInfo.getSessionId()` | Recursive redirect loop: file.force.com → lightning.force.com/content/session → my.salesforce.com/visualforce/session → loops back. API session can't satisfy browser-cookie auth |
+| Approach                                                                                        | Why it fails                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apex SOQL on 0EM                                                                                | Not exposed via `Schema.getGlobalDescribe()` — no SObject token                                                                                                                          |
+| Apex callout to `/servlet/rtaImage` with `UserInfo.getSessionId()`                              | Recursive redirect loop: file.force.com → lightning.force.com/content/session → my.salesforce.com/visualforce/session → loops back. API session can't satisfy browser-cookie auth        |
 | Apex callout to `/services/data/.../richTextImageFields/.../...` with `UserInfo.getSessionId()` | Works in anonymous Apex (returns 200 OK with bytes) BUT fails in LWC-triggered AuraEnabled context. Also: session-ID callouts add AppExchange security review friction even for self-org |
-| `PageReference.getContent()` on rtaImage URL | `Maximum redirects (100) exceeded` — same loop |
-| `frontdoor.jsp?sid=...&retURL=...` session bridge | Returns 200 with bridged session in `Set-Cookie`, but Salesforce platform redacts the value to `SESSION_ID_REMOVED` before Apex can read it |
-| LWC `fetch('/services/data/...', { credentials: 'include' })` | Returns `Access-Control-Allow-Credentials: false` — browser drops response. Architectural CSRF protection, can't be flipped via Setup → CORS allowlist |
-| LWC `<img crossorigin="anonymous">` + `<canvas>` extraction | CORS taints canvas, `toBlob()` throws SecurityError. Without `crossorigin`, image renders but canvas is also tainted |
-| Named Credential to org self | Still ultimately needs cross-domain auth. Adds install-time customer config burden, doesn't avoid the underlying CORS architecture |
+| `PageReference.getContent()` on rtaImage URL                                                    | `Maximum redirects (100) exceeded` — same loop                                                                                                                                           |
+| `frontdoor.jsp?sid=...&retURL=...` session bridge                                               | Returns 200 with bridged session in `Set-Cookie`, but Salesforce platform redacts the value to `SESSION_ID_REMOVED` before Apex can read it                                              |
+| LWC `fetch('/services/data/...', { credentials: 'include' })`                                   | Returns `Access-Control-Allow-Credentials: false` — browser drops response. Architectural CSRF protection, can't be flipped via Setup → CORS allowlist                                   |
+| LWC `<img crossorigin="anonymous">` + `<canvas>` extraction                                     | CORS taints canvas, `toBlob()` throws SecurityError. Without `crossorigin`, image renders but canvas is also tainted                                                                     |
+| Named Credential to org self                                                                    | Still ultimately needs cross-domain auth. Adds install-time customer config burden, doesn't avoid the underlying CORS architecture                                                       |
 
 ### What also doesn't work end-to-end
 
@@ -156,14 +157,14 @@ Every authoring tool exports HTML cleanly. HTML doesn't have OOXML's tag-fragmen
 
 ### Pipeline (DocGenService)
 
-1. `mergeTemplate()` detects `templateType == 'HTML'` and branches to `mergeHtmlTemplate()` *before* any DOCX-specific logic runs (no ZIP decode, no rels path, no pre-decomposed XML lookups).
+1. `mergeTemplate()` detects `templateType == 'HTML'` and branches to `mergeHtmlTemplate()` _before_ any DOCX-specific logic runs (no ZIP decode, no rels path, no pre-decomposed XML lookups).
 2. `mergeHtmlTemplate()`:
-   - Base64-decodes the ContentVersion to the raw HTML string.
-   - Calls `extractHtmlStyleBlocks()` to preserve `<style>` contents from `<head>`.
-   - Calls `extractHtmlBodyContent()` to strip `<html>/<head>/<body>` wrappers.
-   - Runs `processXml()` on body + `Header_Html__c` + `Footer_Html__c` fields. The same merge-tag engine Word templates use — field substitution, formatters, conditionals, loops all work. `<w:tr>`/`<w:p>` container expansion is DOCX-specific and falls through to the "innerXml repeat" fallback for HTML (user writes `{#Loop}<tr>...</tr>{/Loop}` explicitly).
-   - Calls `substituteHtmlPageCounters()` on header/footer HTML: `{PageNumber}` → `<span class="dg-pgn"></span>`, `{TotalPages}` → `<span class="dg-tpg"></span>`.
-   - Calls `wrapHtmlForPdf()` to produce a full HTML document with Flying Saucer `@page` margin boxes and running elements.
+    - Base64-decodes the ContentVersion to the raw HTML string.
+    - Calls `extractHtmlStyleBlocks()` to preserve `<style>` contents from `<head>`.
+    - Calls `extractHtmlBodyContent()` to strip `<html>/<head>/<body>` wrappers.
+    - Runs `processXml()` on body + `Header_Html__c` + `Footer_Html__c` fields. The same merge-tag engine Word templates use — field substitution, formatters, conditionals, loops all work. `<w:tr>`/`<w:p>` container expansion is DOCX-specific and falls through to the "innerXml repeat" fallback for HTML (user writes `{#Loop}<tr>...</tr>{/Loop}` explicitly).
+    - Calls `substituteHtmlPageCounters()` on header/footer HTML: `{PageNumber}` → `<span class="dg-pgn"></span>`, `{TotalPages}` → `<span class="dg-tpg"></span>`.
+    - Calls `wrapHtmlForPdf()` to produce a full HTML document with Flying Saucer `@page` margin boxes and running elements.
 3. `renderPdf()` sees `mr.templateType == 'HTML'` and passes `mr.documentXml` straight to `Blob.toPdf()` — skipping `DocGenHtmlRenderer.convertToHtml()` entirely.
 
 ### Header/footer architecture
@@ -176,7 +177,7 @@ Stored on the template record as two LongTextArea fields: `Header_Html__c` and `
 - `.docgen-running-header { position: running(dgheader); }` + `@page { @top-center { content: element(dgheader); } }` — for rich HTML headers without page counters (images, tables, styling survive).
 - `{PageNumber}` / `{TotalPages}` tokens get passthrough treatment in `processXml()` (same mechanism as `{@Signature_}`) so they survive merge-tag resolution. `wrapHtmlForPdf()` detects them in the header/footer text and generates `@page` margin box `content` CSS with literal strings + `counter(page)` / `counter(pages)` calls.
 
-**Tradeoff:** headers/footers that contain page counters get their HTML markup flattened to plain text because the `@page` margin box `content` property only accepts strings + counter()/string() functions. Rich formatting (images, tables, bold, color) survives only for non-counter headers via the running-element path. Users who want both rich styling *and* page numbers have to pick — current API can't combine them. If this becomes a real constraint, the fallback is to nest the page counter inside a table cell using `string-set` + `string()` in a more advanced pattern, but that's significantly more complex.
+**Tradeoff:** headers/footers that contain page counters get their HTML markup flattened to plain text because the `@page` margin box `content` property only accepts strings + counter()/string() functions. Rich formatting (images, tables, bold, color) survives only for non-counter headers via the running-element path. Users who want both rich styling _and_ page numbers have to pick — current API can't combine them. If this becomes a real constraint, the fallback is to nest the page counter inside a table cell using `string-set` + `string()` in a more advanced pattern, but that's significantly more complex.
 
 ### Zip uploads (Google Docs "Download → Web Page") — client-side break-apart
 
@@ -190,6 +191,7 @@ Solution: **break the zip apart client-side, upload each piece as its own Apex c
 **Client (`docGenAdmin/docGenZipReader.js`)** — pure JS ZIP reader, no external deps. Uses native `DecompressionStream('deflate-raw')` for the compression primitive and does the central-directory / local-header parsing in ~100 lines. Supports store + deflate methods, which is everything real-world ZIP producers emit. `readZip(ArrayBuffer)` returns `[{name, data: Uint8Array}, ...]`.
 
 **Client flow (`docGenAdmin.handleHtmlFileSelected`)**:
+
 1. Read the file as `ArrayBuffer`.
 2. If `.zip`: `readZip()` gives entries. Find first `.html`/`.htm` → body. Collect image-extension entries (png/jpg/jpeg/gif/bmp/tif/tiff/svg).
 3. If `.html`/`.htm`: read as text, no images.
@@ -198,6 +200,7 @@ Solution: **break the zip apart client-side, upload each piece as its own Apex c
 6. `saveHtmlTemplateBody(templateId, fileName, htmlContent)` saves the finished HTML. Returns `{contentVersionId, contentDocumentId}` — same shape `lightning-file-upload` produces, so `uploadedContentVersionId` gets set and the existing "Save as New Version" flow takes over without branching.
 
 **Server endpoints (`DocGenController`)** — both are ~20 lines:
+
 - `saveHtmlTemplateImage(templateId, fileName, base64Content)` — base64-decodes, inserts one ContentVersion titled `docgen_html_img_<templateId>_<ts>_<basename>` linked to the template, returns `{contentVersionId, fileName, url}`.
 - `saveHtmlTemplateBody(templateId, fileName, htmlContent)` — stores the already-rewritten HTML as a ContentVersion titled `docgen_html_body_<templateId>_<ts>`, returns `{contentVersionId, contentDocumentId, fileName}`.
 
@@ -217,6 +220,7 @@ HTML templates use the same batched giant-query pipeline DOCX uses. When a scout
 `DocGenGiantQueryBatch.execute()` detects HTML vs DOCX source by checking whether the innerXml contains `<w:`. For HTML source it uses the rendered rows directly; for DOCX it runs `xmlRowsToHtmlRows()` to convert Word XML into HTML `<tr><td>`. Same batch class, same heap bounds (50 rows per fragment × 12MB queueable heap).
 
 `DocGenGiantQueryAssembler.buildHtmlTemplate()` branches on `Type__c`. HTML-type routes to `buildHtmlTemplateForHtmlType()` which:
+
 1. Loads the body CV directly.
 2. Runs `resolveParentMergeTags` + `resolveGiantAggregateTags` on the body content.
 3. Finds the loop-row boundary and replaces with `{ROWS}` placeholder (same logic as DOCX but looking at HTML `<tr>`/`<li>`/`</table>` positions).
@@ -238,6 +242,7 @@ Exports from Google Docs (File → Download → Web Page) produce class-heavy bu
 DOCX generation now uses client-side ZIP assembly to avoid Apex heap limits:
 
 ### How it works
+
 1. Server calls `generateDocumentParts()` which merges XML using `currentOutputFormat='PDF'` trick (skips blob loading)
 2. Server returns: `allXmlParts` (merged XML + passthrough entries), `imageCvIdMap` (mediaPath → CV ID), `imageBase64Map` (template media)
 3. Client deduplicates CV IDs and calls `getContentVersionBase64()` for each **unique** CV — each call gets fresh 6MB heap
@@ -245,15 +250,18 @@ DOCX generation now uses client-side ZIP assembly to avoid Apex heap limits:
 5. Download works for unlimited size. Save-to-record blocked by Aura 4MB payload limit (needs chunking or alternative).
 
 ### Key files
+
 - `docGenRunner/docGenZipWriter.js` — Pure JS ZIP writer (store mode, CRC-32). Exports `buildDocx(xmlParts, mediaParts)` and `buildDocxFromShell()`
 - `DocGenService.generateDocumentParts()` — Returns merged parts without ZIP assembly
 - `DocGenController.getContentVersionBase64()` — Returns single CV blob as base64, each call = fresh heap
 - `DocGenController.generateDocumentParts()` — AuraEnabled endpoint
 
 ### Important: rels XML must include ALL image relationships
+
 In both `mergeTemplate()` (full ZIP path, ~line 174) and `tryMergeFromPreDecomposed()` (~line 293), the pending images loop that adds relationships to rels XML must process ALL images, not just ones with blobs. URL-only images need rels entries too for DOCX.
 
 ### LWS Constraints
+
 - Lightning Web Security blocks `fetch()` to `/sfc/servlet.shepherd/` URLs (CORS redirect to `file.force.com`)
 - All binary data must be returned via Apex, not client-side fetch
 - `Blob` constructor in LWC rejects non-standard MIME types — use `application/octet-stream` for DOCX downloads
@@ -273,6 +281,7 @@ Format: `{@Signature_Role:Order:Type}`
 Backward compatible: `{@Signature_Buyer}` still works (treated as `:1:Full`).
 
 ### Data Model
+
 - `DocGen_Signature_Request__c` — parent record. Fields: `Template__c`, `Template_Ids__c` (packet), `Status__c`, `Signing_Order__c` (Parallel/Sequential), `Email_Status__c` (delivery diagnostics), `Signature_Data__c` (cached preview HTML + image map)
 - `DocGen_Signer__c` — one per signer. Fields: `Role_Name__c`, `Status__c` (Pending/Viewed/Signed/Cancelled/Declined), `Signature_Data__c` (typed name), `PIN_Hash__c`, `PIN_Verified_At__c`, `Decline_Reason__c`, `Reminder_Sent_At__c`, `Sort_Order__c`
 - `DocGen_Signature_Placement__c` — NEW v3 child of Signer. One record per signature/initial/date placement. Fields: `Sequence_Order__c`, `Placement_Type__c`, `Status__c`, `Signed_Value__c`, `Signed_At__c`, `Tag_Text__c`, `Document_Index__c`, `Section_Context__c`
@@ -287,6 +296,7 @@ Backward compatible: `{@Signature_Buyer}` still works (treated as `:1:Full`).
 2. `DocGenSignatureSenderController.createTemplateSignatureRequestForFlow()` — called by Flow action
 
 Both:
+
 - Insert request record
 - Call `mergeTemplateForSignature()` for preview
 - Build preview HTML with placement spans
@@ -294,6 +304,7 @@ Both:
 - Send branded emails
 
 Differences (each a potential bug):
+
 - LWC version sets `Signing_Order__c`, Flow version doesn't
 - LWC version calls `injectPlacementSpans()`, Flow version calls `convertToHtml()` directly
 - Default `sendEmails` value differs
@@ -303,6 +314,7 @@ Differences (each a potential bug):
 ### Signing Page Flow
 
 The VF page `DocGenSignature.page` runs in guest user context and has multiple states:
+
 - `loading` → `error` (token invalid) | `verify` (PIN entry) | `guided` (v3 signing) | `signature` (v2 fallback)
 - Guided state: shows full document HTML, sticky action bar at bottom, arrow indicator on current placement
 - Each placement signed individually via `signPlacement()` remoting — persists to `DocGen_Signature_Placement__c.Status__c = 'Signed'`
@@ -312,12 +324,14 @@ The VF page `DocGenSignature.page` runs in guest user context and has multiple s
 ### Critical: Guest User Constraints
 
 Guest users CANNOT:
+
 - Send email without OWA (`setOrgWideEmailAddressId` required)
 - Call `Auth.SessionManagement.getCurrentSession()` — throws uncatchable session error
 - Query User table
 - Access ContentVersion via `/sfc/servlet.shepherd/` URLs (browser auth blocks)
 
 Guest user code paths in `DocGenSignatureController.cls`:
+
 - `validateToken`, `sendPin`, `verifyPin`, `getSignerPlacements`, `signPlacement`, `getImageBase64`, `saveSignature`, `declineSignature`, `stampAndReturnSource`
 
 The image proxy `getImageBase64()` returns base64 for guest users since they can't fetch /sfc/ URLs. Signing page JS replaces `<img src="/sfc/...">` with data URIs.
@@ -327,6 +341,7 @@ The image proxy `getImageBase64()` returns base64 for guest users since they can
 ### Platform Event Trigger
 
 `DocGenSignaturePdfTrigger` runs as Automated Process user (system context). Handles:
+
 - All-signers-complete → enqueue `TemplateSignaturePdfQueueable` for PDF generation + send `sendAllSignedNotification`
 - Some-signers-pending → send `sendSignerCompletedNotification` for last signer; if Sequential, send next signer's invite email
 - Declined → send `sendDeclineNotification`
@@ -336,6 +351,7 @@ Guest users publish the event via `EventBus.publish()` from `saveSignature()` an
 ### Email Service
 
 `DocGenSignatureEmailService` — handles ALL signature-related emails. Methods:
+
 - `sendSignatureRequestEmails(signers, docTitle, requestId)` — initial branded invitations
 - `sendSignerCompletedNotification(requestId, signer)` — sent to creator when one signer completes
 - `sendAllSignedNotification(requestId)` — sent to creator when all done
@@ -356,6 +372,7 @@ Test note: has `@TestVisible private static DateTime testThresholdOverride` for 
 ### Setup Validation
 
 `DocGenSetupController.validateSignatureSetup()` returns a checklist of pass/fail items shown in the signature settings UI:
+
 1. Site URL configured
 2. Active Salesforce Site exists
 3. OWA configured and valid
@@ -371,6 +388,7 @@ Fix: `DocGenSetupController.getSettingsFresh()` returns a plain `Map<String, Obj
 ### v3 Component Map
 
 **LWC components:**
+
 - `docGenSignatureSender` — record-page component for creating requests. Multi-template selection, signer rows with auto-detection, preview modal, signing order toggle
 - `docGenSignatureSettings` — admin settings with setup validation checklist, OWA selector, reminder configuration
 - `docGenAdmin` — template manager (createTemplate now correctly persists `Test_Record_Id__c`)
@@ -378,8 +396,9 @@ Fix: `DocGenSetupController.getSettingsFresh()` returns a plain `Map<String, Obj
 - `docGenCommandHub` — main app tab with Learning Center containing all v3 docs
 
 **Apex classes:**
+
 - `DocGenSignatureController` — guest user endpoints (validateToken, sendPin, verifyPin, getSignerPlacements, signPlacement, getImageBase64, saveSignature, declineSignature, stampAndReturnSource)
-- `DocGenSignatureSenderController` — internal user endpoints (createTemplateSignerRequest*, createPacketSignerRequest, getTemplateSignaturePlacements, getDocumentPreviewHtml, plus lots of legacy)
+- `DocGenSignatureSenderController` — internal user endpoints (createTemplateSignerRequest\*, createPacketSignerRequest, getTemplateSignaturePlacements, getDocumentPreviewHtml, plus lots of legacy)
 - `DocGenSignatureService` — stamping logic (`stampSignaturesInXml` with placement awareness), `TemplateSignaturePdfQueueable`, `buildVerificationBlockHtml`
 - `DocGenSignatureEmailService` — all email sending
 - `DocGenSignatureFlowAction` — Flow invocable with `Signer` apex type
@@ -389,6 +408,7 @@ Fix: `DocGenSetupController.getSettingsFresh()` returns a plain `Map<String, Obj
 ### Permission Sets
 
 Three sets, all updated for v3:
+
 - `DocGen_Admin` — full CRUD on all signature objects including new placement object, all new fields
 - `DocGen_User` — read/edit on most fields, no delete
 - `DocGen_Guest_Signature` — READ on requests/signers/placements; CREATE on audits; access to DocGenSign, DocGenSignature, DocGenVerify VF pages
@@ -411,6 +431,7 @@ After 24 hours of iterative changes, several areas are fragile and need refactor
 ### Production Email Diagnosis
 
 When emails don't arrive, check in this order:
+
 1. **Setup > Deliverability** — must be "All Email" (default in scratch is "System Email Only")
 2. **OWA "Allow All Profiles"** — in OWA settings, must be checked or specific profiles listed include the sender's profile
 3. **OWA verified** — green checkmark next to the address
@@ -429,7 +450,9 @@ When emails don't arrive, check in this order:
 ## Font Support
 
 ### PDF output
+
 `Blob.toPdf()` uses Salesforce's Flying Saucer rendering engine which only supports 4 built-in font families:
+
 - **Helvetica** (`sans-serif`) — the default
 - **Times** (`serif`)
 - **Courier** (`monospace`)
@@ -440,6 +463,7 @@ Custom fonts **cannot** be loaded into the PDF engine. CSS `@font-face` is not s
 **Do NOT re-add custom font upload for PDF.** It was built, tested exhaustively (base64 data URIs, static resource URLs, ContentVersion URLs), and confirmed not possible.
 
 ### DOCX output
+
 DOCX output preserves whatever fonts are in the template file. If users need custom fonts (branded typefaces, barcode fonts, decorative scripts), they should generate as DOCX. The fonts render correctly when opened in Word or any compatible viewer.
 
 ## Scratch Orgs
@@ -452,7 +476,8 @@ DOCX output preserves whatever fonts are in the template file. If users need cus
 
 **All three checks MUST pass before every release. No exceptions.**
 
-### 1. E2E Test Suite (8 chained scripts)
+### 1. E2E Test Suite (9 chained scripts)
+
 ```bash
 sf apex run --target-org <org> -f scripts/e2e-01-permissions.apex
 sf apex run --target-org <org> -f scripts/e2e-02-template-crud.apex
@@ -460,24 +485,30 @@ sf apex run --target-org <org> -f scripts/e2e-03-generate-pdf.apex
 sf apex run --target-org <org> -f scripts/e2e-04-generate-docx.apex
 sf apex run --target-org <org> -f scripts/e2e-05-generate-bulk.apex
 sf apex run --target-org <org> -f scripts/e2e-06-signatures.apex
-sf apex run --target-org <org> -f scripts/e2e-07-syntax.apex
+sf apex run --target-org <org> -f scripts/e2e-07-syntax1.apex
+sf apex run --target-org <org> -f scripts/e2e-07-syntax2.apex
 sf apex run --target-org <org> -f scripts/e2e-08-cleanup.apex
 ```
+
 Expected: Each script prints `PASS: N  FAIL: 0  ALL TESTS PASSED`
 
-Scripts run in sequence: 01 is standalone, 02 creates test data, 03-06 depend on 02, 07 is standalone (uses processXmlForTest), 08 cleans up everything.
+Scripts run in sequence: 01 is standalone, 02 creates test data, 03-06 depend on 02, 07-syntax1 / 07-syntax2 are standalone (use processXmlForTest — split in v1.73 because the original 33KB script blew through Anonymous Apex's 20KB limit), 08 cleans up everything.
+
+**Staging org for validation:** `portwood-staging` scratch (created from `Portwood Global - Production` DevHub). Long-lived, no demo data — use this for every release validation run rather than spinning up new scratches.
 
 **MANDATORY: When adding ANY feature, field, merge tag, or configuration:**
+
 1. Add assertions to the appropriate e2e script FIRST — before or alongside the feature code
 2. Script domain mapping:
-   - `e2e-01-permissions` — new Apex classes, VF pages, custom objects, field permissions
-   - `e2e-02-template-crud` — template creation, version management, data retrieval
-   - `e2e-03-generate-pdf` — PDF generation, output verification
-   - `e2e-04-generate-docx` — DOCX generation, ZIP validation, client-side assembly
-   - `e2e-05-generate-bulk` — bulk jobs, saved queries, job analysis
-   - `e2e-06-signatures` — signature requests, PIN flow, settings, verification
-   - `e2e-07-syntax` — ALL merge tag types via processXmlForTest()
-   - `e2e-08-cleanup` — add delete statements for any new custom objects
+    - `e2e-01-permissions` — new Apex classes, VF pages, custom objects, field permissions
+    - `e2e-02-template-crud` — template creation, version management, data retrieval
+    - `e2e-03-generate-pdf` — PDF generation, output verification
+    - `e2e-04-generate-docx` — DOCX generation, ZIP validation, client-side assembly
+    - `e2e-05-generate-bulk` — bulk jobs, saved queries, job analysis
+    - `e2e-06-signatures` — signature requests, PIN flow, settings, verification
+    - `e2e-07-syntax1` — basic merge tags (fields, loops, conditionals, IF, formatters, aggregates, signature passthrough, table-row loop)
+    - `e2e-07-syntax2` — advanced merge tags (locale formatting, Today/Now, textarea/RTL, VML watermark, table widths, nested IF, AND/OR/NOT, empty-rel totalSize)
+    - `e2e-08-cleanup` — add delete statements for any new custom objects
 3. Every new merge tag syntax must have a processXmlForTest() assertion in e2e-07
 4. Every new custom field must be verified in the permission set validation in e2e-01
 5. Every new Apex class must be added to the permission set checks in e2e-01
@@ -485,15 +516,19 @@ Scripts run in sequence: 01 is standalone, 02 creates test data, 03-06 depend on
 7. Each script must stay under 18,000 characters (Anonymous Apex limit is 20,000)
 
 ### 2. Apex Test Suite (850+ tests, 75% coverage)
+
 ```bash
 sf apex run test --target-org <org> --test-level RunLocalTests --wait 15 --code-coverage
 ```
+
 Expected: `Outcome: Passed`, `Pass Rate: 100%`, org-wide coverage ≥ 75%
 
 ### 3. Code Analyzer — Security + AppExchange (0 violations)
+
 ```bash
 sf code-analyzer run --workspace "force-app/" --rule-selector "Security" --rule-selector "AppExchange" --view table
 ```
+
 Expected: `0 High severity violation(s) found.` (30 Moderate false positives are acceptable — see `code-analyzer.yml`)
 
 Runs PMD security rules, AppExchange-specific rules, and Salesforce Graph Engine (SFGE) taint analysis. SFGE timeouts on complex methods are normal — only violations count.
@@ -505,28 +540,82 @@ Runs PMD security rules, AppExchange-specific rules, and Salesforce Graph Engine
 Three formats, all stored in `Query_Config__c` (32KB LongTextArea):
 
 ### V1 — Legacy flat string
+
 ```
 Name, Industry, (SELECT FirstName, LastName FROM Contacts)
 ```
+
 Detected by: does NOT start with `{`. Parsed by the original `getRecordData()` method.
 
 ### V2 — JSON flat (junction support)
+
 ```json
-{"v":2,"baseObject":"Opportunity","baseFields":["Name"],"parentFields":["Account.Name"],
- "children":[{"rel":"OpportunityLineItems","fields":["Name"]}],
- "junctions":[{"junctionRel":"OpportunityContactRoles","targetObject":"Contact","targetIdField":"ContactId","targetFields":["FirstName"]}]}
+{
+    "v": 2,
+    "baseObject": "Opportunity",
+    "baseFields": ["Name"],
+    "parentFields": ["Account.Name"],
+    "children": [{ "rel": "OpportunityLineItems", "fields": ["Name"] }],
+    "junctions": [
+        {
+            "junctionRel": "OpportunityContactRoles",
+            "targetObject": "Contact",
+            "targetIdField": "ContactId",
+            "targetFields": ["FirstName"]
+        }
+    ]
+}
 ```
+
 Detected by: starts with `{`, `"v":2`. Parsed by `getRecordDataV2()`.
 
 ### V3 — Query tree (multi-object, any depth)
+
 ```json
-{"v":3,"root":"Account","nodes":[
-  {"id":"n0","object":"Account","fields":["Name"],"parentFields":["Owner.Name"],"parentNode":null,"lookupField":null,"relationshipName":null},
-  {"id":"n1","object":"Contact","fields":["FirstName"],"parentFields":[],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Contacts"},
-  {"id":"n2","object":"Opportunity","fields":["Name","Amount"],"parentFields":[],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Opportunities"},
-  {"id":"n3","object":"OpportunityLineItem","fields":["Quantity"],"parentFields":["Product2.Name"],"parentNode":"n2","lookupField":"OpportunityId","relationshipName":"OpportunityLineItems"}
-]}
+{
+    "v": 3,
+    "root": "Account",
+    "nodes": [
+        {
+            "id": "n0",
+            "object": "Account",
+            "fields": ["Name"],
+            "parentFields": ["Owner.Name"],
+            "parentNode": null,
+            "lookupField": null,
+            "relationshipName": null
+        },
+        {
+            "id": "n1",
+            "object": "Contact",
+            "fields": ["FirstName"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Contacts"
+        },
+        {
+            "id": "n2",
+            "object": "Opportunity",
+            "fields": ["Name", "Amount"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Opportunities"
+        },
+        {
+            "id": "n3",
+            "object": "OpportunityLineItem",
+            "fields": ["Quantity"],
+            "parentFields": ["Product2.Name"],
+            "parentNode": "n2",
+            "lookupField": "OpportunityId",
+            "relationshipName": "OpportunityLineItems"
+        }
+    ]
+}
 ```
+
 Detected by: starts with `{`, `"v":3`. Parsed by `getRecordDataV3()` tree walker. Each node is one SOQL query, stitched into parent's data map via `lookupField`.
 
 **Backward compat:** All three formats work. The DataRetriever auto-detects the format and routes to the correct parser.
@@ -536,6 +625,7 @@ Detected by: starts with `{`, `"v":3`. Parsed by `getRecordDataV3()` tree walker
 The DocGen app has 2 tabs: "DocGen" (Command Hub) and "Job History".
 
 The Command Hub (`docGenCommandHub` LWC) contains:
+
 - Welcome banner (< 10 templates, dismissible)
 - Quick action cards (Templates, Bulk Generate, How It Works)
 - Embedded template manager (`docGenAdmin`)
@@ -547,9 +637,11 @@ The template wizard uses `docGenColumnBuilder` for the query builder step (tab-p
 ## Font Support
 
 ### PDF output
+
 `Blob.toPdf()` only supports 4 built-in fonts: Helvetica (`sans-serif`), Times (`serif`), Courier (`monospace`), Arial Unicode MS. CSS `@font-face` is NOT supported. **Do NOT re-add custom font upload for PDF.**
 
 ### DOCX output
+
 Preserves whatever fonts are in the template file.
 
 ## AppExchange

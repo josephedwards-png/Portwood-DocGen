@@ -1,5 +1,4 @@
-public with sharing class DocGenService {
-
+global with sharing class DocGenService { // NOPMD AvoidGlobalModifier — global required so subscriber Apex can call generateDocument*/generatePdfBlob* in installed orgs
     // Collector for images to inject after XML processing
     private static List<Map<String, Object>> pendingImages = new List<Map<String, Object>>();
     private static Integer imageCounter = 0;
@@ -14,12 +13,16 @@ public with sharing class DocGenService {
      */
     public static void applyWatermarkOverride(Id templateId) {
         DocGenHtmlRenderer.overrideWatermarkCvId = null;
-        if (templateId == null) { return; }
+        if (templateId == null) {
+            return;
+        }
         try {
             List<DocGen_Template_Version__c> vs = [
-                SELECT Watermark_Image_CV_Id__c FROM DocGen_Template_Version__c
-                WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH SYSTEM_MODE LIMIT 1
+                SELECT Watermark_Image_CV_Id__c
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                LIMIT 1
             ];
             if (!vs.isEmpty() && String.isNotBlank(vs[0].Watermark_Image_CV_Id__c)) {
                 DocGenHtmlRenderer.overrideWatermarkCvId = vs[0].Watermark_Image_CV_Id__c;
@@ -60,16 +63,15 @@ public with sharing class DocGenService {
         public List<ContentVersion> loadByTitlePrefix(String titlePrefix) {
             String likePattern = titlePrefix + '%';
             return [
-                SELECT Id, Title, VersionData FROM ContentVersion
+                SELECT Id, Title, VersionData
+                FROM ContentVersion
                 WHERE Title LIKE :likePattern
                 WITH SYSTEM_MODE // NOPMD — package-internal pre-decomposed parts
             ];
         }
     }
 
-    private static final Set<String> AGGREGATE_FUNCTIONS = new Set<String>{
-        'SUM', 'COUNT', 'AVG', 'MIN', 'MAX'
-    };
+    private static final Set<String> AGGREGATE_FUNCTIONS = new Set<String>{ 'SUM', 'COUNT', 'AVG', 'MIN', 'MAX' };
 
     // Heap-pressure routing: check every N loop iterations during sync merge; if
     // we're past HEAP_PRESSURE_RATIO of the limit, throw HeapPressureException so
@@ -84,26 +86,61 @@ public with sharing class DocGenService {
     @TestVisible
     private static Boolean forceHeapPressureForTest = false;
 
-    private static final Set<String> NUMERIC_FORMATS = new Set<String>{
-        'currency', 'percent', 'number'
-    };
+    private static final Set<String> NUMERIC_FORMATS = new Set<String>{ 'currency', 'percent', 'number' };
 
     // Currency ISO code → display symbol (top ~35 world currencies)
     private static final Map<String, String> CURRENCY_SYMBOLS = new Map<String, String>{
-        'USD'=>'$', 'EUR'=>'\u20AC', 'GBP'=>'\u00A3', 'JPY'=>'\u00A5', 'CNY'=>'\u00A5',
-        'CHF'=>'CHF ', 'CAD'=>'C$', 'AUD'=>'A$', 'INR'=>'\u20B9', 'KRW'=>'\u20A9',
-        'BRL'=>'R$', 'MXN'=>'MX$', 'SEK'=>'kr ', 'NOK'=>'kr ', 'DKK'=>'kr ',
-        'PLN'=>'z\u0142', 'CZK'=>'K\u010D', 'HUF'=>'Ft ', 'TRY'=>'\u20BA', 'ZAR'=>'R ',
-        'SGD'=>'S$', 'HKD'=>'HK$', 'NZD'=>'NZ$', 'THB'=>'\u0E3F', 'MYR'=>'RM ',
-        'PHP'=>'\u20B1', 'IDR'=>'Rp ', 'TWD'=>'NT$', 'ILS'=>'\u20AA', 'RUB'=>'\u20BD',
-        'NGN'=>'\u20A6', 'KES'=>'KSh ', 'AED'=>'AED ', 'SAR'=>'SAR ',
-        'COP'=>'COL$', 'CLP'=>'CLP$', 'PEN'=>'S/', 'ARS'=>'ARS$',
-        'EGP'=>'E\u00A3', 'GHS'=>'GH\u20B5'
+        'USD' => '$',
+        'EUR' => '\u20AC',
+        'GBP' => '\u00A3',
+        'JPY' => '\u00A5',
+        'CNY' => '\u00A5',
+        'CHF' => 'CHF ',
+        'CAD' => 'C$',
+        'AUD' => 'A$',
+        'INR' => '\u20B9',
+        'KRW' => '\u20A9',
+        'BRL' => 'R$',
+        'MXN' => 'MX$',
+        'SEK' => 'kr ',
+        'NOK' => 'kr ',
+        'DKK' => 'kr ',
+        'PLN' => 'z\u0142',
+        'CZK' => 'K\u010D',
+        'HUF' => 'Ft ',
+        'TRY' => '\u20BA',
+        'ZAR' => 'R ',
+        'SGD' => 'S$',
+        'HKD' => 'HK$',
+        'NZD' => 'NZ$',
+        'THB' => '\u0E3F',
+        'MYR' => 'RM ',
+        'PHP' => '\u20B1',
+        'IDR' => 'Rp ',
+        'TWD' => 'NT$',
+        'ILS' => '\u20AA',
+        'RUB' => '\u20BD',
+        'NGN' => '\u20A6',
+        'KES' => 'KSh ',
+        'AED' => 'AED ',
+        'SAR' => 'SAR ',
+        'COP' => 'COL$',
+        'CLP' => 'CLP$',
+        'PEN' => 'S/',
+        'ARS' => 'ARS$',
+        'EGP' => 'E\u00A3',
+        'GHS' => 'GH\u20B5'
     };
 
     // Currencies that use 0 decimal places
     private static final Set<String> ZERO_DECIMAL_CURRENCIES = new Set<String>{
-        'JPY', 'KRW', 'CLP', 'VND', 'HUF', 'ISK', 'TWD'
+        'JPY',
+        'KRW',
+        'CLP',
+        'VND',
+        'HUF',
+        'ISK',
+        'TWD'
     };
 
     /**
@@ -150,22 +187,22 @@ public with sharing class DocGenService {
      * Intermediate merge result containing processed XML, images, and passthrough ZIP entries.
      */
     private class MergeResult { // NOPMD TooManyFields — data transfer object requires all fields
-        String documentXml;                                   // Processed word/document.xml
-        Map<String, String> processedXmlEntries;              // All processed XML entries (name → xml)
-        Map<String, Blob> passthroughEntries;                 // Non-XML ZIP entries passed through as-is
-        String contentTypesXml;                               // [Content_Types].xml
-        String relsXml;                                       // word/_rels/document.xml.rels
-        String relsPath;                                      // Path to rels file
-        String mediaPath;                                     // Path prefix for media files
-        Map<String, String> imageBase64ByRelId;               // relId → base64 image data (for DOCX and fallback)
-        Map<String, String> imageUrlByRelId;                  // relId → absolute URL (for PDF rendering via Blob.toPdf)
+        String documentXml; // Processed word/document.xml
+        Map<String, String> processedXmlEntries; // All processed XML entries (name → xml)
+        Map<String, Blob> passthroughEntries; // Non-XML ZIP entries passed through as-is
+        String contentTypesXml; // [Content_Types].xml
+        String relsXml; // word/_rels/document.xml.rels
+        String relsPath; // Path to rels file
+        String mediaPath; // Path prefix for media files
+        Map<String, String> imageBase64ByRelId; // relId → base64 image data (for DOCX and fallback)
+        Map<String, String> imageUrlByRelId; // relId → absolute URL (for PDF rendering via Blob.toPdf)
         String templateType;
         String outputFormat;
         String docTitle;
         String pageOrientation; // 'Landscape' routes through DocGenPdfRenderer VF page; otherwise Blob.toPdf portrait
-        String pageSize;        // 1.68 — Letter / Legal / A4
-        String pageMargins;     // 1.68 — Default / Narrow / Normal / Wide / Custom
-        String customMargins;   // 1.68 — "T,R,B,L" inches when pageMargins == Custom
+        String pageSize; // 1.68 — Letter / Legal / A4
+        String pageMargins; // 1.68 — Default / Narrow / Normal / Wide / Custom
+        String customMargins; // 1.68 — "T,R,B,L" inches when pageMargins == Custom
 
         MergeResult() {
             processedXmlEntries = new Map<String, String>();
@@ -187,7 +224,12 @@ public with sharing class DocGenService {
         return mergeTemplate(templateId, recordId, resolvedImages, null);
     }
 
-    private static MergeResult mergeTemplate(Id templateId, Id recordId, Map<String, String> resolvedImages, String outputFormatOverride) {
+    private static MergeResult mergeTemplate(
+        Id templateId,
+        Id recordId,
+        Map<String, String> resolvedImages,
+        String outputFormatOverride
+    ) {
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
 
@@ -228,7 +270,7 @@ public with sharing class DocGenService {
         if (dataObj instanceof Map<String, Object>) {
             recordDataMap = (Map<String, Object>) dataObj;
         } else if (dataObj instanceof SObject) {
-            recordDataMap = ((SObject)dataObj).getPopulatedFieldsAsMap();
+            recordDataMap = ((SObject) dataObj).getPopulatedFieldsAsMap();
         } else {
             throw new DocGenException('Invalid data format.');
         }
@@ -297,14 +339,15 @@ public with sharing class DocGenService {
             String name = entry.getName();
             Boolean isTargetXml = false;
             if (templateType == 'Word') {
-                isTargetXml = name == 'word/document.xml' ||
-                              (name.startsWith('word/header') && name.endsWith('.xml')) ||
-                              (name.startsWith('word/footer') && name.endsWith('.xml'));
+                isTargetXml =
+                    name == 'word/document.xml' ||
+                    (name.startsWith('word/header') && name.endsWith('.xml')) ||
+                    (name.startsWith('word/footer') && name.endsWith('.xml'));
             } else if (templateType == 'PowerPoint') {
                 isTargetXml = name.startsWith('ppt/slides/slide') && name.endsWith('.xml');
             } else if (templateType == 'Excel') {
-                isTargetXml = (name.startsWith('xl/worksheets/sheet') && name.endsWith('.xml')) ||
-                              name == 'xl/sharedStrings.xml';
+                isTargetXml =
+                    (name.startsWith('xl/worksheets/sheet') && name.endsWith('.xml')) || name == 'xl/sharedStrings.xml';
             }
 
             // Excel: collect worksheets for second pass (shared strings must be read first)
@@ -442,7 +485,11 @@ public with sharing class DocGenService {
      * Skips full ZIP decompression — saves ~1.5-2MB heap for PDF generation.
      * Returns null if pre-decomposed parts are not available (older templates).
      */
-    private static MergeResult tryMergeFromPreDecomposed(Id templateId, Map<String, Object> recordDataMap, MergeResult mr) {
+    private static MergeResult tryMergeFromPreDecomposed(
+        Id templateId,
+        Map<String, Object> recordDataMap,
+        MergeResult mr
+    ) {
         // Cache the template version + XML CV query — identical for every record
         if (cachedPreDecompTemplateId != templateId || cachedXmlParts == null) {
             cachedPreDecompTemplateId = templateId;
@@ -450,9 +497,11 @@ public with sharing class DocGenService {
             cachedPreDecompAvailable = false;
 
             List<DocGen_Template_Version__c> activeVersions = [
-                SELECT Id FROM DocGen_Template_Version__c
-                WHERE Template__c = :templateId AND Is_Active__c = true
-                WITH SYSTEM_MODE LIMIT 1
+                SELECT Id
+                FROM DocGen_Template_Version__c
+                WHERE Template__c = :templateId AND Is_Active__c = TRUE
+                WITH SYSTEM_MODE
+                LIMIT 1
             ];
             if (activeVersions.isEmpty()) {
                 return null;
@@ -528,14 +577,21 @@ public with sharing class DocGenService {
      *          generateDocumentPartsGiantQuery (collectRenderMaps=false — URL-only, client assembles).
      */
     private static void applyPendingImages(MergeResult mr, Boolean collectRenderMaps) {
-        if (pendingImages.isEmpty()) return;
+        if (pendingImages.isEmpty())
+            return;
 
         if (mr.contentTypesXml != null) {
             if (!mr.contentTypesXml.contains('Extension="png"')) {
-                mr.contentTypesXml = mr.contentTypesXml.replace('</Types>', '<Default Extension="png" ContentType="image/png"/></Types>');
+                mr.contentTypesXml = mr.contentTypesXml.replace(
+                    '</Types>',
+                    '<Default Extension="png" ContentType="image/png"/></Types>'
+                );
             }
             if (!mr.contentTypesXml.contains('Extension="jpeg"') && !mr.contentTypesXml.contains('Extension="jpg"')) {
-                mr.contentTypesXml = mr.contentTypesXml.replace('</Types>', '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>');
+                mr.contentTypesXml = mr.contentTypesXml.replace(
+                    '</Types>',
+                    '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>'
+                );
             }
         }
 
@@ -543,7 +599,12 @@ public with sharing class DocGenService {
             for (Map<String, Object> img : pendingImages) {
                 String relId = (String) img.get('relId');
                 String fName = (String) img.get('fileName');
-                String newRel = '<Relationship Id="' + relId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' + fName + '"/>';
+                String newRel =
+                    '<Relationship Id="' +
+                    relId +
+                    '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
+                    fName +
+                    '"/>';
                 mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
             }
         }
@@ -631,7 +692,12 @@ public with sharing class DocGenService {
      * Throws DocGenException if the override is incompatible with the template type
      * (e.g. PowerPoint template + PDF override) or if the template has Lock_Output_Format__c = true.
      */
-    public static Map<String, Object> processDocument(Id templateId, Id recordId, Map<String, String> resolvedImages, String outputFormatOverride) {
+    public static Map<String, Object> processDocument(
+        Id templateId,
+        Id recordId,
+        Map<String, String> resolvedImages,
+        String outputFormatOverride
+    ) {
         validateOutputFormatOverride(templateId, outputFormatOverride);
         MergeResult mr = mergeTemplate(templateId, recordId, resolvedImages, outputFormatOverride);
 
@@ -660,16 +726,28 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static void validateOutputFormatOverride(Id templateId, String outputFormatOverride) {
-        if (String.isBlank(outputFormatOverride)) return;
-        if (outputFormatOverride != 'PDF' && outputFormatOverride != 'Word' && outputFormatOverride != 'PowerPoint' && outputFormatOverride != 'HTML') {
-            throw new DocGenException('Invalid output format override: ' + outputFormatOverride + '. Expected PDF, Word, PowerPoint, or HTML.');
+        if (String.isBlank(outputFormatOverride))
+            return;
+        if (
+            outputFormatOverride != 'PDF' &&
+            outputFormatOverride != 'Word' &&
+            outputFormatOverride != 'PowerPoint' &&
+            outputFormatOverride != 'HTML'
+        ) {
+            throw new DocGenException(
+                'Invalid output format override: ' + outputFormatOverride + '. Expected PDF, Word, PowerPoint, or HTML.'
+            );
         }
         /* code-analyzer-suppress ApexFlsViolation */
         List<DocGen_Template__c> tpls = [
-            SELECT Lock_Output_Format__c, Type__c FROM DocGen_Template__c
-            WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            SELECT Lock_Output_Format__c, Type__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
-        if (tpls.isEmpty()) return; // mergeTemplate will throw a clearer "template not found" error
+        if (tpls.isEmpty())
+            return; // mergeTemplate will throw a clearer "template not found" error
         DocGen_Template__c t = tpls[0];
         if (t.Lock_Output_Format__c == true) {
             throw new DocGenException('This template locks its output format. Override not permitted.');
@@ -769,7 +847,11 @@ public with sharing class DocGenService {
      * @param giantRelationshipName The child relationship processed by the harvest batch
      * @return Map containing allXmlParts (with placeholder), image maps, title, and placeholder token
      */
-    public static Map<String, Object> generateDocumentPartsGiantQuery(Id templateId, Id recordId, String giantRelationshipName) {
+    public static Map<String, Object> generateDocumentPartsGiantQuery(
+        Id templateId,
+        Id recordId,
+        String giantRelationshipName
+    ) {
         // Use PDF output format to skip image blob loading during merge
         currentOutputFormat = 'PDF';
 
@@ -825,8 +907,9 @@ public with sharing class DocGenService {
             } else if (name == mr.relsPath) {
                 mr.relsXml = reader.extract(name).toString();
             } else {
-                Boolean isProcessedXml = (name.startsWith('word/header') && name.endsWith('.xml')) ||
-                                         (name.startsWith('word/footer') && name.endsWith('.xml'));
+                Boolean isProcessedXml =
+                    (name.startsWith('word/header') && name.endsWith('.xml')) ||
+                    (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
@@ -930,9 +1013,11 @@ public with sharing class DocGenService {
     public static Map<String, Object> extractGiantQueryFragmentConfig(Id templateId, String giantRelationshipName) {
         // Load only document.xml and styles.xml from pre-decomposed parts
         List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
         if (activeVersions.isEmpty()) {
             throw new DocGenException('No active template version found.');
@@ -946,8 +1031,10 @@ public with sharing class DocGenService {
         String capturedStylesXml = null;
 
         List<ContentVersion> xmlCvs = [
-            SELECT Title, VersionData FROM ContentVersion
-            WHERE Title IN (:docKey, :stylesKey) WITH USER_MODE // NOPMD — internal pre-decomposed parts
+            SELECT Title, VersionData
+            FROM ContentVersion
+            WHERE Title IN (:docKey, :stylesKey)
+            WITH USER_MODE // NOPMD — internal pre-decomposed parts
         ];
         for (ContentVersion cv : xmlCvs) {
             if (cv.Title == docKey) {
@@ -1036,7 +1123,12 @@ public with sharing class DocGenService {
      * @param placeholder String to inject where the giant loop table rows go
      * @return Complete HTML string with placeholder for table row injection
      */
-    public static String mergeTemplateForGiantQueryPdf(Id templateId, Id recordId, String giantRelationshipName, String placeholder) {
+    public static String mergeTemplateForGiantQueryPdf(
+        Id templateId,
+        Id recordId,
+        String giantRelationshipName,
+        String placeholder
+    ) {
         currentOutputFormat = 'PDF';
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
@@ -1045,7 +1137,10 @@ public with sharing class DocGenService {
         // CxSAST: USER_MODE not viable in managed package (namespace resolution breaks unqualified field names); CRUD/FLS enforced by permission sets
         List<DocGen_Template__c> templates = [
             SELECT Base_Object_API__c, Query_Config__c, Type__c, Document_Title_Format__c
-            FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
         DocGen_Template__c template = templates[0];
 
@@ -1057,7 +1152,9 @@ public with sharing class DocGenService {
                 List<Object> rootOnly = new List<Object>();
                 for (Object nodeObj : nodes) {
                     Map<String, Object> node = (Map<String, Object>) nodeObj;
-                    if (node.get('parentNode') == null) { rootOnly.add(node); }
+                    if (node.get('parentNode') == null) {
+                        rootOnly.add(node);
+                    }
                 }
                 configMap.put('nodes', rootOnly);
                 shellConfig = JSON.serialize(configMap);
@@ -1068,7 +1165,9 @@ public with sharing class DocGenService {
         }
 
         Map<String, Object> recordDataMap = DocGenDataRetriever.getRecordData(
-            recordId, template.Base_Object_API__c, shellConfig
+            recordId,
+            template.Base_Object_API__c,
+            shellConfig
         );
         shellConfig = null;
 
@@ -1082,9 +1181,11 @@ public with sharing class DocGenService {
 
         // Load pre-decomposed XML parts
         List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
         String xmlPrefix = 'docgen_tmpl_xml_' + activeVersions[0].Id + '_';
         // SYSTEM_MODE is required: this runs in async contexts (signature PDF queueable
@@ -1095,8 +1196,10 @@ public with sharing class DocGenService {
         // DocGen permission sets; reading the pre-decomposed artifacts in system mode is safe.
         /* code-analyzer-suppress ApexFlsViolation */
         List<ContentVersion> xmlCvs = [
-            SELECT Title, VersionData FROM ContentVersion
-            WHERE Title LIKE :(xmlPrefix + '%') WITH SYSTEM_MODE // NOPMD — package-internal pre-decomposed parts
+            SELECT Title, VersionData
+            FROM ContentVersion
+            WHERE Title LIKE :(xmlPrefix + '%')
+            WITH SYSTEM_MODE // NOPMD — package-internal pre-decomposed parts
         ];
 
         String rawDocumentXml = null;
@@ -1174,7 +1277,11 @@ public with sharing class DocGenService {
         }
 
         List<DocGen_Template__c> templates = [
-            SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            SELECT Type__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
         if (templates.isEmpty()) {
             return;
@@ -1226,8 +1333,12 @@ public with sharing class DocGenService {
 
             if (name == relsPath) {
                 relsXml = entryBlob.toString();
-            } else if (templateType == 'Word' && name.startsWith('word/_rels/') &&
-                       (name.contains('header') || name.contains('footer')) && name.endsWith('.rels')) {
+            } else if (
+                templateType == 'Word' &&
+                name.startsWith('word/_rels/') &&
+                (name.contains('header') || name.contains('footer')) &&
+                name.endsWith('.rels')
+            ) {
                 // Header/footer relationship files contain image references
                 String partPrefix = name.substringAfterLast('/').substringBefore('.xml.rels');
                 additionalRelsXmls.put(partPrefix, entryBlob.toString());
@@ -1237,11 +1348,13 @@ public with sharing class DocGenService {
 
             // Identify XML parts that get merged/replaced at generation time
             if (templateType == 'Word') {
-                if (name == 'word/document.xml' ||
+                if (
+                    name == 'word/document.xml' ||
                     name == 'word/styles.xml' ||
                     name == 'word/numbering.xml' ||
                     (name.startsWith('word/header') && name.endsWith('.xml')) ||
-                    (name.startsWith('word/footer') && name.endsWith('.xml'))) {
+                    (name.startsWith('word/footer') && name.endsWith('.xml'))
+                ) {
                     xmlEntries.put(name, entryBlob.toString());
                     if (name != 'word/styles.xml' && name != 'word/numbering.xml') {
                         isDocumentXml = true;
@@ -1301,9 +1414,11 @@ public with sharing class DocGenService {
 
             // Build list of (partPrefix, relsXml) pairs: document gets empty prefix
             List<List<String>> allRelsPairs = new List<List<String>>();
-            if (relsXml != null) { allRelsPairs.add(new List<String>{'', relsXml}); }
+            if (relsXml != null) {
+                allRelsPairs.add(new List<String>{ '', relsXml });
+            }
             for (String partPrefix : additionalRelsXmls.keySet()) {
-                allRelsPairs.add(new List<String>{partPrefix, additionalRelsXmls.get(partPrefix)});
+                allRelsPairs.add(new List<String>{ partPrefix, additionalRelsXmls.get(partPrefix) });
             }
 
             for (List<String> pair : allRelsPairs) {
@@ -1328,7 +1443,12 @@ public with sharing class DocGenService {
                         String relId = extractXmlAttrValue(relTag, 'Id');
                         String target = extractXmlAttrValue(relTag, 'Target');
                         String saveKey = String.isNotBlank(partPrefix) ? partPrefix + '_' + relId : relId;
-                        if (relId != null && target != null && target.startsWith('media/') && !savedKeys.contains(saveKey)) {
+                        if (
+                            relId != null &&
+                            target != null &&
+                            target.startsWith('media/') &&
+                            !savedKeys.contains(saveKey)
+                        ) {
                             String fullPath = mediaPath + target.substringAfter('media/');
                             Blob imgBlob = mediaEntries.get(fullPath);
                             if (imgBlob != null) {
@@ -1403,9 +1523,7 @@ public with sharing class DocGenService {
                 setNumberingXml(htmlMr);
                 applyWatermarkOverride(templateId);
 
-                String templateHtml = DocGenHtmlRenderer.convertToHtml(
-                    combineXmlWithHeadersFooters(htmlMr), pdfImages
-                );
+                String templateHtml = DocGenHtmlRenderer.convertToHtml(combineXmlWithHeadersFooters(htmlMr), pdfImages);
                 htmlMr = null;
 
                 // Save pre-baked HTML as ContentVersion
@@ -1425,7 +1543,6 @@ public with sharing class DocGenService {
             SObjectAccessDecision cvDecision = Security.stripInaccessible(AccessType.CREATABLE, newCvs);
             insert cvDecision.getRecords();
         }
-
     }
 
     /**
@@ -1438,14 +1555,17 @@ public with sharing class DocGenService {
 
         // 1. Template-embedded images: committed CVs linked to active version
         List<DocGen_Template_Version__c> activeVersions = [
-            SELECT Id FROM DocGen_Template_Version__c
-            WHERE Template__c = :templateId AND Is_Active__c = true
-            WITH SYSTEM_MODE LIMIT 1
+            SELECT Id
+            FROM DocGen_Template_Version__c
+            WHERE Template__c = :templateId AND Is_Active__c = TRUE
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
         if (!activeVersions.isEmpty()) {
             String prefix = 'docgen_tmpl_img_' + activeVersions[0].Id + '_';
             List<ContentVersion> tmplCvs = [
-                SELECT Id, Title FROM ContentVersion
+                SELECT Id, Title
+                FROM ContentVersion
                 WHERE Title LIKE :(prefix + '%')
                 WITH USER_MODE
             ];
@@ -1461,7 +1581,9 @@ public with sharing class DocGenService {
             // Strip domain if absolute — Blob.toPdf() only resolves relative paths
             if (url.startsWithIgnoreCase('http')) {
                 Integer pathStart = url.indexOf('/sfc/');
-                if (pathStart == -1) { pathStart = url.indexOf('/servlet/'); }
+                if (pathStart == -1) {
+                    pathStart = url.indexOf('/servlet/');
+                }
                 if (pathStart != -1) {
                     url = url.substring(pathStart);
                 }
@@ -1479,7 +1601,9 @@ public with sharing class DocGenService {
      */
     private static Blob renderPdf(MergeResult mr, Id templateId, Id recordId) {
         if (Test.isRunningTest()) {
-            lastRenderedHtml = (mr != null && mr.templateType == 'HTML' && String.isNotBlank(mr.documentXml))
+            lastRenderedHtml = (mr != null &&
+                mr.templateType == 'HTML' &&
+                String.isNotBlank(mr.documentXml))
                 ? mr.documentXml
                 : '<html><body><p>Test PDF</p></body></html>';
             return Blob.toPdf(lastRenderedHtml);
@@ -1556,7 +1680,13 @@ public with sharing class DocGenService {
             if (url != null && url.contains('/version/download/')) {
                 String cvId = url.substringAfterLast('/');
                 try {
-                    ContentVersion cv = [SELECT VersionData, FileExtension FROM ContentVersion WHERE Id = :cvId WITH USER_MODE LIMIT 1]; // NOPMD ApexCRUDViolation - ContentVersion read access required for PDF image preview; gated by template ownership
+                    ContentVersion cv = [
+                        SELECT VersionData, FileExtension
+                        FROM ContentVersion
+                        WHERE Id = :cvId
+                        WITH USER_MODE
+                        LIMIT 1
+                    ]; // NOPMD ApexCRUDViolation - ContentVersion read access required for PDF image preview; gated by template ownership
                     String ext = cv.FileExtension != null ? cv.FileExtension.toLowerCase() : 'png';
                     String mime = (ext == 'jpg' || ext == 'jpeg') ? 'image/jpeg' : 'image/png';
                     previewImages.put(relId, 'data:' + mime + ';base64,' + EncodingUtil.base64Encode(cv.VersionData));
@@ -1581,7 +1711,7 @@ public with sharing class DocGenService {
      * @param recordId The source record ID to merge data from
      * @return Map with keys: blob (PDF Blob), title (String)
      */
-    public static Map<String, Object> generatePdfBlob(Id templateId, Id recordId) {
+    global static Map<String, Object> generatePdfBlob(Id templateId, Id recordId) {
         // Force PDF output format so we get the heap-efficient path
         // (pre-decomposed XML, relative image URLs, no blob loading)
         MergeResult mr = mergeTemplate(templateId, recordId, null, 'PDF');
@@ -1592,10 +1722,7 @@ public with sharing class DocGenService {
 
         Blob pdfBlob = renderPdf(mr, templateId, recordId);
 
-        return new Map<String, Object>{
-            'blob' => pdfBlob,
-            'title' => mr.docTitle
-        };
+        return new Map<String, Object>{ 'blob' => pdfBlob, 'title' => mr.docTitle };
     }
 
     /**
@@ -1607,7 +1734,11 @@ public with sharing class DocGenService {
      * @param imageMap Map of relId to image URL for PDF rendering
      * @return Map with keys: html, title, outputFormat, templateType
      */
-    public static Map<String, Object> processDocumentAsHtmlWithImageMap(Id templateId, Id recordId, Map<String, String> imageMap) {
+    public static Map<String, Object> processDocumentAsHtmlWithImageMap(
+        Id templateId,
+        Id recordId,
+        Map<String, String> imageMap
+    ) {
         MergeResult mr = mergeTemplate(templateId, recordId);
 
         if (mr.templateType == 'PowerPoint') {
@@ -1642,7 +1773,7 @@ public with sharing class DocGenService {
      * @param recordId The source record ID to merge data from
      * @return ContentDocumentId of the saved file
      */
-    public static Id generateDocument(Id templateId, Id recordId) {
+    global static Id generateDocument(Id templateId, Id recordId) {
         return generateDocument(templateId, recordId, null);
     }
 
@@ -1651,7 +1782,7 @@ public with sharing class DocGenService {
      * outputFormatOverride: 'PDF', 'Word', or 'PowerPoint'. Null = use template's Output_Format__c.
      * Throws DocGenException if Lock_Output_Format__c is true on the template, or if PowerPoint→PDF.
      */
-    public static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride) {
+    global static Id generateDocument(Id templateId, Id recordId, String outputFormatOverride) {
         validateOutputFormatOverride(templateId, outputFormatOverride);
         MergeResult mr = mergeTemplate(templateId, recordId, null, outputFormatOverride);
 
@@ -1674,7 +1805,7 @@ public with sharing class DocGenService {
      * @param preloadedRecordData Pre-fetched record data map to use instead of querying
      * @return ContentDocumentId of the saved file
      */
-    public static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
+    global static Id generateDocumentFromData(Id templateId, Id recordId, Map<String, Object> preloadedRecordData) {
         preloadedRecordDataOverride = preloadedRecordData;
         return generateDocument(templateId, recordId);
     }
@@ -1694,9 +1825,11 @@ public with sharing class DocGenService {
      * @param dataMap The pre-built data map to merge — must not be null
      * @return Map with keys: blob (PDF Blob), title (String)
      */
-    public static Map<String, Object> generatePdfBlobFromData(Id templateId, Map<String, Object> dataMap) {
+    global static Map<String, Object> generatePdfBlobFromData(Id templateId, Map<String, Object> dataMap) {
         if (dataMap == null) {
-            throw new DocGenException('dataMap cannot be null. Use generatePdfBlob(templateId, recordId) for SOQL-based merge.');
+            throw new DocGenException(
+                'dataMap cannot be null. Use generatePdfBlob(templateId, recordId) for SOQL-based merge.'
+            );
         }
         preloadedRecordDataOverride = dataMap;
         // recordId is null — safe because the override short-circuits SOQL data retrieval and
@@ -1717,12 +1850,19 @@ public with sharing class DocGenService {
      * @param outputFormatOverride 'PDF', 'Word', or 'PowerPoint'; null = template default
      * @return ContentDocumentId of the saved file
      */
-    public static Id generateAndSaveFromData(Id templateId, Id attachmentRecordId, Map<String, Object> dataMap, String outputFormatOverride) {
+    global static Id generateAndSaveFromData(
+        Id templateId,
+        Id attachmentRecordId,
+        Map<String, Object> dataMap,
+        String outputFormatOverride
+    ) {
         if (dataMap == null) {
             throw new DocGenException('dataMap cannot be null.');
         }
         if (attachmentRecordId == null) {
-            throw new DocGenException('attachmentRecordId is required for save-to-record. Use generatePdfBlobFromData if you only want the blob.');
+            throw new DocGenException(
+                'attachmentRecordId is required for save-to-record. Use generatePdfBlobFromData if you only want the blob.'
+            );
         }
         preloadedRecordDataOverride = dataMap;
         return generateDocument(templateId, attachmentRecordId, outputFormatOverride);
@@ -1746,14 +1886,18 @@ public with sharing class DocGenService {
     }
 
     private static String combineXmlWithHeadersFooters(MergeResult mr) {
-        if (mr.processedXmlEntries == null) { return mr.documentXml; }
+        if (mr.processedXmlEntries == null) {
+            return mr.documentXml;
+        }
 
         String headers = '';
         String footers = '';
         List<String> keys = new List<String>(mr.processedXmlEntries.keySet());
         keys.sort();
         for (String key : keys) {
-            if (key == 'word/styles.xml') { continue; }
+            if (key == 'word/styles.xml') {
+                continue;
+            }
             if (key.startsWith('word/header') || key.startsWith('word/footer')) {
                 String partPrefix = key.substringAfterLast('/').substringBefore('.xml');
                 String partXml = namespaceImageRelIds(mr.processedXmlEntries.get(key), partPrefix);
@@ -1802,10 +1946,14 @@ public with sharing class DocGenService {
         Integer cursor = 0;
         while (cursor < result.length()) {
             Integer markerStart = result.indexOf(attrMarker, cursor);
-            if (markerStart == -1) { break; }
+            if (markerStart == -1) {
+                break;
+            }
             Integer valStart = markerStart + attrMarker.length();
             Integer valEnd = result.indexOf('"', valStart);
-            if (valEnd == -1) { break; }
+            if (valEnd == -1) {
+                break;
+            }
 
             Boolean inScope = true;
             if (scopeTag != null) {
@@ -1906,8 +2054,12 @@ public with sharing class DocGenService {
             for (Integer i = 0; i < contents.size(); i++) {
                 Integer segStart = flatOffsets.get(i);
                 Integer segEnd = segStart + contents.get(i).length();
-                if (openBrace >= segStart && openBrace < segEnd) { openSeg = i; }
-                if (closeBrace >= segStart && closeBrace < segEnd) { closeSeg = i; }
+                if (openBrace >= segStart && openBrace < segEnd) {
+                    openSeg = i;
+                }
+                if (closeBrace >= segStart && closeBrace < segEnd) {
+                    closeSeg = i;
+                }
             }
 
             if (openSeg != -1 && closeSeg != -1 && openSeg != closeSeg) {
@@ -1942,7 +2094,10 @@ public with sharing class DocGenService {
         for (Integer i = contents.size() - 1; i >= 0; i--) {
             String original = result.substring(contentStarts.get(i), contentEnds.get(i));
             if (!contents.get(i).equals(original)) {
-                result = result.substring(0, contentStarts.get(i)) + contents.get(i) + result.substring(contentEnds.get(i));
+                result =
+                    result.substring(0, contentStarts.get(i)) +
+                    contents.get(i) +
+                    result.substring(contentEnds.get(i));
             }
         }
 
@@ -1953,24 +2108,25 @@ public with sharing class DocGenService {
         String output = '';
         Integer len = xml.length();
         Integer cursor = 0;
-        
+
         while (cursor < len) {
             Integer nextTag = xml.indexOf('{', cursor);
             if (nextTag == -1) {
                 output += xml.substring(cursor);
-                break; 
+                break;
             }
             output += xml.substring(cursor, nextTag);
             cursor = nextTag;
-            
+
             Integer tagClose = xml.indexOf('}', cursor);
             if (tagClose == -1) {
                 throw new DocGenException(
-                    'Malformed merge tag: missing closing "}" near position ' + cursor +
-                    '. Check for an unclosed tag in the template.'
+                    'Malformed merge tag: missing closing "}" near position ' +
+                        cursor +
+                        '. Check for an unclosed tag in the template.'
                 );
             }
-            
+
             String rawTag = xml.substring(cursor + 1, tagClose);
             String tagContent = rawTag.trim();
 
@@ -2010,7 +2166,7 @@ public with sharing class DocGenService {
                     Integer contentStart = tagClose + 1;
                     Integer contentEnd = sectionEnd;
                     String innerXml = xml.substring(contentStart, contentEnd);
-                    
+
                     // Smart container expansion: repeat the nearest parent container when possible.
                     // Candidate containers:
                     // 1) Table row (<w:tr>...</w:tr>)
@@ -2036,8 +2192,14 @@ public with sharing class DocGenService {
                         Integer paragraphStart = lastIndexOfTagStart(xml, 'w:p', cursor);
                         if (paragraphStart != -1 && paragraphStart <= numPropsStart) {
                             Integer paragraphEndStart = xml.indexOf('</w:p>', paragraphStart);
-                            Boolean paragraphClosedBeforeCursor = xml.substring(paragraphStart, cursor).contains('</w:p>');
-                            if (!paragraphClosedBeforeCursor && paragraphEndStart != -1 && paragraphEndStart > closeTagEnd && numPropsStart < paragraphEndStart) {
+                            Boolean paragraphClosedBeforeCursor = xml.substring(paragraphStart, cursor)
+                                .contains('</w:p>');
+                            if (
+                                !paragraphClosedBeforeCursor &&
+                                paragraphEndStart != -1 &&
+                                paragraphEndStart > closeTagEnd &&
+                                numPropsStart < paragraphEndStart
+                            ) {
                                 Integer paragraphContainerEnd = paragraphEndStart + 6; // </w:p>
                                 // Prefer the closest valid parent.
                                 if (chosenContainerStart == -1 || paragraphStart > chosenContainerStart) {
@@ -2096,9 +2258,16 @@ public with sharing class DocGenService {
                             Integer outputLength = output.length();
                             if (overlap > outputLength) {
                                 throw new DocGenException(
-                                    'Template loop parsing error for "{#' + key + '}": internal overlap (' + overlap +
-                                    ') exceeds output length (' + outputLength + '). ' +
-                                    'This usually indicates malformed or mismatched loop tags (missing "{/' + key + '}").'
+                                    'Template loop parsing error for "{#' +
+                                        key +
+                                        '}": internal overlap (' +
+                                        overlap +
+                                        ') exceeds output length (' +
+                                        outputLength +
+                                        '). ' +
+                                        'This usually indicates malformed or mismatched loop tags (missing "{/' +
+                                        key +
+                                        '}").'
                                 );
                             }
                             output = output.substring(0, outputLength - overlap);
@@ -2134,9 +2303,9 @@ public with sharing class DocGenService {
                     Object val = resolveValue(data, key);
                     String sectionResult = '';
                     Boolean isTruthy = false;
-                    if (val instanceof Boolean && (Boolean)val) {
-                         isTruthy = true;
-                         sectionResult = processXml(trueBranch, data);
+                    if (val instanceof Boolean && (Boolean) val) {
+                        isTruthy = true;
+                        sectionResult = processXml(trueBranch, data);
                     } else if (val instanceof Map<String, Object>) {
                         isTruthy = true;
                         Map<String, Object> mapVal = (Map<String, Object>) val;
@@ -2148,7 +2317,12 @@ public with sharing class DocGenService {
                                 for (Object item : records) {
                                     if (item instanceof Map<String, Object>) {
                                         Object idVal = ((Map<String, Object>) item).get('Id');
-                                        if (idVal != null) { try { loopIds.add(Id.valueOf(String.valueOf(idVal))); } catch (Exception e) {} }
+                                        if (idVal != null) {
+                                            try {
+                                                loopIds.add(Id.valueOf(String.valueOf(idVal)));
+                                            } catch (Exception e) {
+                                            }
+                                        }
                                     }
                                 }
                                 prefetchImagesForIds(loopIds);
@@ -2159,35 +2333,48 @@ public with sharing class DocGenService {
                                     sectionResult += processXml(trueBranch, (Map<String, Object>) item);
                                 }
                                 iterCount++;
-                                if (Math.mod(iterCount, HEAP_CHECK_EVERY_N_ITERS) == 0) { checkHeapPressure(key); }
+                                if (Math.mod(iterCount, HEAP_CHECK_EVERY_N_ITERS) == 0) {
+                                    checkHeapPressure(key);
+                                }
                             }
                         } else {
-                             sectionResult = processXml(trueBranch, mapVal);
+                            sectionResult = processXml(trueBranch, mapVal);
                         }
                     } else if (val instanceof List<Object>) {
-                         List<Object> listVal = (List<Object>) val;
-                         if (!listVal.isEmpty()) { isTruthy = true; }
-                         // Pre-fetch attached images for all iteration records if the loop body uses {%Image:N}
-                         if (loopBodyHasImageTag(trueBranch) && !listVal.isEmpty()) {
-                             Set<Id> loopIds = new Set<Id>();
-                             for (Object item : listVal) {
-                                 if (item instanceof Map<String, Object>) {
-                                     Object idVal = ((Map<String, Object>) item).get('Id');
-                                     if (idVal != null) { try { loopIds.add(Id.valueOf(String.valueOf(idVal))); } catch (Exception e) {} }
-                                 }
-                             }
-                             prefetchImagesForIds(loopIds);
-                         }
-                         Integer iterCount = 0;
-                         for (Object item : listVal) {
-                              if (item instanceof Map<String, Object>) { sectionResult += processXml(trueBranch, (Map<String, Object>) item); }
-                              iterCount++;
-                              if (Math.mod(iterCount, HEAP_CHECK_EVERY_N_ITERS) == 0) { checkHeapPressure(key); }
-                         }
+                        List<Object> listVal = (List<Object>) val;
+                        if (!listVal.isEmpty()) {
+                            isTruthy = true;
+                        }
+                        // Pre-fetch attached images for all iteration records if the loop body uses {%Image:N}
+                        if (loopBodyHasImageTag(trueBranch) && !listVal.isEmpty()) {
+                            Set<Id> loopIds = new Set<Id>();
+                            for (Object item : listVal) {
+                                if (item instanceof Map<String, Object>) {
+                                    Object idVal = ((Map<String, Object>) item).get('Id');
+                                    if (idVal != null) {
+                                        try {
+                                            loopIds.add(Id.valueOf(String.valueOf(idVal)));
+                                        } catch (Exception e) {
+                                        }
+                                    }
+                                }
+                            }
+                            prefetchImagesForIds(loopIds);
+                        }
+                        Integer iterCount = 0;
+                        for (Object item : listVal) {
+                            if (item instanceof Map<String, Object>) {
+                                sectionResult += processXml(trueBranch, (Map<String, Object>) item);
+                            }
+                            iterCount++;
+                            if (Math.mod(iterCount, HEAP_CHECK_EVERY_N_ITERS) == 0) {
+                                checkHeapPressure(key);
+                            }
+                        }
                     } else if (val != null && !(val instanceof Boolean)) {
-                         // Non-null, non-boolean, non-list, non-map value (e.g., non-blank string)
-                         isTruthy = true;
-                         sectionResult = processXml(trueBranch, data);
+                        // Non-null, non-boolean, non-list, non-map value (e.g., non-blank string)
+                        isTruthy = true;
+                        sectionResult = processXml(trueBranch, data);
                     }
 
                     if (!isTruthy && elseBranch != null) {
@@ -2195,7 +2382,6 @@ public with sharing class DocGenService {
                     }
                     output += sectionResult;
                 }
-                
             } else if (tagContent.startsWith('^')) {
                 // Inverse conditional: {^BoolField}content{/BoolField}
                 // Shows content when field is false, null, blank, or empty list
@@ -2221,10 +2407,11 @@ public with sharing class DocGenService {
 
                     String sectionResult = '';
                     Object val = resolveValue(data, key);
-                    Boolean isFalsy = (val == null) ||
-                        (val instanceof Boolean && !(Boolean)val) ||
-                        (val instanceof String && String.isBlank((String)val)) ||
-                        (val instanceof List<Object> && ((List<Object>)val).isEmpty());
+                    Boolean isFalsy =
+                        (val == null) ||
+                        (val instanceof Boolean && !(Boolean) val) ||
+                        (val instanceof String && String.isBlank((String) val)) ||
+                        (val instanceof List<Object> && ((List<Object>) val).isEmpty());
                     if (isFalsy) {
                         sectionResult = processXml(inverseTrueBranch, data);
                     } else if (inverseElseBranch != null) {
@@ -2233,7 +2420,6 @@ public with sharing class DocGenService {
                     output += sectionResult;
                     cursor = (closeTagEnd != -1 ? closeTagEnd + 1 : sectionEnd);
                 }
-
             } else if (tagContent.startsWith('/')) {
                 output += '{' + rawTag + '}';
                 cursor = tagClose + 1;
@@ -2248,7 +2434,9 @@ public with sharing class DocGenService {
 
                 // Positional record-attached-image tag: {%Image:N} or {%Image:N:SIZE}
                 // Renders the Nth oldest image (PNG/JPG/GIF/BMP/TIFF/SVG) attached to the current record.
-                String imageTagHead = imageTagSpec.contains(':') ? imageTagSpec.substringBefore(':').trim() : imageTagSpec.trim();
+                String imageTagHead = imageTagSpec.contains(':')
+                    ? imageTagSpec.substringBefore(':').trim()
+                    : imageTagSpec.trim();
                 if ('Image'.equalsIgnoreCase(imageTagHead)) {
                     ImageRenderSpec indexedSpec = resolveImageByIndexTag(imageTagSpec, data);
                     if (indexedSpec != null && String.isNotBlank(indexedSpec.fieldValue)) {
@@ -2323,16 +2511,20 @@ public with sharing class DocGenService {
                 if (val != null) {
                     String strVal;
                     // Apply formatting if a format specifier was provided
-                    if (dateFormat != null && dateFormat.toLowerCase().trim().startsWith('date') &&
-                        (val instanceof DateTime || val instanceof Date)) {
+                    if (
+                        dateFormat != null &&
+                        dateFormat.toLowerCase().trim().startsWith('date') &&
+                        (val instanceof DateTime || val instanceof Date)
+                    ) {
                         // {Field:date} → user's locale default | {Field:date:locale} → explicit locale
                         String dateTrimmed = dateFormat.trim();
                         String dateLocale = dateTrimmed.contains(':')
                             ? dateTrimmed.substring(dateTrimmed.indexOf(':') + 1).trim()
                             : UserInfo.getLocale();
                         String pattern = getLocaleDatePattern(dateLocale);
-                        DateTime dt = val instanceof DateTime ? (DateTime) val :
-                            DateTime.newInstance((Date) val, Time.newInstance(0, 0, 0, 0));
+                        DateTime dt = val instanceof DateTime
+                            ? (DateTime) val
+                            : DateTime.newInstance((Date) val, Time.newInstance(0, 0, 0, 0));
                         strVal = dt.format(pattern);
                     } else if (dateFormat != null && val instanceof DateTime) {
                         strVal = ((DateTime) val).format(dateFormat);
@@ -2342,8 +2534,9 @@ public with sharing class DocGenService {
                     } else if (dateFormat != null && dateFormat.toLowerCase().trim() == 'checkbox') {
                         // {IsActive:checkbox} → [X] or [ ]
                         // Uses ASCII representation for universal font compatibility in PDF/DOCX
-                        Boolean checked = val instanceof Boolean ? (Boolean) val :
-                            String.valueOf(val).equalsIgnoreCase('true');
+                        Boolean checked = val instanceof Boolean
+                            ? (Boolean) val
+                            : String.valueOf(val).equalsIgnoreCase('true');
                         strVal = checked ? '[X]' : '[ ]';
                     } else if (dateFormat != null && isNumericFormat(dateFormat)) {
                         strVal = formatNumber(val, dateFormat);
@@ -2352,20 +2545,27 @@ public with sharing class DocGenService {
                     }
                     // Rich text HTML — convert to DOCX XML preserving formatting, images, and paragraphs
                     // PowerPoint: strip HTML tags and output plain text (Word XML corrupts PPTX)
-                    if (strVal.contains('<') && strVal.contains('>') &&
-                        (strVal.containsIgnoreCase('<p') || strVal.containsIgnoreCase('<div') ||
-                         strVal.containsIgnoreCase('<span') || strVal.containsIgnoreCase('<br') ||
-                         strVal.containsIgnoreCase('<img') || strVal.containsIgnoreCase('<b>') ||
-                         strVal.containsIgnoreCase('<i>') || strVal.containsIgnoreCase('<u>') ||
-                         strVal.containsIgnoreCase('<strong') || strVal.containsIgnoreCase('<em'))) {
+                    if (
+                        strVal.contains('<') &&
+                        strVal.contains('>') &&
+                        (strVal.containsIgnoreCase('<p') ||
+                        strVal.containsIgnoreCase('<div') ||
+                        strVal.containsIgnoreCase('<span') ||
+                        strVal.containsIgnoreCase('<br') ||
+                        strVal.containsIgnoreCase('<img') ||
+                        strVal.containsIgnoreCase('<b>') ||
+                        strVal.containsIgnoreCase('<i>') ||
+                        strVal.containsIgnoreCase('<u>') ||
+                        strVal.containsIgnoreCase('<strong') ||
+                        strVal.containsIgnoreCase('<em'))
+                    ) {
                         if (currentTemplateType == 'PowerPoint') {
                             // Strip HTML tags for plain text in PPTX
                             output += strVal.replaceAll('<[^>]+>', ' ').replaceAll('\\s+', ' ').trim().escapeXml();
                         } else {
                             output += convertRichTextToDocxXml(strVal);
                         }
-                    }
-                    else {
+                    } else {
                         if (currentTemplateType == 'PowerPoint') {
                             output += strVal.escapeXml();
                         } else {
@@ -2381,7 +2581,7 @@ public with sharing class DocGenService {
         }
         return output;
     }
-    
+
     private static Integer findBalancedEnd(String xml, Integer startSearch, String key) {
         Integer depth = 1;
         Integer cursor = startSearch;
@@ -2401,8 +2601,11 @@ public with sharing class DocGenService {
                 // IF openers carry an expression ("#IF Field > 0"), but the
                 // close tag is bare "/IF". Match openers by prefix; the
                 // closer remains exact-equals.
-                isOpener = content.equals('#IF') || content.startsWith('#IF ')
-                        || content.equals('^IF') || content.startsWith('^IF ');
+                isOpener =
+                    content.equals('#IF') ||
+                    content.startsWith('#IF ') ||
+                    content.equals('^IF') ||
+                    content.startsWith('^IF ');
                 isCloser = content.equals('/IF');
             } else {
                 isOpener = content.equals('#' + key) || content.equals('^' + key);
@@ -2410,8 +2613,7 @@ public with sharing class DocGenService {
             }
             if (isOpener) {
                 depth++;
-            }
-            else if (isCloser) {
+            } else if (isCloser) {
                 depth--;
                 if (depth == 0) {
                     return nextStart;
@@ -2433,7 +2635,7 @@ public with sharing class DocGenService {
     // Quoted-string contents are opaque (a literal "AND" inside 'big AND small'
     // is preserved). Single-comparison expressions go through unchanged.
     private class IfTok {
-        String type;  // 'AND' | 'OR' | 'NOT' | 'LPAREN' | 'RPAREN' | 'TERM'
+        String type; // 'AND' | 'OR' | 'NOT' | 'LPAREN' | 'RPAREN' | 'TERM'
         String text;
     }
 
@@ -2456,10 +2658,14 @@ public with sharing class DocGenService {
                 .replace('&quot;', '"')
                 .replace('&amp;', '&');
         }
-        if (String.isBlank(expression)) { return false; }
+        if (String.isBlank(expression)) {
+            return false;
+        }
 
         List<IfTok> toks = tokenizeIfExpr(expression);
-        if (toks.isEmpty()) { return false; }
+        if (toks.isEmpty()) {
+            return false;
+        }
 
         IfParseState st = new IfParseState();
         st.toks = toks;
@@ -2497,12 +2703,16 @@ public with sharing class DocGenService {
     }
 
     private static Boolean parseIfPrimary(IfParseState st) {
-        if (st.pos >= st.toks.size()) { return false; }
+        if (st.pos >= st.toks.size()) {
+            return false;
+        }
         IfTok t = st.toks[st.pos];
         if (t.type == 'LPAREN') {
             st.pos++;
             Boolean result = parseIfOr(st);
-            if (st.pos < st.toks.size() && st.toks[st.pos].type == 'RPAREN') { st.pos++; }
+            if (st.pos < st.toks.size() && st.toks[st.pos].type == 'RPAREN') {
+                st.pos++;
+            }
             return result;
         }
         if (t.type == 'TERM') {
@@ -2528,7 +2738,8 @@ public with sharing class DocGenService {
             String c = norm.substring(i, i + 1);
             if (!inSingle && !inDouble) {
                 if (c == '(' || c == ')') {
-                    addIfTerm(out, cur); cur = '';
+                    addIfTerm(out, cur);
+                    cur = '';
                     IfTok pt = new IfTok();
                     pt.type = (c == '(') ? 'LPAREN' : 'RPAREN';
                     pt.text = c;
@@ -2537,31 +2748,43 @@ public with sharing class DocGenService {
                     continue;
                 }
                 if (c == '&' && i + 1 < len && norm.substring(i + 1, i + 2) == '&') {
-                    addIfTerm(out, cur); cur = '';
-                    IfTok at = new IfTok(); at.type = 'AND'; at.text = '&&';
+                    addIfTerm(out, cur);
+                    cur = '';
+                    IfTok at = new IfTok();
+                    at.type = 'AND';
+                    at.text = '&&';
                     out.add(at);
                     i += 2;
                     continue;
                 }
                 if (c == '|' && i + 1 < len && norm.substring(i + 1, i + 2) == '|') {
-                    addIfTerm(out, cur); cur = '';
-                    IfTok ot = new IfTok(); ot.type = 'OR'; ot.text = '||';
+                    addIfTerm(out, cur);
+                    cur = '';
+                    IfTok ot = new IfTok();
+                    ot.type = 'OR';
+                    ot.text = '||';
                     out.add(ot);
                     i += 2;
                     continue;
                 }
                 // Standalone ! (NOT) — only when not part of !=
-                if (c == '!' && (i + 1 >= len || norm.substring(i + 1, i + 2) != '=')
-                        && cur.trim().length() == 0) {
-                    addIfTerm(out, cur); cur = '';
-                    IfTok nt = new IfTok(); nt.type = 'NOT'; nt.text = '!';
+                if (c == '!' && (i + 1 >= len || norm.substring(i + 1, i + 2) != '=') && cur.trim().length() == 0) {
+                    addIfTerm(out, cur);
+                    cur = '';
+                    IfTok nt = new IfTok();
+                    nt.type = 'NOT';
+                    nt.text = '!';
                     out.add(nt);
                     i++;
                     continue;
                 }
             }
-            if (c == '\'' && !inDouble) { inSingle = !inSingle; }
-            if (c == '"' && !inSingle) { inDouble = !inDouble; }
+            if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+            }
+            if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+            }
             cur += c;
             i++;
         }
@@ -2570,7 +2793,9 @@ public with sharing class DocGenService {
     }
 
     private static void addIfTerm(List<IfTok> out, String s) {
-        if (String.isBlank(s)) { return; }
+        if (String.isBlank(s)) {
+            return;
+        }
         IfTok t = new IfTok();
         t.type = 'TERM';
         t.text = s.trim();
@@ -2578,7 +2803,9 @@ public with sharing class DocGenService {
     }
 
     private static String normalizeBoolOps(String expr) {
-        if (expr == null) { return null; }
+        if (expr == null) {
+            return null;
+        }
         String r = '';
         Integer i = 0;
         Integer len = expr.length();
@@ -2590,22 +2817,29 @@ public with sharing class DocGenService {
                 String upper = expr.substring(i).toUpperCase();
                 Boolean leftOk = (i == 0) || !isWordChar(expr.substring(i - 1, i));
                 if (leftOk) {
-                    if (upper.startsWith('AND')
-                            && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
-                        r += '&&'; i += 3; continue;
+                    if (upper.startsWith('AND') && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
+                        r += '&&';
+                        i += 3;
+                        continue;
                     }
-                    if (upper.startsWith('OR')
-                            && (i + 2 == len || !isWordChar(expr.substring(i + 2, i + 3)))) {
-                        r += '||'; i += 2; continue;
+                    if (upper.startsWith('OR') && (i + 2 == len || !isWordChar(expr.substring(i + 2, i + 3)))) {
+                        r += '||';
+                        i += 2;
+                        continue;
                     }
-                    if (upper.startsWith('NOT')
-                            && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
-                        r += '!'; i += 3; continue;
+                    if (upper.startsWith('NOT') && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
+                        r += '!';
+                        i += 3;
+                        continue;
                     }
                 }
             }
-            if (c == '\'' && !inDouble) { inSingle = !inSingle; }
-            if (c == '"' && !inSingle) { inDouble = !inDouble; }
+            if (c == '\'' && !inDouble) {
+                inSingle = !inSingle;
+            }
+            if (c == '"' && !inSingle) {
+                inDouble = !inDouble;
+            }
             r += c;
             i++;
         }
@@ -2613,8 +2847,12 @@ public with sharing class DocGenService {
     }
 
     private static Boolean isWordChar(String c) {
-        if (String.isEmpty(c)) { return false; }
-        if (c == '_') { return true; }
+        if (String.isEmpty(c)) {
+            return false;
+        }
+        if (c == '_') {
+            return true;
+        }
         return c.isAlphanumeric();
     }
 
@@ -2622,7 +2860,7 @@ public with sharing class DocGenService {
         // Parse: "Field op Value" — find the operator. Two-char operators
         // must come before their single-char prefixes (==, >=, <= before =,
         // >, <) or indexOf would match the prefix inside the longer form.
-        String[] operators = new String[]{ '!=', '==', '>=', '<=', '=', '>', '<' };
+        String[] operators = new List<String>{ '!=', '==', '>=', '<=', '=', '>', '<' };
         String op = null;
         String fieldPart = null;
         String valuePart = null;
@@ -2643,9 +2881,15 @@ public with sharing class DocGenService {
             // false unconditionally, so {#IF BooleanField} and {#IF Rel}
             // never rendered their bodies.
             Object v = resolveValue(data, expression.trim());
-            if (v == null) { return false; }
-            if (v instanceof Boolean) { return (Boolean) v; }
-            if (v instanceof List<Object>) { return !((List<Object>) v).isEmpty(); }
+            if (v == null) {
+                return false;
+            }
+            if (v instanceof Boolean) {
+                return (Boolean) v;
+            }
+            if (v instanceof List<Object>) {
+                return !((List<Object>) v).isEmpty();
+            }
             if (v instanceof Map<String, Object>) {
                 Map<String, Object> mv = (Map<String, Object>) v;
                 // {records:[…], totalSize:N} wrapper — truthy when non-empty
@@ -2655,9 +2899,15 @@ public with sharing class DocGenService {
                 return true;
             }
             String s = String.valueOf(v);
-            if (String.isBlank(s)) { return false; }
-            if (s.equalsIgnoreCase('false')) { return false; }
-            if (s == '0') { return false; }
+            if (String.isBlank(s)) {
+                return false;
+            }
+            if (s.equalsIgnoreCase('false')) {
+                return false;
+            }
+            if (s == '0') {
+                return false;
+            }
             return true;
         }
 
@@ -2674,23 +2924,47 @@ public with sharing class DocGenService {
         try {
             Decimal fieldNum = Decimal.valueOf(fieldStr);
             Decimal valueNum = Decimal.valueOf(valuePart);
-            if (op == '=' || op == '==') { return fieldNum == valueNum; }
-            if (op == '!=') { return fieldNum != valueNum; }
-            if (op == '>') { return fieldNum > valueNum; }
-            if (op == '<') { return fieldNum < valueNum; }
-            if (op == '>=') { return fieldNum >= valueNum; }
-            if (op == '<=') { return fieldNum <= valueNum; }
+            if (op == '=' || op == '==') {
+                return fieldNum == valueNum;
+            }
+            if (op == '!=') {
+                return fieldNum != valueNum;
+            }
+            if (op == '>') {
+                return fieldNum > valueNum;
+            }
+            if (op == '<') {
+                return fieldNum < valueNum;
+            }
+            if (op == '>=') {
+                return fieldNum >= valueNum;
+            }
+            if (op == '<=') {
+                return fieldNum <= valueNum;
+            }
         } catch (Exception e) {
             // Not numeric — fall through to string comparison
         }
 
         // String comparison
-        if (op == '=' || op == '==') { return fieldStr == valuePart; }
-        if (op == '!=') { return fieldStr != valuePart; }
-        if (op == '>') { return fieldStr > valuePart; }
-        if (op == '<') { return fieldStr < valuePart; }
-        if (op == '>=') { return fieldStr >= valuePart; }
-        if (op == '<=') { return fieldStr <= valuePart; }
+        if (op == '=' || op == '==') {
+            return fieldStr == valuePart;
+        }
+        if (op == '!=') {
+            return fieldStr != valuePart;
+        }
+        if (op == '>') {
+            return fieldStr > valuePart;
+        }
+        if (op == '<') {
+            return fieldStr < valuePart;
+        }
+        if (op == '>=') {
+            return fieldStr >= valuePart;
+        }
+        if (op == '<=') {
+            return fieldStr <= valuePart;
+        }
 
         return false;
     }
@@ -2721,7 +2995,12 @@ public with sharing class DocGenService {
         List<String> lines = normalized.split('\n');
         String result = '';
         String rPrXml = String.isNotBlank(rPr) ? rPr : '';
-        String lineBreakXml = '</w:t></w:r><w:r>' + rPrXml + '<w:br/></w:r><w:r>' + rPrXml + '<w:t xml:space="preserve">';
+        String lineBreakXml =
+            '</w:t></w:r><w:r>' +
+            rPrXml +
+            '<w:br/></w:r><w:r>' +
+            rPrXml +
+            '<w:t xml:space="preserve">';
         for (Integer i = 0; i < lines.size(); i++) {
             if (i > 0) {
                 result += lineBreakXml;
@@ -2743,7 +3022,10 @@ public with sharing class DocGenService {
         // Find the last <w:r> or <w:r > opening (start of current run)
         Integer lastRunOpen = output.lastIndexOf('<w:r>');
         Integer lastRunOpenAttr = output.lastIndexOf('<w:r ');
-        Integer runStart = Math.max(lastRunOpen != null ? lastRunOpen : -1, lastRunOpenAttr != null ? lastRunOpenAttr : -1);
+        Integer runStart = Math.max(
+            lastRunOpen != null ? lastRunOpen : -1,
+            lastRunOpenAttr != null ? lastRunOpenAttr : -1
+        );
         if (runStart < 0) {
             return '';
         }
@@ -2800,12 +3082,12 @@ public with sharing class DocGenService {
                     }
                 }
             } else if (current instanceof SObject) {
-                 SObject sobj = (SObject) current;
-                 try {
-                     current = sobj.get(part);
-                 } catch(Exception e) {
-                     return null;
-                 }
+                SObject sobj = (SObject) current;
+                try {
+                    current = sobj.get(part);
+                } catch (Exception e) {
+                    return null;
+                }
             } else {
                 return null;
             }
@@ -2815,7 +3097,7 @@ public with sharing class DocGenService {
         }
         return current;
     }
-    
+
     // ---------------------------------------------------------------------------
     // Aggregate Tags: {SUM:List.Field}, {COUNT:List}, {AVG:...}, {MIN:...}, {MAX:...}
     // ---------------------------------------------------------------------------
@@ -2966,16 +3248,33 @@ public with sharing class DocGenService {
 
     /** Returns the thousands grouping separator for a locale. */
     private static String getLocaleGroupSep(String locale) {
-        if (locale == null) { return ','; }
+        if (locale == null) {
+            return ',';
+        }
         String loc = locale.toLowerCase();
         // Dot-as-thousands: German, French, Spanish, Italian, Portuguese, Dutch, Scandinavian
-        if (loc.startsWith('de_') || loc.startsWith('fr_') || loc.startsWith('es_') ||
-            loc.startsWith('it_') || loc.startsWith('pt_') || loc.startsWith('nl_') ||
-            loc.startsWith('da_') || loc.startsWith('sv_') || loc.startsWith('nb_') ||
-            loc.startsWith('nn_') || loc.startsWith('pl_') || loc.startsWith('cs_') ||
-            loc.startsWith('hu_') || loc.startsWith('tr_') || loc.startsWith('ro_') ||
-            loc.startsWith('el_') || loc.startsWith('ru_') || loc.startsWith('uk_') ||
-            loc.startsWith('id_') || loc.startsWith('vi_')) {
+        if (
+            loc.startsWith('de_') ||
+            loc.startsWith('fr_') ||
+            loc.startsWith('es_') ||
+            loc.startsWith('it_') ||
+            loc.startsWith('pt_') ||
+            loc.startsWith('nl_') ||
+            loc.startsWith('da_') ||
+            loc.startsWith('sv_') ||
+            loc.startsWith('nb_') ||
+            loc.startsWith('nn_') ||
+            loc.startsWith('pl_') ||
+            loc.startsWith('cs_') ||
+            loc.startsWith('hu_') ||
+            loc.startsWith('tr_') ||
+            loc.startsWith('ro_') ||
+            loc.startsWith('el_') ||
+            loc.startsWith('ru_') ||
+            loc.startsWith('uk_') ||
+            loc.startsWith('id_') ||
+            loc.startsWith('vi_')
+        ) {
             return '.';
         }
         // Apostrophe-as-thousands: Swiss French/German
@@ -2988,16 +3287,33 @@ public with sharing class DocGenService {
 
     /** Returns the decimal separator for a locale. */
     private static String getLocaleDecSep(String locale) {
-        if (locale == null) { return '.'; }
+        if (locale == null) {
+            return '.';
+        }
         String loc = locale.toLowerCase();
         // Comma-as-decimal: same set that uses dot-as-thousands
-        if (loc.startsWith('de_') || loc.startsWith('fr_') || loc.startsWith('es_') ||
-            loc.startsWith('it_') || loc.startsWith('pt_') || loc.startsWith('nl_') ||
-            loc.startsWith('da_') || loc.startsWith('sv_') || loc.startsWith('nb_') ||
-            loc.startsWith('nn_') || loc.startsWith('pl_') || loc.startsWith('cs_') ||
-            loc.startsWith('hu_') || loc.startsWith('tr_') || loc.startsWith('ro_') ||
-            loc.startsWith('el_') || loc.startsWith('ru_') || loc.startsWith('uk_') ||
-            loc.startsWith('id_') || loc.startsWith('vi_')) {
+        if (
+            loc.startsWith('de_') ||
+            loc.startsWith('fr_') ||
+            loc.startsWith('es_') ||
+            loc.startsWith('it_') ||
+            loc.startsWith('pt_') ||
+            loc.startsWith('nl_') ||
+            loc.startsWith('da_') ||
+            loc.startsWith('sv_') ||
+            loc.startsWith('nb_') ||
+            loc.startsWith('nn_') ||
+            loc.startsWith('pl_') ||
+            loc.startsWith('cs_') ||
+            loc.startsWith('hu_') ||
+            loc.startsWith('tr_') ||
+            loc.startsWith('ro_') ||
+            loc.startsWith('el_') ||
+            loc.startsWith('ru_') ||
+            loc.startsWith('uk_') ||
+            loc.startsWith('id_') ||
+            loc.startsWith('vi_')
+        ) {
             // Exception: Swiss locales use dot as decimal
             if (loc == 'fr_ch' || loc == 'de_ch' || loc == 'it_ch') {
                 return '.';
@@ -3009,36 +3325,87 @@ public with sharing class DocGenService {
 
     /** Returns whether currency symbol goes after the number for a locale. */
     private static Boolean isCurrencyAfter(String locale) {
-        if (locale == null) { return false; }
+        if (locale == null) {
+            return false;
+        }
         String loc = locale.toLowerCase();
-        return loc.startsWith('de_') || loc.startsWith('fr_') || loc.startsWith('es_') ||
-               loc.startsWith('it_') || loc.startsWith('pt_') || loc.startsWith('nl_') ||
-               loc.startsWith('da_') || loc.startsWith('sv_') || loc.startsWith('nb_') ||
-               loc.startsWith('nn_') || loc.startsWith('pl_') || loc.startsWith('cs_') ||
-               loc.startsWith('hu_') || loc.startsWith('tr_') || loc.startsWith('ro_') ||
-               loc.startsWith('el_') || loc.startsWith('ru_') || loc.startsWith('uk_');
+        return loc.startsWith('de_') ||
+            loc.startsWith('fr_') ||
+            loc.startsWith('es_') ||
+            loc.startsWith('it_') ||
+            loc.startsWith('pt_') ||
+            loc.startsWith('nl_') ||
+            loc.startsWith('da_') ||
+            loc.startsWith('sv_') ||
+            loc.startsWith('nb_') ||
+            loc.startsWith('nn_') ||
+            loc.startsWith('pl_') ||
+            loc.startsWith('cs_') ||
+            loc.startsWith('hu_') ||
+            loc.startsWith('tr_') ||
+            loc.startsWith('ro_') ||
+            loc.startsWith('el_') ||
+            loc.startsWith('ru_') ||
+            loc.startsWith('uk_');
     }
 
     /** Returns the default date format pattern for a locale. */
     private static String getLocaleDatePattern(String locale) {
-        if (locale == null) { return 'yyyy-MM-dd'; }
+        if (locale == null) {
+            return 'yyyy-MM-dd';
+        }
         String loc = locale.toLowerCase();
-        if (loc.startsWith('en_us')) { return 'MM/dd/yyyy'; }
-        if (loc.startsWith('en_gb') || loc.startsWith('en_au') || loc.startsWith('en_nz') ||
-            loc.startsWith('en_ie') || loc.startsWith('en_in')) { return 'dd/MM/yyyy'; }
-        if (loc.startsWith('de_')) { return 'dd.MM.yyyy'; }
-        if (loc.startsWith('fr_')) { return 'dd/MM/yyyy'; }
-        if (loc.startsWith('es_')) { return 'dd/MM/yyyy'; }
-        if (loc.startsWith('it_')) { return 'dd/MM/yyyy'; }
-        if (loc.startsWith('pt_')) { return 'dd/MM/yyyy'; }
-        if (loc.startsWith('nl_')) { return 'dd-MM-yyyy'; }
-        if (loc.startsWith('ja_')) { return 'yyyy/MM/dd'; }
-        if (loc.startsWith('zh_')) { return 'yyyy-MM-dd'; }
-        if (loc.startsWith('ko_')) { return 'yyyy. MM. dd'; }
-        if (loc.startsWith('ru_')) { return 'dd.MM.yyyy'; }
-        if (loc.startsWith('pl_') || loc.startsWith('cs_') || loc.startsWith('hu_')) { return 'dd.MM.yyyy'; }
-        if (loc.startsWith('da_') || loc.startsWith('sv_') || loc.startsWith('nb_') || loc.startsWith('nn_')) { return 'yyyy-MM-dd'; }
-        if (loc.startsWith('tr_')) { return 'dd.MM.yyyy'; }
+        if (loc.startsWith('en_us')) {
+            return 'MM/dd/yyyy';
+        }
+        if (
+            loc.startsWith('en_gb') ||
+            loc.startsWith('en_au') ||
+            loc.startsWith('en_nz') ||
+            loc.startsWith('en_ie') ||
+            loc.startsWith('en_in')
+        ) {
+            return 'dd/MM/yyyy';
+        }
+        if (loc.startsWith('de_')) {
+            return 'dd.MM.yyyy';
+        }
+        if (loc.startsWith('fr_')) {
+            return 'dd/MM/yyyy';
+        }
+        if (loc.startsWith('es_')) {
+            return 'dd/MM/yyyy';
+        }
+        if (loc.startsWith('it_')) {
+            return 'dd/MM/yyyy';
+        }
+        if (loc.startsWith('pt_')) {
+            return 'dd/MM/yyyy';
+        }
+        if (loc.startsWith('nl_')) {
+            return 'dd-MM-yyyy';
+        }
+        if (loc.startsWith('ja_')) {
+            return 'yyyy/MM/dd';
+        }
+        if (loc.startsWith('zh_')) {
+            return 'yyyy-MM-dd';
+        }
+        if (loc.startsWith('ko_')) {
+            return 'yyyy. MM. dd';
+        }
+        if (loc.startsWith('ru_')) {
+            return 'dd.MM.yyyy';
+        }
+        if (loc.startsWith('pl_') || loc.startsWith('cs_') || loc.startsWith('hu_')) {
+            return 'dd.MM.yyyy';
+        }
+        if (loc.startsWith('da_') || loc.startsWith('sv_') || loc.startsWith('nb_') || loc.startsWith('nn_')) {
+            return 'yyyy-MM-dd';
+        }
+        if (loc.startsWith('tr_')) {
+            return 'dd.MM.yyyy';
+        }
         // ISO 8601 as safe default
         return 'yyyy-MM-dd';
     }
@@ -3197,12 +3564,17 @@ public with sharing class DocGenService {
     private static void checkHeapPressure(String relationshipName) {
         Integer heap = Limits.getHeapSize();
         Integer heapLimit = Limits.getLimitHeapSize();
-        Boolean overThreshold = forceHeapPressureForTest ||
-            (heapLimit > 0 && heap >= (Integer) (heapLimit * HEAP_PRESSURE_RATIO));
+        Boolean overThreshold =
+            forceHeapPressureForTest || (heapLimit > 0 && heap >= (Integer) (heapLimit * HEAP_PRESSURE_RATIO));
         if (overThreshold) {
             HeapPressureException e = new HeapPressureException(
-                'Heap pressure during sync merge (heap=' + heap + ' of ' + heapLimit + ') — ' +
-                'switching to giant-query path for relationship: ' + relationshipName
+                'Heap pressure during sync merge (heap=' +
+                    heap +
+                    ' of ' +
+                    heapLimit +
+                    ') — ' +
+                    'switching to giant-query path for relationship: ' +
+                    relationshipName
             );
             e.relationshipName = relationshipName;
             throw e;
@@ -3215,7 +3587,9 @@ public with sharing class DocGenService {
      * Used by DocGenGiantQueryAssembler to resolve grand-total tags.
      */
     public static String formatAggregateValue(Decimal value, String fmt) {
-        if (value == null) { return '0'; }
+        if (value == null) {
+            return '0';
+        }
         if (String.isNotBlank(fmt) && isNumericFormat(fmt)) {
             return formatNumber(value, fmt);
         }
@@ -3373,22 +3747,24 @@ public with sharing class DocGenService {
         String normalized = html;
         normalized = normalized.replaceAll('(?i)</p>\\s*<p[^>]*>', delim);
         normalized = normalized.replaceAll('(?i)</div>\\s*<div[^>]*>', delim);
-        normalized = normalized.replaceAll('(?i)<br\\s*/?>',  delim);
+        normalized = normalized.replaceAll('(?i)<br\\s*/?>', delim);
         normalized = normalized.replaceAll('(?i)</?p[^>]*>', delim);
         normalized = normalized.replaceAll('(?i)</?div[^>]*>', delim);
 
         List<String> paragraphs = normalized.split(delim);
 
         // Build DOCX XML: close current context, emit paragraphs, reopen context
-        String result = '</w:t></w:r>';  // close current run
+        String result = '</w:t></w:r>'; // close current run
 
         Boolean firstPara = true;
         for (String para : paragraphs) {
             String trimmed = para.trim();
-            if (String.isBlank(trimmed)) { continue; }
+            if (String.isBlank(trimmed)) {
+                continue;
+            }
 
             if (!firstPara) {
-                result += '</w:p><w:p>';  // new paragraph
+                result += '</w:p><w:p>'; // new paragraph
             } else {
                 // Continue in the same paragraph as the merge tag
                 firstPara = false;
@@ -3472,12 +3848,19 @@ public with sharing class DocGenService {
                 if (closeA != -1) {
                     String linkText = html.substring(tagEnd, closeA);
                     linkText = linkText.replaceAll('<[^>]+>', '').trim();
-                    if (String.isBlank(linkText)) { linkText = href; }
+                    if (String.isBlank(linkText)) {
+                        linkText = href;
+                    }
                     if (String.isNotBlank(href)) {
                         // Build w:hyperlink with direct URL attribute for PDF rendering
-                        result += '<w:hyperlink w:docgen-url="' + href.escapeXml() + '">' +
+                        result +=
+                            '<w:hyperlink w:docgen-url="' +
+                            href.escapeXml() +
+                            '">' +
                             '<w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr>' +
-                            '<w:t xml:space="preserve">' + linkText.escapeXml() + '</w:t></w:r>' +
+                            '<w:t xml:space="preserve">' +
+                            linkText.escapeXml() +
+                            '</w:t></w:r>' +
                             '</w:hyperlink>';
                     } else {
                         result += buildRun(linkText, isBold, isItalic, true);
@@ -3511,9 +3894,15 @@ public with sharing class DocGenService {
         String rPr = '';
         if (bold || italic || underline) {
             rPr = '<w:rPr>';
-            if (bold) { rPr += '<w:b/>'; }
-            if (italic) { rPr += '<w:i/>'; }
-            if (underline) { rPr += '<w:u w:val="single"/>'; }
+            if (bold) {
+                rPr += '<w:b/>';
+            }
+            if (italic) {
+                rPr += '<w:i/>';
+            }
+            if (underline) {
+                rPr += '<w:u w:val="single"/>';
+            }
             rPr += '</w:rPr>';
         }
         return '<w:r>' + rPr + '<w:t xml:space="preserve">' + text.escapeXml() + '</w:t></w:r>';
@@ -3532,9 +3921,13 @@ public with sharing class DocGenService {
      */
     private static String extractAttribute(String tag, String attrName) {
         Integer attrIdx = tag.indexOfIgnoreCase(attrName + '=');
-        if (attrIdx == -1) { return null; }
+        if (attrIdx == -1) {
+            return null;
+        }
         Integer valStart = attrIdx + attrName.length() + 1;
-        if (valStart >= tag.length()) { return null; }
+        if (valStart >= tag.length()) {
+            return null;
+        }
         String quote = tag.substring(valStart, valStart + 1);
         if (quote == '"' || quote == '\'') {
             valStart++;
@@ -3546,7 +3939,9 @@ public with sharing class DocGenService {
         // Unquoted attribute — read until space or >
         Integer valEnd = tag.indexOf(' ', valStart);
         Integer tagEnd = tag.indexOf('>', valStart);
-        if (valEnd == -1 || (tagEnd != -1 && tagEnd < valEnd)) { valEnd = tagEnd; }
+        if (valEnd == -1 || (tagEnd != -1 && tagEnd < valEnd)) {
+            valEnd = tagEnd;
+        }
         if (valEnd != -1) {
             return tag.substring(valStart, valEnd).replace('&amp;', '&');
         }
@@ -3623,12 +4018,16 @@ public with sharing class DocGenService {
             if (src.startsWith('data:image/')) {
                 // Data URI — decode to blob (for DOCX embedding)
                 String base64Part = src.substringAfter(',');
-                if (src.containsIgnoreCase('jpeg') || src.containsIgnoreCase('jpg')) { ext = 'jpeg'; }
+                if (src.containsIgnoreCase('jpeg') || src.containsIgnoreCase('jpg')) {
+                    ext = 'jpeg';
+                }
                 imageBlob = EncodingUtil.base64Decode(base64Part);
             }
             // For Salesforce URLs (servlet, sfc, https), store URL for PDF rendering.
             // Blob.toPdf() resolves Salesforce URLs natively via the VF engine.
-            if (src.containsIgnoreCase('.jpg') || src.containsIgnoreCase('.jpeg')) { ext = 'jpeg'; }
+            if (src.containsIgnoreCase('.jpg') || src.containsIgnoreCase('.jpeg')) {
+                ext = 'jpeg';
+            }
         } catch (Exception e) {
             // Intentionally swallowed — image source parsing failed, fall through to URL handling
             String noop = e.getMessage(); // NOPMD UnusedLocalVariable — satisfies EmptyCatchBlock rule
@@ -3639,14 +4038,23 @@ public with sharing class DocGenService {
         // ContentVersion ID (068...) for some legacy/embedded forms. Try both.
         // Then rewrite src to the /sfc/servlet.shepherd/version/download/<cvId> form
         // that the existing image pipeline handles end-to-end. No HTTP callouts.
-        if (imageBlob == null && src != null && src.containsIgnoreCase('rtaImage') && src.containsIgnoreCase('refid=')) {
+        if (
+            imageBlob == null &&
+            src != null &&
+            src.containsIgnoreCase('rtaImage') &&
+            src.containsIgnoreCase('refid=')
+        ) {
             Integer refStart = src.toLowerCase().indexOf('refid=') + 6;
             Integer refEnd = src.indexOf('&', refStart);
-            if (refEnd == -1) { refEnd = src.length(); }
+            if (refEnd == -1) {
+                refEnd = src.length();
+            }
             String refid = src.substring(refStart, refEnd);
             if (String.isNotBlank(refid) && refid.length() >= 15) {
                 Id resolvedId = null;
-                try { resolvedId = (Id) refid; } catch (Exception parseE) {
+                try {
+                    resolvedId = (Id) refid;
+                } catch (Exception parseE) {
                     String noop = parseE.getMessage(); // NOPMD UnusedLocalVariable
                 }
                 if (resolvedId != null) {
@@ -3663,19 +4071,55 @@ public with sharing class DocGenService {
                         if (idPrefix == '068') {
                             // refid is already a ContentVersion ID
                             rtaCvs = loadBytes
-                                ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1]
-                                : [SELECT Id, FileExtension FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1];
+                                ? [
+                                      SELECT Id, FileExtension, VersionData
+                                      FROM ContentVersion
+                                      WHERE Id = :resolvedId
+                                      WITH USER_MODE
+                                      LIMIT 1
+                                  ]
+                                : [
+                                      SELECT Id, FileExtension
+                                      FROM ContentVersion
+                                      WHERE Id = :resolvedId
+                                      WITH USER_MODE
+                                      LIMIT 1
+                                  ];
                         } else {
                             // Treat as ContentDocument ID (069 prefix)
                             rtaCvs = loadBytes
-                                ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE ContentDocumentId = :resolvedId AND IsLatest = true WITH USER_MODE LIMIT 1]
-                                : [SELECT Id, FileExtension FROM ContentVersion WHERE ContentDocumentId = :resolvedId AND IsLatest = true WITH USER_MODE LIMIT 1];
+                                ? [
+                                      SELECT Id, FileExtension, VersionData
+                                      FROM ContentVersion
+                                      WHERE ContentDocumentId = :resolvedId AND IsLatest = TRUE
+                                      WITH USER_MODE
+                                      LIMIT 1
+                                  ]
+                                : [
+                                      SELECT Id, FileExtension
+                                      FROM ContentVersion
+                                      WHERE ContentDocumentId = :resolvedId AND IsLatest = TRUE
+                                      WITH USER_MODE
+                                      LIMIT 1
+                                  ];
                             // Some refid prefixes (like 0EM or 005 — embedded inline images)
                             // aren't ContentDocuments. If first lookup empty, try Id directly.
                             if (rtaCvs.isEmpty()) {
                                 rtaCvs = loadBytes
-                                    ? [SELECT Id, FileExtension, VersionData FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1]
-                                    : [SELECT Id, FileExtension FROM ContentVersion WHERE Id = :resolvedId WITH USER_MODE LIMIT 1];
+                                    ? [
+                                          SELECT Id, FileExtension, VersionData
+                                          FROM ContentVersion
+                                          WHERE Id = :resolvedId
+                                          WITH USER_MODE
+                                          LIMIT 1
+                                      ]
+                                    : [
+                                          SELECT Id, FileExtension
+                                          FROM ContentVersion
+                                          WHERE Id = :resolvedId
+                                          WITH USER_MODE
+                                          LIMIT 1
+                                      ];
                             }
                         }
                     } catch (Exception qE) {
@@ -3685,8 +4129,11 @@ public with sharing class DocGenService {
                         src = '/sfc/servlet.shepherd/version/download/' + rtaCvs[0].Id;
                         if (String.isNotBlank(rtaCvs[0].FileExtension)) {
                             String fext = rtaCvs[0].FileExtension.toLowerCase();
-                            if (fext == 'jpg' || fext == 'jpeg') { ext = 'jpeg'; }
-                            else if (fext == 'gif' || fext == 'png' || fext == 'bmp') { ext = fext; }
+                            if (fext == 'jpg' || fext == 'jpeg') {
+                                ext = 'jpeg';
+                            } else if (fext == 'gif' || fext == 'png' || fext == 'bmp') {
+                                ext = fext;
+                            }
                         }
                         // Server-side ZIP needs the binary for assembleZip()
                         if (loadBytes && rtaCvs[0].VersionData != null) {
@@ -3719,11 +4166,7 @@ public with sharing class DocGenService {
             }
             pendingImages.add(imgData);
         } else if (String.isNotBlank(src) && !src.startsWith('data:')) {
-            pendingImages.add(new Map<String, Object>{
-                'relId' => relId,
-                'fileName' => fileName,
-                'url' => src
-            });
+            pendingImages.add(new Map<String, Object>{ 'relId' => relId, 'fileName' => fileName, 'url' => src });
         } else {
             return null; // Can't resolve image at all
         }
@@ -3739,35 +4182,53 @@ public with sharing class DocGenService {
         Integer widthEmu = (widthPx != null) ? (widthPx * 9525) : (288 * 12700);
         Integer heightEmu = (heightPx != null) ? (heightPx * 9525) : (216 * 12700);
         String docPrAttrs = 'id="' + imageCounter + '" name="DocGenImage' + imageCounter + '"';
-        if (noSizeInfo) { docPrAttrs += ' descr="DOCGEN_AUTOSIZE"'; }
+        if (noSizeInfo) {
+            docPrAttrs += ' descr="DOCGEN_AUTOSIZE"';
+        }
 
         return '<w:r><w:drawing>' +
             '<wp:inline distT="0" distB="0" distL="0" distR="0" ' +
-                'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
-              '<wp:extent cx="' + widthEmu + '" cy="' + heightEmu + '"/>' +
-              '<wp:docPr ' + docPrAttrs + '/>' +
-              '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-                '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-                  '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-                    '<pic:nvPicPr>' +
-                      '<pic:cNvPr id="' + imageCounter + '" name="DocGenImage' + imageCounter + '"/>' +
-                      '<pic:cNvPicPr/>' +
-                    '</pic:nvPicPr>' +
-                    '<pic:blipFill>' +
-                      '<a:blip r:embed="' + relId + '" ' +
-                        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>' +
-                      '<a:stretch><a:fillRect/></a:stretch>' +
-                    '</pic:blipFill>' +
-                    '<pic:spPr>' +
-                      '<a:xfrm>' +
-                        '<a:off x="0" y="0"/>' +
-                        '<a:ext cx="' + widthEmu + '" cy="' + heightEmu + '"/>' +
-                      '</a:xfrm>' +
-                      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-                    '</pic:spPr>' +
-                  '</pic:pic>' +
-                '</a:graphicData>' +
-              '</a:graphic>' +
+            'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+            '<wp:extent cx="' +
+            widthEmu +
+            '" cy="' +
+            heightEmu +
+            '"/>' +
+            '<wp:docPr ' +
+            docPrAttrs +
+            '/>' +
+            '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+            '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+            '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+            '<pic:nvPicPr>' +
+            '<pic:cNvPr id="' +
+            imageCounter +
+            '" name="DocGenImage' +
+            imageCounter +
+            '"/>' +
+            '<pic:cNvPicPr/>' +
+            '</pic:nvPicPr>' +
+            '<pic:blipFill>' +
+            '<a:blip r:embed="' +
+            relId +
+            '" ' +
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>' +
+            '<a:stretch><a:fillRect/></a:stretch>' +
+            '</pic:blipFill>' +
+            '<pic:spPr>' +
+            '<a:xfrm>' +
+            '<a:off x="0" y="0"/>' +
+            '<a:ext cx="' +
+            widthEmu +
+            '" cy="' +
+            heightEmu +
+            '"/>' +
+            '</a:xfrm>' +
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+            '</pic:spPr>' +
+            '</pic:pic>' +
+            '</a:graphicData>' +
+            '</a:graphic>' +
             '</wp:inline>' +
             '</w:drawing></w:r>';
     }
@@ -3782,22 +4243,34 @@ public with sharing class DocGenService {
      * Returns null if the property isn't present or value can't be parsed.
      */
     private static Integer parseStylePx(String styleVal, String propName) {
-        if (String.isBlank(styleVal) || String.isBlank(propName)) { return null; }
+        if (String.isBlank(styleVal) || String.isBlank(propName)) {
+            return null;
+        }
         String lower = styleVal.toLowerCase();
         Integer pIdx = lower.indexOf(propName.toLowerCase() + ':');
-        if (pIdx == -1) { return null; }
+        if (pIdx == -1) {
+            return null;
+        }
         Integer valStart = pIdx + propName.length() + 1;
         Integer valEnd = lower.indexOf(';', valStart);
-        if (valEnd == -1) { valEnd = lower.length(); }
+        if (valEnd == -1) {
+            valEnd = lower.length();
+        }
         String raw = styleVal.substring(valStart, valEnd).trim();
-        if (String.isBlank(raw)) { return null; }
+        if (String.isBlank(raw)) {
+            return null;
+        }
         // Strip unit suffix and parse number
         Boolean isPt = raw.toLowerCase().endsWith('pt');
         String numStr = raw.replaceAll('[^0-9.]', '');
-        if (String.isBlank(numStr)) { return null; }
+        if (String.isBlank(numStr)) {
+            return null;
+        }
         try {
             Decimal n = Decimal.valueOf(numStr);
-            if (isPt) { n = n * 96 / 72; }
+            if (isPt) {
+                n = n * 96 / 72;
+            }
             return Math.round(n);
         } catch (Exception e) {
             return null;
@@ -3880,11 +4353,17 @@ public with sharing class DocGenService {
             // 2. Base64 data URI
             else if (spec.fieldValue.startsWith('data:image/')) {
                 String base64Part = spec.fieldValue.substringAfter(',');
-                if (spec.fieldValue.containsIgnoreCase('jpeg') || spec.fieldValue.containsIgnoreCase('jpg')) { ext = 'jpeg'; }
+                if (spec.fieldValue.containsIgnoreCase('jpeg') || spec.fieldValue.containsIgnoreCase('jpg')) {
+                    ext = 'jpeg';
+                }
                 spec.imageBlobData = EncodingUtil.base64Decode(base64Part);
             }
             // 3. Raw base64 (no data URI prefix)
-            else if (spec.fieldValue.length() > 100 && !spec.fieldValue.contains('/') && !spec.fieldValue.contains(' ')) {
+            else if (
+                spec.fieldValue.length() > 100 &&
+                !spec.fieldValue.contains('/') &&
+                !spec.fieldValue.contains(' ')
+            ) {
                 spec.imageBlobData = EncodingUtil.base64Decode(spec.fieldValue);
             }
             // 4. ContentVersion ID (starts with 068) — works for both DOCX (blob) and PDF (URL)
@@ -3892,17 +4371,33 @@ public with sharing class DocGenService {
                 if (currentOutputFormat == 'PDF') {
                     // PDF path: only need the URL — Blob.toPdf() fetches images server-side.
                     // Skip loading the blob entirely to save heap.
-                    List<ContentVersion> cvs = [SELECT Id, FileExtension FROM ContentVersion WHERE Id = :spec.fieldValue WITH USER_MODE LIMIT 1];
+                    List<ContentVersion> cvs = [
+                        SELECT Id, FileExtension
+                        FROM ContentVersion
+                        WHERE Id = :spec.fieldValue
+                        WITH USER_MODE
+                        LIMIT 1
+                    ];
                     if (!cvs.isEmpty()) {
-                        if (cvs[0].FileExtension != null) { ext = cvs[0].FileExtension.toLowerCase(); }
+                        if (cvs[0].FileExtension != null) {
+                            ext = cvs[0].FileExtension.toLowerCase();
+                        }
                         spec.contentVersionImageUrl = '/sfc/servlet.shepherd/version/download/' + cvs[0].Id;
                     }
                 } else {
                     // DOCX path: need the blob for ZIP embedding
-                    List<ContentVersion> cvs = [SELECT Id, VersionData, FileExtension FROM ContentVersion WHERE Id = :spec.fieldValue WITH USER_MODE LIMIT 1];
+                    List<ContentVersion> cvs = [
+                        SELECT Id, VersionData, FileExtension
+                        FROM ContentVersion
+                        WHERE Id = :spec.fieldValue
+                        WITH USER_MODE
+                        LIMIT 1
+                    ];
                     if (!cvs.isEmpty()) {
                         spec.imageBlobData = cvs[0].VersionData;
-                        if (cvs[0].FileExtension != null) { ext = cvs[0].FileExtension.toLowerCase(); }
+                        if (cvs[0].FileExtension != null) {
+                            ext = cvs[0].FileExtension.toLowerCase();
+                        }
                         spec.contentVersionImageUrl = '/sfc/servlet.shepherd/version/download/' + cvs[0].Id;
                     }
                 }
@@ -3910,13 +4405,17 @@ public with sharing class DocGenService {
             // 5. Salesforce file URL containing refid (rich text image reference)
             else if (spec.fieldValue.containsIgnoreCase('refid=')) {
                 String refId = spec.fieldValue.substringAfterLast('refid=').substringBefore('&');
-                if (String.isBlank(refId)) { refId = spec.fieldValue.substringAfterLast('refid='); }
+                if (String.isBlank(refId)) {
+                    refId = spec.fieldValue.substringAfterLast('refid=');
+                }
                 spec.imageBlobData = fetchSalesforceImage(refId);
             }
             // 6. Salesforce servlet/sfc URL
             else if (spec.fieldValue.containsIgnoreCase('/servlet/') || spec.fieldValue.containsIgnoreCase('/sfc/')) {
                 String docId = spec.fieldValue.substringAfterLast('/');
-                if (docId.contains('?')) { docId = docId.substringBefore('?'); }
+                if (docId.contains('?')) {
+                    docId = docId.substringBefore('?');
+                }
                 spec.imageBlobData = fetchSalesforceImage(docId);
             }
             // 7. Generic HTTPS URL — can't fetch without session ID (AppExchange safe).
@@ -3929,12 +4428,16 @@ public with sharing class DocGenService {
                     Integer sIdx = spec.fieldValue.indexOfIgnoreCase('src=');
                     if (sIdx != -1) {
                         sIdx += 4;
-                        while (sIdx < spec.fieldValue.length() && spec.fieldValue.substring(sIdx, sIdx + 1) == ' ') { sIdx++; }
+                        while (sIdx < spec.fieldValue.length() && spec.fieldValue.substring(sIdx, sIdx + 1) == ' ') {
+                            sIdx++;
+                        }
                         String qc = spec.fieldValue.substring(sIdx, sIdx + 1);
                         if (qc == '"' || qc == '\'') {
                             sIdx++;
                             Integer sEnd = spec.fieldValue.indexOf(qc, sIdx);
-                            if (sEnd != -1) { spec.sourceUrl = spec.fieldValue.substring(sIdx, sEnd).replace('&amp;', '&'); }
+                            if (sEnd != -1) {
+                                spec.sourceUrl = spec.fieldValue.substring(sIdx, sEnd).replace('&amp;', '&');
+                            }
                         }
                     }
                 } else if (spec.fieldValue.startsWithIgnoreCase('http') || spec.fieldValue.startsWith('/')) {
@@ -3956,16 +4459,20 @@ public with sharing class DocGenService {
             // natively. Data URIs can't be rendered by Blob.toPdf so blob-only
             // field values (without a resolvable URL) skip to avoid broken img.
             if (currentTemplateType == 'HTML') {
-                String imgUrl = (spec.contentVersionImageUrl != null)
-                    ? spec.contentVersionImageUrl
-                    : spec.sourceUrl;
+                String imgUrl = (spec.contentVersionImageUrl != null) ? spec.contentVersionImageUrl : spec.sourceUrl;
                 if (String.isBlank(imgUrl) || imgUrl.startsWith('data:')) {
                     return '';
                 }
                 String sizeCss = '';
-                if (spec.widthPx != null) { sizeCss += 'width:' + spec.widthPx + 'px;'; }
-                if (spec.heightPx != null) { sizeCss += 'height:' + spec.heightPx + 'px;'; }
-                if (String.isBlank(sizeCss)) { sizeCss = 'max-width:100%;'; }
+                if (spec.widthPx != null) {
+                    sizeCss += 'width:' + spec.widthPx + 'px;';
+                }
+                if (spec.heightPx != null) {
+                    sizeCss += 'height:' + spec.heightPx + 'px;';
+                }
+                if (String.isBlank(sizeCss)) {
+                    sizeCss = 'max-width:100%;';
+                }
                 return '<img src="' + imgUrl.escapeHtml4() + '" style="' + sizeCss + '"/>';
             }
 
@@ -3986,8 +4493,14 @@ public with sharing class DocGenService {
 
             // Compute image dimensions in EMU with intrinsic size detection and scaling
             List<Integer> intrinsicSizeEmu = getImageDimensionsInEmu(spec.imageBlobData, ext);
-            Integer baseWidthEmu = (intrinsicSizeEmu != null && intrinsicSizeEmu.size() == 2) ? intrinsicSizeEmu[0] : (288 * 12700);
-            Integer baseHeightEmu = (intrinsicSizeEmu != null && intrinsicSizeEmu.size() == 2) ? intrinsicSizeEmu[1] : (216 * 12700);
+            Integer baseWidthEmu = (intrinsicSizeEmu != null &&
+                intrinsicSizeEmu.size() == 2)
+                ? intrinsicSizeEmu[0]
+                : (288 * 12700);
+            Integer baseHeightEmu = (intrinsicSizeEmu != null &&
+                intrinsicSizeEmu.size() == 2)
+                ? intrinsicSizeEmu[1]
+                : (216 * 12700);
 
             Integer[] scaledDims = scaleImageDimensionsEmu(baseWidthEmu, baseHeightEmu, spec);
             Integer widthEmu = scaledDims[0];
@@ -3996,34 +4509,51 @@ public with sharing class DocGenService {
             return '</w:t></w:r>' +
                 '<w:r><w:drawing>' +
                 '<wp:inline distT="0" distB="0" distL="0" distR="0" ' +
-                    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
-                  '<wp:extent cx="' + widthEmu + '" cy="' + heightEmu + '"/>' +
-                  '<wp:docPr id="' + imageCounter + '" name="DocGenImage' + imageCounter + '"/>' +
-                  '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-                    '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-                      '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
-                        '<pic:nvPicPr>' +
-                          '<pic:cNvPr id="' + imageCounter + '" name="DocGenImage' + imageCounter + '"/>' +
-                          '<pic:cNvPicPr/>' +
-                        '</pic:nvPicPr>' +
-                        '<pic:blipFill>' +
-                          '<a:blip r:embed="' + spec.relationshipId + '" ' +
-                            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>' +
-                          '<a:stretch><a:fillRect/></a:stretch>' +
-                        '</pic:blipFill>' +
-                        '<pic:spPr>' +
-                          '<a:xfrm>' +
-                            '<a:off x="0" y="0"/>' +
-                            '<a:ext cx="' + widthEmu + '" cy="' + heightEmu + '"/>' +
-                          '</a:xfrm>' +
-                          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-                        '</pic:spPr>' +
-                      '</pic:pic>' +
-                    '</a:graphicData>' +
-                  '</a:graphic>' +
+                'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+                '<wp:extent cx="' +
+                widthEmu +
+                '" cy="' +
+                heightEmu +
+                '"/>' +
+                '<wp:docPr id="' +
+                imageCounter +
+                '" name="DocGenImage' +
+                imageCounter +
+                '"/>' +
+                '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+                '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+                '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
+                '<pic:nvPicPr>' +
+                '<pic:cNvPr id="' +
+                imageCounter +
+                '" name="DocGenImage' +
+                imageCounter +
+                '"/>' +
+                '<pic:cNvPicPr/>' +
+                '</pic:nvPicPr>' +
+                '<pic:blipFill>' +
+                '<a:blip r:embed="' +
+                spec.relationshipId +
+                '" ' +
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>' +
+                '<a:stretch><a:fillRect/></a:stretch>' +
+                '</pic:blipFill>' +
+                '<pic:spPr>' +
+                '<a:xfrm>' +
+                '<a:off x="0" y="0"/>' +
+                '<a:ext cx="' +
+                widthEmu +
+                '" cy="' +
+                heightEmu +
+                '"/>' +
+                '</a:xfrm>' +
+                '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+                '</pic:spPr>' +
+                '</pic:pic>' +
+                '</a:graphicData>' +
+                '</a:graphic>' +
                 '</wp:inline>' +
                 '</w:drawing></w:r><w:r><w:t xml:space="preserve">';
-
         } catch (Exception e) {
             // Image injection failed (invalid CV ID, corrupt base64, etc.) — skip this image
             return null;
@@ -4044,21 +4574,31 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static ImageRenderSpec resolveImageByIndexTag(String imageTagSpec, Map<String, Object> data) {
-        if (String.isBlank(imageTagSpec)) return null;
+        if (String.isBlank(imageTagSpec))
+            return null;
         List<String> parts = imageTagSpec.split(':');
-        if (parts.size() < 2) return null;
+        if (parts.size() < 2)
+            return null;
         String indexToken = parts[1].trim();
-        if (!indexToken.isNumeric()) return null;
+        if (!indexToken.isNumeric())
+            return null;
         Integer n = Integer.valueOf(indexToken);
-        if (n < 1) return null;
+        if (n < 1)
+            return null;
 
         Object recordIdVal = data != null ? data.get('Id') : null;
-        if (recordIdVal == null) return null;
+        if (recordIdVal == null)
+            return null;
         Id recordId;
-        try { recordId = Id.valueOf(String.valueOf(recordIdVal)); } catch (Exception e) { return null; }
+        try {
+            recordId = Id.valueOf(String.valueOf(recordIdVal));
+        } catch (Exception e) {
+            return null;
+        }
 
         String cvId = resolveImageCvIdByIndex(n, recordId);
-        if (String.isBlank(cvId)) return null;
+        if (String.isBlank(cvId))
+            return null;
 
         ImageRenderSpec spec = new ImageRenderSpec();
         spec.imageField = 'Image:' + n;
@@ -4077,25 +4617,27 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static String resolveImageCvIdByIndex(Integer n, Id recordId) {
-        if (n == null || n < 1 || recordId == null) return null;
+        if (n == null || n < 1 || recordId == null)
+            return null;
 
         if (imageCvCache != null && imageCvCache.containsKey(recordId)) {
             List<String> cached = imageCvCache.get(recordId);
-            if (cached == null || cached.size() < n) return null;
+            if (cached == null || cached.size() < n)
+                return null;
             return cached[n - 1];
         }
 
-        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
+        Set<String> imageExts = new Set<String>{ 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'svg' };
         List<ContentDocumentLink> cdls = [
             SELECT ContentDocument.LatestPublishedVersionId
             FROM ContentDocumentLink
-            WHERE LinkedEntityId = :recordId
-              AND ContentDocument.FileExtension IN :imageExts
+            WHERE LinkedEntityId = :recordId AND ContentDocument.FileExtension IN :imageExts
             WITH USER_MODE
             ORDER BY ContentDocument.CreatedDate ASC, ContentDocument.Id ASC
             LIMIT 50
         ];
-        if (cdls.size() < n) return null;
+        if (cdls.size() < n)
+            return null;
         return String.valueOf(cdls[n - 1].ContentDocument.LatestPublishedVersionId);
     }
 
@@ -4110,26 +4652,29 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static void prefetchImagesForIds(Set<Id> recordIds) {
-        if (recordIds == null || recordIds.isEmpty()) return;
-        if (imageCvCache == null) imageCvCache = new Map<Id, List<String>>();
+        if (recordIds == null || recordIds.isEmpty())
+            return;
+        if (imageCvCache == null)
+            imageCvCache = new Map<Id, List<String>>();
 
         Set<Id> toFetch = new Set<Id>();
         for (Id rid : recordIds) {
-            if (rid != null && !imageCvCache.containsKey(rid)) toFetch.add(rid);
+            if (rid != null && !imageCvCache.containsKey(rid))
+                toFetch.add(rid);
         }
-        if (toFetch.isEmpty()) return;
+        if (toFetch.isEmpty())
+            return;
 
         // Seed cache with empty lists so records with zero images don't re-query on cache miss
         for (Id rid : toFetch) {
             imageCvCache.put(rid, new List<String>());
         }
 
-        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
+        Set<String> imageExts = new Set<String>{ 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'svg' };
         List<ContentDocumentLink> cdls = [
             SELECT LinkedEntityId, ContentDocument.LatestPublishedVersionId
             FROM ContentDocumentLink
-            WHERE LinkedEntityId IN :toFetch
-              AND ContentDocument.FileExtension IN :imageExts
+            WHERE LinkedEntityId IN :toFetch AND ContentDocument.FileExtension IN :imageExts
             WITH USER_MODE
             ORDER BY ContentDocument.CreatedDate ASC, ContentDocument.Id ASC
         ];
@@ -4147,7 +4692,8 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static Boolean loopBodyHasImageTag(String innerXml) {
-        if (String.isBlank(innerXml)) return false;
+        if (String.isBlank(innerXml))
+            return false;
         String lower = innerXml.toLowerCase();
         return lower.contains('{%image:');
     }
@@ -4161,7 +4707,8 @@ public with sharing class DocGenService {
      */
     @TestVisible
     private static void applyImageSizeToken(ImageRenderSpec spec, String sizeToken) {
-        if (spec == null || String.isBlank(sizeToken)) return;
+        if (spec == null || String.isBlank(sizeToken))
+            return;
         String t = sizeToken.trim().toLowerCase();
         if (!t.contains('x')) {
             if (t.isNumeric()) {
@@ -4294,7 +4841,8 @@ public with sharing class DocGenService {
         Integer widthPx = null;
         Integer heightPx = null;
         try {
-            Boolean looksPng = extLower == 'png' || (hexUpper.length() >= 16 && hexUpper.substring(0, 16) == '89504E470D0A1A0A');
+            Boolean looksPng =
+                extLower == 'png' || (hexUpper.length() >= 16 && hexUpper.substring(0, 16) == '89504E470D0A1A0A');
             if (looksPng) {
                 Integer ihdrIdx = hexUpper.indexOf('49484452');
                 if (ihdrIdx >= 0 && ihdrIdx + 24 <= hexUpper.length()) {
@@ -4306,7 +4854,11 @@ public with sharing class DocGenService {
                     }
                 }
             }
-            Boolean looksJpeg = extLower == 'jpg' || extLower == 'jpeg' || (hexUpper.length() >= 4 && hexUpper.substring(0, 4) == 'FFD8');
+            Boolean looksJpeg =
+                extLower == 'jpg' ||
+                extLower == 'jpeg' ||
+                (hexUpper.length() >= 4 &&
+                hexUpper.substring(0, 4) == 'FFD8');
             if ((widthPx == null || heightPx == null) && looksJpeg) {
                 Integer sofIdx = hexUpper.indexOf('FFC0');
                 if (sofIdx >= 0 && sofIdx + 18 <= hexUpper.length()) {
@@ -4318,13 +4870,17 @@ public with sharing class DocGenService {
                 return null;
             }
             Integer emuPerPx = 9525;
-            return new List<Integer>{widthPx * emuPerPx, heightPx * emuPerPx};
+            return new List<Integer>{ widthPx * emuPerPx, heightPx * emuPerPx };
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static Integer[] scaleImageDimensionsEmu(Integer baseWidthEmu, Integer baseHeightEmu, ImageRenderSpec spec) {
+    private static Integer[] scaleImageDimensionsEmu(
+        Integer baseWidthEmu,
+        Integer baseHeightEmu,
+        ImageRenderSpec spec
+    ) {
         Integer pageContentWidthEmu = 5943600; // 6.5in
         Integer pageContentHeightEmu = 8229600; // 9in
 
@@ -4344,13 +4900,13 @@ public with sharing class DocGenService {
             resolvedW = fixedW;
             resolvedH = fixedH;
         } else if (fixedW != null && fixedW > 0 && baseWidthEmu > 0) {
-            Decimal scale = ((Decimal)fixedW) / ((Decimal)baseWidthEmu);
+            Decimal scale = ((Decimal) fixedW) / ((Decimal) baseWidthEmu);
             resolvedW = fixedW;
-            resolvedH = (((Decimal)baseHeightEmu) * scale).intValue();
+            resolvedH = (((Decimal) baseHeightEmu) * scale).intValue();
         } else if (fixedH != null && fixedH > 0 && baseHeightEmu > 0) {
-            Decimal scale = ((Decimal)fixedH) / ((Decimal)baseHeightEmu);
+            Decimal scale = ((Decimal) fixedH) / ((Decimal) baseHeightEmu);
             resolvedH = fixedH;
-            resolvedW = (((Decimal)baseWidthEmu) * scale).intValue();
+            resolvedW = (((Decimal) baseWidthEmu) * scale).intValue();
         }
 
         Integer maxW = spec.maxWidthPx != null ? (spec.maxWidthPx * 9525) : null;
@@ -4364,21 +4920,29 @@ public with sharing class DocGenService {
 
         Decimal maxScale = 1;
         if (maxW != null && maxW > 0 && resolvedW > maxW && resolvedW > 0) {
-            Decimal ws = ((Decimal)maxW) / ((Decimal)resolvedW);
-            if (ws < maxScale) { maxScale = ws; }
+            Decimal ws = ((Decimal) maxW) / ((Decimal) resolvedW);
+            if (ws < maxScale) {
+                maxScale = ws;
+            }
         }
         if (maxH != null && maxH > 0 && resolvedH > maxH && resolvedH > 0) {
-            Decimal hs = ((Decimal)maxH) / ((Decimal)resolvedH);
-            if (hs < maxScale) { maxScale = hs; }
+            Decimal hs = ((Decimal) maxH) / ((Decimal) resolvedH);
+            if (hs < maxScale) {
+                maxScale = hs;
+            }
         }
         if (maxScale < 1) {
-            resolvedW = (((Decimal)resolvedW) * maxScale).intValue();
-            resolvedH = (((Decimal)resolvedH) * maxScale).intValue();
+            resolvedW = (((Decimal) resolvedW) * maxScale).intValue();
+            resolvedH = (((Decimal) resolvedH) * maxScale).intValue();
         }
 
-        if (resolvedW == null || resolvedW <= 0) { resolvedW = 288 * 12700; }
-        if (resolvedH == null || resolvedH <= 0) { resolvedH = 216 * 12700; }
-        return new Integer[]{resolvedW, resolvedH};
+        if (resolvedW == null || resolvedW <= 0) {
+            resolvedW = 288 * 12700;
+        }
+        if (resolvedH == null || resolvedH <= 0) {
+            resolvedH = 216 * 12700;
+        }
+        return new List<Integer>{ resolvedW, resolvedH };
     }
 
     /**
@@ -4442,17 +5006,35 @@ public with sharing class DocGenService {
         try {
             // Try as ContentVersion ID first
             if (fileRef.startsWith('068')) {
-                List<ContentVersion> cvs = [SELECT VersionData FROM ContentVersion WHERE Id = :fileRef WITH USER_MODE LIMIT 1];
+                List<ContentVersion> cvs = [
+                    SELECT VersionData
+                    FROM ContentVersion
+                    WHERE Id = :fileRef
+                    WITH USER_MODE
+                    LIMIT 1
+                ];
                 if (!cvs.isEmpty()) {
                     return cvs[0].VersionData;
                 }
             }
             // Try as ContentDocument ID
             if (fileRef.startsWith('069')) {
-                List<ContentDocument> docs = [SELECT LatestPublishedVersionId FROM ContentDocument WHERE Id = :fileRef WITH USER_MODE LIMIT 1];
+                List<ContentDocument> docs = [
+                    SELECT LatestPublishedVersionId
+                    FROM ContentDocument
+                    WHERE Id = :fileRef
+                    WITH USER_MODE
+                    LIMIT 1
+                ];
                 if (!docs.isEmpty() && docs[0].LatestPublishedVersionId != null) {
                     Id latestCvId = docs[0].LatestPublishedVersionId;
-                    List<ContentVersion> cvs = [SELECT VersionData FROM ContentVersion WHERE Id = :latestCvId WITH USER_MODE LIMIT 1];
+                    List<ContentVersion> cvs = [
+                        SELECT VersionData
+                        FROM ContentVersion
+                        WHERE Id = :latestCvId
+                        WITH USER_MODE
+                        LIMIT 1
+                    ];
                     if (!cvs.isEmpty()) {
                         return cvs[0].VersionData;
                     }
@@ -4460,7 +5042,13 @@ public with sharing class DocGenService {
             }
             // Try as a generic ID that could be linked
             if (fileRef.length() >= 15) {
-                List<ContentVersion> cvs = [SELECT VersionData FROM ContentVersion WHERE Id = :fileRef WITH USER_MODE LIMIT 1];
+                List<ContentVersion> cvs = [
+                    SELECT VersionData
+                    FROM ContentVersion
+                    WHERE Id = :fileRef
+                    WITH USER_MODE
+                    LIMIT 1
+                ];
                 if (!cvs.isEmpty()) {
                     return cvs[0].VersionData;
                 }
@@ -4471,7 +5059,6 @@ public with sharing class DocGenService {
         }
         return null;
     }
-
 
     private static Id saveFile(Blob fileBlob, String title, Id recordId, String format, String type) {
         String baseName = title != null ? title : 'Generated_Document';
@@ -4501,18 +5088,28 @@ public with sharing class DocGenService {
 
         Id savedCvId;
         try {
-            SObjectAccessDecision cvDecision = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
+            SObjectAccessDecision cvDecision = Security.stripInaccessible(
+                AccessType.CREATABLE,
+                new List<ContentVersion>{ cv }
+            );
             insert cvDecision.getRecords();
             savedCvId = cvDecision.getRecords()[0].Id;
         } catch (DmlException dml) {
             // FirstPublishLocationId rejected (e.g., Pricebook2) — insert without link, then create CDL
-            if (dml.getMessage().contains('FIELD_INTEGRITY_EXCEPTION') && dml.getMessage().containsIgnoreCase('FirstPublishLocationId')) {
+            if (
+                dml.getMessage().contains('FIELD_INTEGRITY_EXCEPTION') &&
+                dml.getMessage().containsIgnoreCase('FirstPublishLocationId')
+            ) {
                 cv.FirstPublishLocationId = null;
-                SObjectAccessDecision cvDecision2 = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentVersion>{ cv });
+                SObjectAccessDecision cvDecision2 = Security.stripInaccessible(
+                    AccessType.CREATABLE,
+                    new List<ContentVersion>{ cv }
+                );
                 insert cvDecision2.getRecords();
                 savedCvId = cvDecision2.getRecords()[0].Id;
 
-                Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :savedCvId WITH USER_MODE].ContentDocumentId;
+                Id docId = [SELECT ContentDocumentId FROM ContentVersion WHERE Id = :savedCvId WITH USER_MODE]
+                .ContentDocumentId;
                 // Try to link the file to the source record — some objects (e.g. Pricebook2) don't support CDLs
                 try {
                     ContentDocumentLink cdl = new ContentDocumentLink(
@@ -4521,7 +5118,10 @@ public with sharing class DocGenService {
                         ShareType = 'V',
                         Visibility = 'AllUsers'
                     );
-                    SObjectAccessDecision cdlDec = Security.stripInaccessible(AccessType.CREATABLE, new List<ContentDocumentLink>{ cdl });
+                    SObjectAccessDecision cdlDec = Security.stripInaccessible(
+                        AccessType.CREATABLE,
+                        new List<ContentDocumentLink>{ cdl }
+                    );
                     insert cdlDec.getRecords(); // NOPMD ApexCRUDViolation — FLS enforced by stripInaccessible
                 } catch (DmlException linkErr) {
                     // Intentionally swallowed — object may not support ContentDocumentLink
@@ -4559,11 +5159,11 @@ public with sharing class DocGenService {
         String result = format;
         Pattern p = Pattern.compile('\\{([^}]+)\\}');
         Matcher m = p.matcher(format);
-        while(m.find()) {
+        while (m.find()) {
             String key = m.group(1);
             Object val = resolveValue(data, key);
             if (val != null) {
-                 result = result.replace('{' + key + '}', String.valueOf(val));
+                result = result.replace('{' + key + '}', String.valueOf(val));
             } else {
                 result = result.replace('{' + key + '}', '');
             }
@@ -4730,7 +5330,12 @@ public with sharing class DocGenService {
      * @param fieldNames List of field API names to include in the data map
      * @return Concatenated rendered XML for all records
      */
-    public static String renderLoopBodyForRecords(String innerXml, String relationshipName, List<SObject> records, List<String> fieldNames) {
+    public static String renderLoopBodyForRecords(
+        String innerXml,
+        String relationshipName,
+        List<SObject> records,
+        List<String> fieldNames
+    ) {
         String rendered = '';
         for (SObject rec : records) {
             Map<String, Object> dataMap = new Map<String, Object>();
@@ -4743,7 +5348,9 @@ public with sharing class DocGenService {
                         SObject current = rec;
                         for (Integer i = 0; i < parts.size() - 1; i++) {
                             current = current.getSObject(parts[i]);
-                            if (current == null) { break; }
+                            if (current == null) {
+                                break;
+                            }
                         }
                         Object val = (current != null) ? current.get(parts[parts.size() - 1]) : null;
                         // Build nested map structure for resolveValue traversal
@@ -4777,7 +5384,12 @@ public with sharing class DocGenService {
      * @param outputFormat The desired output format ('PDF' or 'Native')
      * @return ContentDocumentId of the saved document
      */
-    public static Id mergeTemplateWithPreRenderedLoops(Id templateId, Id recordId, Map<String, String> preRenderedLoops, String outputFormat) {
+    public static Id mergeTemplateWithPreRenderedLoops(
+        Id templateId,
+        Id recordId,
+        Map<String, String> preRenderedLoops,
+        String outputFormat
+    ) {
         pendingImages = new List<Map<String, Object>>();
         imageCounter = 0;
 
@@ -4834,8 +5446,9 @@ public with sharing class DocGenService {
             } else if (name == mr.relsPath) {
                 mr.relsXml = reader.extract(name).toString();
             } else {
-                Boolean isProcessedXml = (name.startsWith('word/header') && name.endsWith('.xml')) ||
-                                         (name.startsWith('word/footer') && name.endsWith('.xml'));
+                Boolean isProcessedXml =
+                    (name.startsWith('word/header') && name.endsWith('.xml')) ||
+                    (name.startsWith('word/footer') && name.endsWith('.xml'));
                 if (isProcessedXml) {
                     String xml = mergeRunsInTags(reader.extract(name).toString());
                     xml = processXml(xml, recordDataMap);
@@ -4857,7 +5470,8 @@ public with sharing class DocGenService {
         for (String relName : preRenderedLoops.keySet()) {
             Map<String, String> loopParts = extractLoopBody(rawDocumentXml, relName);
             if (loopParts != null) {
-                rawDocumentXml = loopParts.get('beforeLoop') +
+                rawDocumentXml =
+                    loopParts.get('beforeLoop') +
                     preRenderedLoops.get(relName) +
                     loopParts.get('afterLoop');
             }
@@ -4878,17 +5492,30 @@ public with sharing class DocGenService {
         if (!pendingImages.isEmpty()) {
             if (mr.contentTypesXml != null) {
                 if (!mr.contentTypesXml.contains('Extension="png"')) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace('</Types>', '<Default Extension="png" ContentType="image/png"/></Types>');
+                    mr.contentTypesXml = mr.contentTypesXml.replace(
+                        '</Types>',
+                        '<Default Extension="png" ContentType="image/png"/></Types>'
+                    );
                 }
-                if (!mr.contentTypesXml.contains('Extension="jpeg"') && !mr.contentTypesXml.contains('Extension="jpg"')) {
-                    mr.contentTypesXml = mr.contentTypesXml.replace('</Types>', '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>');
+                if (
+                    !mr.contentTypesXml.contains('Extension="jpeg"') && !mr.contentTypesXml.contains('Extension="jpg"')
+                ) {
+                    mr.contentTypesXml = mr.contentTypesXml.replace(
+                        '</Types>',
+                        '<Default Extension="jpeg" ContentType="image/jpeg"/></Types>'
+                    );
                 }
             }
             if (mr.relsXml != null) {
                 for (Map<String, Object> img : pendingImages) {
                     String relId = (String) img.get('relId');
                     String fName = (String) img.get('fileName');
-                    String newRel = '<Relationship Id="' + relId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' + fName + '"/>';
+                    String newRel =
+                        '<Relationship Id="' +
+                        relId +
+                        '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' +
+                        fName +
+                        '"/>';
                     mr.relsXml = mr.relsXml.replace('</Relationships>', newRel + '</Relationships>');
                 }
             }
@@ -4927,31 +5554,49 @@ public with sharing class DocGenService {
      */
     public static void extractAndSaveHtmlTemplateAssets(Id templateId, Id versionId) {
         List<DocGen_Template__c> templates = [
-            SELECT Type__c FROM DocGen_Template__c WHERE Id = :templateId WITH SYSTEM_MODE LIMIT 1
+            SELECT Type__c
+            FROM DocGen_Template__c
+            WHERE Id = :templateId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
-        if (templates.isEmpty() || templates[0].Type__c != 'HTML') { return; }
+        if (templates.isEmpty() || templates[0].Type__c != 'HTML') {
+            return;
+        }
 
         List<DocGen_Template_Version__c> vers = [
-            SELECT Id, Content_Version_Id__c FROM DocGen_Template_Version__c
-            WHERE Id = :versionId WITH SYSTEM_MODE LIMIT 1
+            SELECT Id, Content_Version_Id__c
+            FROM DocGen_Template_Version__c
+            WHERE Id = :versionId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
-        if (vers.isEmpty() || String.isBlank(vers[0].Content_Version_Id__c)) { return; }
+        if (vers.isEmpty() || String.isBlank(vers[0].Content_Version_Id__c)) {
+            return;
+        }
         Id sourceCvId = (Id) vers[0].Content_Version_Id__c;
 
         List<ContentVersion> cvs = [
-            SELECT VersionData, FileExtension, Title FROM ContentVersion
-            WHERE Id = :sourceCvId WITH SYSTEM_MODE LIMIT 1
+            SELECT VersionData, FileExtension, Title
+            FROM ContentVersion
+            WHERE Id = :sourceCvId
+            WITH SYSTEM_MODE
+            LIMIT 1
         ];
-        if (cvs.isEmpty()) { return; }
+        if (cvs.isEmpty()) {
+            return;
+        }
         String ext = cvs[0].FileExtension == null ? '' : cvs[0].FileExtension.toLowerCase();
-        if (ext != 'zip') { return; }  // .html/.htm uploads have no assets to extract
+        if (ext != 'zip') {
+            return;
+        } // .html/.htm uploads have no assets to extract
 
         Compression.ZipReader reader = new Compression.ZipReader(cvs[0].VersionData);
 
         String htmlEntryName = null;
         String htmlContent = null;
         Map<String, Blob> imageEntries = new Map<String, Blob>();
-        Set<String> imageExts = new Set<String>{'png','jpg','jpeg','gif','bmp','tif','tiff','svg'};
+        Set<String> imageExts = new Set<String>{ 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tif', 'tiff', 'svg' };
 
         for (Compression.ZipEntry entry : reader.getEntries()) {
             String name = entry.getName();
@@ -4981,7 +5626,9 @@ public with sharing class DocGenService {
         Integer idx = 0;
         for (String name : imageEntries.keySet()) {
             String base = name.substringAfterLast('/');
-            if (String.isBlank(base)) { base = name; }
+            if (String.isBlank(base)) {
+                base = name;
+            }
             ContentVersion icv = new ContentVersion();
             icv.Title = imgPrefix + base;
             icv.PathOnClient = base;
@@ -4999,15 +5646,21 @@ public with sharing class DocGenService {
         String rewritten = htmlContent;
         if (!imageCvs.isEmpty()) {
             List<Id> reloadIds = new List<Id>();
-            for (ContentVersion icv : imageCvs) { reloadIds.add(icv.Id); }
-            Map<Id, ContentVersion> byId = new Map<Id, ContentVersion>([
-                SELECT Id FROM ContentVersion WHERE Id IN :reloadIds WITH SYSTEM_MODE
-            ]);
+            for (ContentVersion icv : imageCvs) {
+                reloadIds.add(icv.Id);
+            }
+            Map<Id, ContentVersion> byId = new Map<Id, ContentVersion>(
+                [SELECT Id FROM ContentVersion WHERE Id IN :reloadIds WITH SYSTEM_MODE]
+            );
             for (String originalPath : imageEntries.keySet()) {
                 Integer i = nameToIndex.get(originalPath);
-                if (i == null) { continue; }
+                if (i == null) {
+                    continue;
+                }
                 Id cvId = imageCvs[i].Id;
-                if (cvId == null) { continue; }
+                if (cvId == null) {
+                    continue;
+                }
                 String url = '/sfc/servlet.shepherd/version/download/' + cvId;
                 String basePath = originalPath.substringAfterLast('/');
                 // Google Docs most often writes src="images/foo.png". Replace
@@ -5094,17 +5747,25 @@ public with sharing class DocGenService {
      * Preserves Google Docs / Notion / Word HTML class-based styling in the PDF.
      */
     public static String extractHtmlStyleBlocks(String html) {
-        if (String.isBlank(html)) { return ''; }
+        if (String.isBlank(html)) {
+            return '';
+        }
         String result = '';
         Integer cursor = 0;
         String lower = html.toLowerCase();
         while (cursor < html.length()) {
             Integer start = lower.indexOf('<style', cursor);
-            if (start == -1) { break; }
+            if (start == -1) {
+                break;
+            }
             Integer openEnd = html.indexOf('>', start);
-            if (openEnd == -1) { break; }
+            if (openEnd == -1) {
+                break;
+            }
             Integer closeStart = lower.indexOf('</style>', openEnd);
-            if (closeStart == -1) { break; }
+            if (closeStart == -1) {
+                break;
+            }
             result += html.substring(openEnd + 1, closeStart) + '\n';
             cursor = closeStart + 8;
         }
@@ -5116,7 +5777,9 @@ public with sharing class DocGenService {
      * Handles common HTML export wrappers (<html>, <head>) from Google Docs, Notion, Word, etc.
      */
     public static String extractHtmlBodyContent(String html) {
-        if (String.isBlank(html)) { return ''; }
+        if (String.isBlank(html)) {
+            return '';
+        }
         String lower = html.toLowerCase();
         Integer bodyOpen = lower.indexOf('<body');
         if (bodyOpen == -1) {
@@ -5124,11 +5787,15 @@ public with sharing class DocGenService {
             Integer headClose = lower.indexOf('</head>');
             Integer start = (headClose != -1) ? (html.indexOf('>', headClose) + 1) : 0;
             Integer endPos = (htmlClose != -1) ? htmlClose : html.length();
-            if (start >= endPos) { return html; }
+            if (start >= endPos) {
+                return html;
+            }
             return html.substring(start, endPos);
         }
         Integer openEnd = html.indexOf('>', bodyOpen);
-        if (openEnd == -1) { return html; }
+        if (openEnd == -1) {
+            return html;
+        }
         Integer bodyClose = lower.lastIndexOf('</body>');
         if (bodyClose == -1 || bodyClose <= openEnd) {
             return html.substring(openEnd + 1);
@@ -5151,10 +5818,18 @@ public with sharing class DocGenService {
      * tags; processXml only matches literal braces, so un-encode before merge.
      */
     public static String decodeBraceEntities(String html) {
-        if (String.isBlank(html)) { return html; }
+        if (String.isBlank(html)) {
+            return html;
+        }
         return html
-            .replace('&#123;', '{').replace('&#x7B;', '{').replace('&#x7b;', '{').replace('&lbrace;', '{')
-            .replace('&#125;', '}').replace('&#x7D;', '}').replace('&#x7d;', '}').replace('&rbrace;', '}');
+            .replace('&#123;', '{')
+            .replace('&#x7B;', '{')
+            .replace('&#x7b;', '{')
+            .replace('&lbrace;', '{')
+            .replace('&#125;', '}')
+            .replace('&#x7D;', '}')
+            .replace('&#x7d;', '}')
+            .replace('&rbrace;', '}');
     }
 
     /**
@@ -5182,13 +5857,26 @@ public with sharing class DocGenService {
         // keyword — invalid CSS, Flying Saucer silently falls back to portrait.
         String sizeCss;
         String marginsCss;
-        if (String.isNotBlank(DocGenHtmlRenderer.pageSizeOverride) || String.isNotBlank(DocGenHtmlRenderer.orientationOverride)) {
-            String size = String.isNotBlank(DocGenHtmlRenderer.pageSizeOverride) ? DocGenHtmlRenderer.pageSizeOverride : 'Letter';
+        if (
+            String.isNotBlank(DocGenHtmlRenderer.pageSizeOverride) ||
+            String.isNotBlank(DocGenHtmlRenderer.orientationOverride)
+        ) {
+            String size = String.isNotBlank(DocGenHtmlRenderer.pageSizeOverride)
+                ? DocGenHtmlRenderer.pageSizeOverride
+                : 'Letter';
             Boolean isLandscape = 'Landscape'.equalsIgnoreCase(DocGenHtmlRenderer.orientationOverride);
-            Decimal portraitW; Decimal portraitH;
-            if ('Legal'.equalsIgnoreCase(size)) { portraitW = 8.5; portraitH = 14.0; }
-            else if ('A4'.equalsIgnoreCase(size)) { portraitW = 8.27; portraitH = 11.69; }
-            else { portraitW = 8.5; portraitH = 11.0; }
+            Decimal portraitW;
+            Decimal portraitH;
+            if ('Legal'.equalsIgnoreCase(size)) {
+                portraitW = 8.5;
+                portraitH = 14.0;
+            } else if ('A4'.equalsIgnoreCase(size)) {
+                portraitW = 8.27;
+                portraitH = 11.69;
+            } else {
+                portraitW = 8.5;
+                portraitH = 11.0;
+            }
             Decimal pageW = isLandscape ? portraitH : portraitW;
             Decimal pageH = isLandscape ? portraitW : portraitH;
             sizeCss = pageW + 'in ' + pageH + 'in';
@@ -5201,14 +5889,20 @@ public with sharing class DocGenService {
         String css = '@page { size: ' + sizeCss + '; ' + marginsCss + ';';
         if (String.isNotBlank(header)) {
             if (headerHasCounters) {
-                css += ' @top-center { ' + buildPageMarginContentCss(header) + ' vertical-align: bottom; font-size: 9pt; color: #444; }';
+                css +=
+                    ' @top-center { ' +
+                    buildPageMarginContentCss(header) +
+                    ' vertical-align: bottom; font-size: 9pt; color: #444; }';
             } else {
                 css += ' @top-center { content: element(dgheader); vertical-align: bottom; }';
             }
         }
         if (String.isNotBlank(footer)) {
             if (footerHasCounters) {
-                css += ' @bottom-center { ' + buildPageMarginContentCss(footer) + ' vertical-align: top; font-size: 9pt; color: #444; }';
+                css +=
+                    ' @bottom-center { ' +
+                    buildPageMarginContentCss(footer) +
+                    ' vertical-align: top; font-size: 9pt; color: #444; }';
             } else {
                 css += ' @bottom-center { content: element(dgfooter); vertical-align: top; }';
             }
@@ -5245,11 +5939,10 @@ public with sharing class DocGenService {
     // glyphs — Arial Unicode MS has them. Wrap any checkmark Unicode chars in
     // body text with a font span. Skips substrings already inside a <span style=...>
     // by doing a direct char replace; double-wrapping is harmless (inner span wins).
-    private static final String[] HTML_CHECKMARK_CHARS = new String[]{
-        '☐', '☑', '☒', '✓', '✔', '✗', '✘'
-    };
+    private static final String[] HTML_CHECKMARK_CHARS = new List<String>{ '☐', '☑', '☒', '✓', '✔', '✗', '✘' };
     private static String wrapHtmlCheckmarks(String s) {
-        if (String.isBlank(s)) return s;
+        if (String.isBlank(s))
+            return s;
         for (String c : HTML_CHECKMARK_CHARS) {
             if (s.contains(c)) {
                 s = s.replace(c, '<span style="font-family:\'Arial Unicode MS\', sans-serif;">' + c + '</span>');
@@ -5259,7 +5952,9 @@ public with sharing class DocGenService {
     }
 
     private static Boolean hasPageCounterTokens(String html) {
-        if (String.isBlank(html)) { return false; }
+        if (String.isBlank(html)) {
+            return false;
+        }
         return html.contains('{PageNumber}') || html.contains('{TotalPages}');
     }
 
@@ -5269,13 +5964,19 @@ public with sharing class DocGenService {
      * DocGenHtmlRenderer.resolveMarginsForOverride but emits CSS instead of twips.
      */
     private static String resolveMarginsCss(String size, Boolean isLandscape) {
-        String preset = String.isNotBlank(DocGenHtmlRenderer.marginsOverride) ? DocGenHtmlRenderer.marginsOverride : 'Default';
-        if ('Narrow'.equalsIgnoreCase(preset)) return 'margin: 0.5in';
-        if ('Normal'.equalsIgnoreCase(preset)) return 'margin: 1in';
-        if ('Wide'.equalsIgnoreCase(preset)) return 'margin: 1.5in';
+        String preset = String.isNotBlank(DocGenHtmlRenderer.marginsOverride)
+            ? DocGenHtmlRenderer.marginsOverride
+            : 'Default';
+        if ('Narrow'.equalsIgnoreCase(preset))
+            return 'margin: 0.5in';
+        if ('Normal'.equalsIgnoreCase(preset))
+            return 'margin: 1in';
+        if ('Wide'.equalsIgnoreCase(preset))
+            return 'margin: 1.5in';
         if ('Custom'.equalsIgnoreCase(preset)) {
             String custom = parseCustomMarginsCss(DocGenHtmlRenderer.customMarginsOverride);
-            if (custom != null) return custom;
+            if (custom != null)
+                return custom;
         }
         // 'FromSource' on HTML templates falls through to size-default since HTML
         // has no <w:pgMar>. DOCX-source FromSource is handled by the renderer's
@@ -5285,7 +5986,8 @@ public with sharing class DocGenService {
     }
 
     private static String parseCustomMarginsCss(String raw) {
-        if (String.isBlank(raw)) return null;
+        if (String.isBlank(raw))
+            return null;
         try {
             String cleaned = raw.replaceAll('\\s+', ' ').trim();
             List<String> parts;
@@ -5294,7 +5996,8 @@ public with sharing class DocGenService {
             } else {
                 parts = cleaned.split(' ');
             }
-            if (parts.isEmpty()) return null;
+            if (parts.isEmpty())
+                return null;
             Decimal t = clampMarginCss(Decimal.valueOf(parts[0].trim()));
             Decimal r = parts.size() >= 2 ? clampMarginCss(Decimal.valueOf(parts[1].trim())) : t;
             Decimal b = parts.size() >= 3 ? clampMarginCss(Decimal.valueOf(parts[2].trim())) : t;
@@ -5306,8 +6009,10 @@ public with sharing class DocGenService {
     }
 
     private static Decimal clampMarginCss(Decimal v) {
-        if (v < 0.1) return 0.1;
-        if (v > 3.0) return 3.0;
+        if (v < 0.1)
+            return 0.1;
+        if (v > 3.0)
+            return 3.0;
         return v;
     }
 
@@ -5327,11 +6032,11 @@ public with sharing class DocGenService {
     private static String buildPageMarginContentCss(String html) {
         String text = html == null ? '' : decodeBraceEntities(html).replaceAll('<[^>]+>', '');
         text = text.replace('&nbsp;', ' ')
-                   .replace('&amp;', '&')
-                   .replace('&lt;', '<')
-                   .replace('&gt;', '>')
-                   .replace('&quot;', '"')
-                   .replace('&#39;', '\'');
+            .replace('&amp;', '&')
+            .replace('&lt;', '<')
+            .replace('&gt;', '>')
+            .replace('&quot;', '"')
+            .replace('&#39;', '\'');
 
         List<String> parts = new List<String>();
         Integer cursor = 0;
@@ -5361,7 +6066,9 @@ public with sharing class DocGenService {
             parts.add(counterFn);
             cursor = next + 12; // both tokens are 12 chars ({PageNumber}, {TotalPages})
         }
-        if (parts.isEmpty()) { parts.add('""'); }
+        if (parts.isEmpty()) {
+            parts.add('""');
+        }
         return 'content: ' + String.join(parts, ' ') + ';';
     }
 

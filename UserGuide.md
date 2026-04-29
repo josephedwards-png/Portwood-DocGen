@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.72.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0xiAAA)
+**Current release:** v1.73.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006rAYrAAM)
 
 ---
 
@@ -21,7 +21,7 @@
 8. [Bulk generation](#8-bulk-generation)
 9. [E-signatures (v3)](#9-e-signatures-v3)
 10. [Flow automation](#10-flow-automation)
-10A. [Apex API reference (programmatic access)](#10a-apex-api-reference-programmatic-access)
+    10A. [Apex API reference (programmatic access)](#10a-apex-api-reference-programmatic-access)
 11. [Heap-aware routing (how big datasets are handled)](#11-heap-aware-routing-how-big-datasets-are-handled)
 12. [Admin & settings](#12-admin--settings)
 13. [Limits & known constraints](#13-limits--known-constraints)
@@ -34,6 +34,7 @@
 Portwood DocGen is a native Salesforce document generation engine. It merges Salesforce record data into Word and PowerPoint templates to produce PDF, DOCX, PPTX, or XLSX files. It runs 100% inside Salesforce — no external services, no API callouts, no session ID leakage.
 
 **Capabilities at a glance**
+
 - Word, HTML, PowerPoint, Excel templates with `{FieldName}` merge tags
 - Multi-object query builder (any depth — Opportunity → Line Items → Product → Pricebook)
 - Child record loops (tables, bulleted lists), aggregates (SUM/COUNT/AVG/MIN/MAX), conditionals, comparisons
@@ -52,10 +53,10 @@ Portwood DocGen is a native Salesforce document generation engine. It merges Sal
 ### Install the package
 
 ```bash
-sf package install --package 04tal000006r0xiAAA --wait 10 --target-org <your-org>
+sf package install --package 04tal000006rAYrAAM --wait 10 --target-org <your-org>
 ```
 
-Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0xiAAA) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0xiAAA)
+Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006rAYrAAM) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006rAYrAAM)
 
 ### Post-install checklist
 
@@ -70,10 +71,10 @@ Or: [Install in Production](https://login.salesforce.com/packaging/installPackag
 
 Three permission sets ship with the package. Assign what each user needs.
 
-| Permission set | Who gets it | What they can do |
-|---|---|---|
-| `DocGen_Admin` | Template authors, system admins | Full CRUD on templates, query configs, signature objects, settings. Can create/edit/delete templates. Can "Sign In Person" bypass for signatures. |
-| `DocGen_User` | End users generating docs | Read/edit templates (no delete). Generate single + bulk documents. Create signature requests. Can't modify templates or settings. |
+| Permission set           | Who gets it                              | What they can do                                                                                                                                                                       |
+| ------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DocGen_Admin`           | Template authors, system admins          | Full CRUD on templates, query configs, signature objects, settings. Can create/edit/delete templates. Can "Sign In Person" bypass for signatures.                                      |
+| `DocGen_User`            | End users generating docs                | Read/edit templates (no delete). Generate single + bulk documents. Create signature requests. Can't modify templates or settings.                                                      |
 | `DocGen_Guest_Signature` | Salesforce Site guest user (for signing) | Read access to signature requests/signers/placements. Create access on audit records. Access to the signing VF pages. Required for external signers who don't have a Salesforce login. |
 
 **Adding a custom field to DocGen objects? Update all three permission sets.** Missed FLS grants silently break field access for the affected role (signer can't read, generator can't populate, etc.). This is the #1 recurring bug class.
@@ -93,6 +94,7 @@ Three permission sets ship with the package. Assign what each user needs.
 7. Save.
 
 **Output formats by template type:**
+
 - Word (`.docx`) template → output PDF or DOCX
 - HTML (`.html` / `.htm` / `.zip`) template → output PDF only (see [§4.7](#47-html-templates-google-docs-notion-any-html-source))
 - PowerPoint (`.pptx`) template → output PPTX only (PowerPoint→PDF is not supported by the Salesforce platform)
@@ -120,7 +122,7 @@ Use this for compliance-sensitive documents where only one format is allowed (e.
 
 Restrict which users see a template in their picker:
 
-- **`Required_Permission_Sets__c`** (comma-separated permission-set names): only users with *all* of these permission sets see the template.
+- **`Required_Permission_Sets__c`** (comma-separated permission-set names): only users with _all_ of these permission sets see the template.
 - **`Specific_Record_Ids__c`** (comma-separated record IDs): only show the template for these specific records.
 - **`Record_Filter__c`** (SOQL `WHERE` clause — for example, `StageName = 'Negotiation/Review' AND Amount > 10000`): dynamically show/hide based on the record's field values.
 
@@ -128,7 +130,7 @@ These can be combined. All three must match for the template to appear.
 
 ### 4.6 Template sharing
 
-Template access uses **standard Salesforce sharing** — sharing rules, manual sharing, and role hierarchy. Field-level security is enforced on the merged data too. There's no custom sharing UI; if you want to restrict who *sees* a template in the picker, use the visibility controls in §4.5 instead.
+Template access uses **standard Salesforce sharing** — sharing rules, manual sharing, and role hierarchy. Field-level security is enforced on the merged data too. There's no custom sharing UI; if you want to restrict who _sees_ a template in the picker, use the visibility controls in §4.5 instead.
 
 ### 4.7 HTML templates (Google Docs, Notion, any HTML source)
 
@@ -172,12 +174,10 @@ Put `{PageNumber}` and `{TotalPages}` in the Header HTML or Footer HTML field. T
 Example footer HTML:
 
 ```html
-<div style="text-align:center; font-size:9pt; color:#888;">
-  Page {PageNumber} of {TotalPages}
-</div>
+<div style="text-align:center; font-size:9pt; color:#888;">Page {PageNumber} of {TotalPages}</div>
 ```
 
-**Flying Saucer limitation:** page counters only resolve inside `@page` rules, not on DOM elements. When a header/footer contains counter tokens, DocGen renders that margin as plain text (no inline images or rich formatting). A header *without* counters stays rich HTML via CSS running elements. Practical workaround: logo in the header (no counters), page count in the footer (counters only). Both fields can be populated simultaneously.
+**Flying Saucer limitation:** page counters only resolve inside `@page` rules, not on DOM elements. When a header/footer contains counter tokens, DocGen renders that margin as plain text (no inline images or rich formatting). A header _without_ counters stays rich HTML via CSS running elements. Practical workaround: logo in the header (no counters), page count in the footer (counters only). Both fields can be populated simultaneously.
 
 #### 4.7.5 Images
 
@@ -193,16 +193,28 @@ Loop auto-expansion works the same as Word. Either pattern produces one repeated
 
 ```html
 <table>
-  <thead><tr><th>Product</th><th>Amount</th></tr></thead>
-  <tbody>
-    <!-- Pattern A: loop wraps the row -->
-    {#OpportunityLineItems}
-    <tr><td>{Product2.Name}</td><td>{TotalPrice:currency}</td></tr>
-    {/OpportunityLineItems}
+    <thead>
+        <tr>
+            <th>Product</th>
+            <th>Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- Pattern A: loop wraps the row -->
+        {#OpportunityLineItems}
+        <tr>
+            <td>{Product2.Name}</td>
+            <td>{TotalPrice:currency}</td>
+        </tr>
+        {/OpportunityLineItems}
 
-    <!-- Pattern B: loop inside the row (DocGen expands to the <tr>) -->
-    <tr>{#OpportunityLineItems}<td>{Product2.Name}</td>{/OpportunityLineItems}</tr>
-  </tbody>
+        <!-- Pattern B: loop inside the row (DocGen expands to the <tr>) -->
+        <tr>
+            {#OpportunityLineItems}
+            <td>{Product2.Name}</td>
+            {/OpportunityLineItems}
+        </tr>
+    </tbody>
 </table>
 ```
 
@@ -248,10 +260,21 @@ Detected when the config does NOT start with `{`.
 Adds junction-object support for many-to-many (e.g., Account ↔ Contact via AccountContactRelation).
 
 ```json
-{"v":2,"baseObject":"Opportunity","baseFields":["Name"],
- "parentFields":["Account.Name"],
- "children":[{"rel":"OpportunityLineItems","fields":["Name"]}],
- "junctions":[{"junctionRel":"OpportunityContactRoles","targetObject":"Contact","targetIdField":"ContactId","targetFields":["FirstName"]}]}
+{
+    "v": 2,
+    "baseObject": "Opportunity",
+    "baseFields": ["Name"],
+    "parentFields": ["Account.Name"],
+    "children": [{ "rel": "OpportunityLineItems", "fields": ["Name"] }],
+    "junctions": [
+        {
+            "junctionRel": "OpportunityContactRoles",
+            "targetObject": "Contact",
+            "targetIdField": "ContactId",
+            "targetFields": ["FirstName"]
+        }
+    ]
+}
 ```
 
 ### 5.3 V3 — Query tree (multi-object, any depth)
@@ -259,12 +282,48 @@ Adds junction-object support for many-to-many (e.g., Account ↔ Contact via Acc
 Preferred. Tree of nodes — each node is one SOQL query, stitched into the parent's data map via `lookupField`.
 
 ```json
-{"v":3,"root":"Account","nodes":[
-  {"id":"n0","object":"Account","fields":["Name"],"parentFields":["Owner.Name"],"parentNode":null,"lookupField":null,"relationshipName":null},
-  {"id":"n1","object":"Contact","fields":["FirstName"],"parentFields":[],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Contacts"},
-  {"id":"n2","object":"Opportunity","fields":["Name","Amount"],"parentFields":[],"parentNode":"n0","lookupField":"AccountId","relationshipName":"Opportunities"},
-  {"id":"n3","object":"OpportunityLineItem","fields":["Quantity"],"parentFields":["Product2.Name"],"parentNode":"n2","lookupField":"OpportunityId","relationshipName":"OpportunityLineItems"}
-]}
+{
+    "v": 3,
+    "root": "Account",
+    "nodes": [
+        {
+            "id": "n0",
+            "object": "Account",
+            "fields": ["Name"],
+            "parentFields": ["Owner.Name"],
+            "parentNode": null,
+            "lookupField": null,
+            "relationshipName": null
+        },
+        {
+            "id": "n1",
+            "object": "Contact",
+            "fields": ["FirstName"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Contacts"
+        },
+        {
+            "id": "n2",
+            "object": "Opportunity",
+            "fields": ["Name", "Amount"],
+            "parentFields": [],
+            "parentNode": "n0",
+            "lookupField": "AccountId",
+            "relationshipName": "Opportunities"
+        },
+        {
+            "id": "n3",
+            "object": "OpportunityLineItem",
+            "fields": ["Quantity"],
+            "parentFields": ["Product2.Name"],
+            "parentNode": "n2",
+            "lookupField": "OpportunityId",
+            "relationshipName": "OpportunityLineItems"
+        }
+    ]
+}
 ```
 
 ### 5.4 Using the visual builder
@@ -276,6 +335,7 @@ For direct JSON editing or V1 legacy configs, toggle **Manual Query** mode and t
 ### 5.5 Per-child filters, order by, limit
 
 Each V3 child node supports:
+
 - `fields`: scalar fields to SELECT
 - `parentFields`: dotted lookup fields (e.g., `Product2.Name`)
 - `where`: optional `WHERE` clause (sanitized for SOQL injection)
@@ -292,27 +352,36 @@ When the data you need to render isn't an SObject — external API responses, co
 
 ```apex
 global with sharing class MyAccountBriefProvider implements portwoodglobal.DocGenDataProvider {
-
     global Map<String, Object> getData(Id recordId) {
         // recordId is whatever the caller passes at generate time (an Account
         // here, but it could be any SObject — or you can ignore it entirely
         // and assemble data from somewhere else).
-        Account a = [SELECT Id, Name, Industry, AnnualRevenue, Owner.Name
-                     FROM Account WHERE Id = :recordId LIMIT 1];
+        Account a = [
+            SELECT Id, Name, Industry, AnnualRevenue, Owner.Name
+            FROM Account
+            WHERE Id = :recordId
+            LIMIT 1
+        ];
 
         // Compute / call out / aggregate — anything Apex can do.
-        Decimal score = a.AnnualRevenue == null ? 0
-                       : Math.min(100, Math.log(a.AnnualRevenue.doubleValue() + 1) * 6);
+        Decimal score = a.AnnualRevenue == null ? 0 : Math.min(100, Math.log(a.AnnualRevenue.doubleValue() + 1) * 6);
 
         // Pull child collections.
         List<Object> contacts = new List<Object>();
-        for (Contact c : [SELECT FirstName, LastName, Email, Title
-                          FROM Contact WHERE AccountId = :recordId]) {
-            contacts.add(new Map<String, Object>{
-                'FullName' => c.FirstName + ' ' + c.LastName,
-                'Title' => c.Title,
-                'Email' => c.Email
-            });
+        for (Contact c : [
+            SELECT FirstName, LastName, Email, Title
+            FROM Contact
+            WHERE AccountId = :recordId
+        ]) {
+            contacts.add(
+                new Map<String, Object>{
+                    'FullName' => c.FirstName +
+                    ' ' +
+                    c.LastName,
+                    'Title' => c.Title,
+                    'Email' => c.Email
+                }
+            );
         }
 
         // Return the Map<String, Object> the merge engine consumes.
@@ -322,20 +391,12 @@ global with sharing class MyAccountBriefProvider implements portwoodglobal.DocGe
             'Name' => a.Name,
             'Industry' => a.Industry,
             'AnnualRevenue' => a.AnnualRevenue,
-
             // Computed field — no SOQL equivalent → {CustomerScore}
             'CustomerScore' => score,
-
             // Parent lookup → {Owner.Name}
-            'Owner' => new Map<String, Object>{
-                'Name' => a.Owner.Name
-            },
-
+            'Owner' => new Map<String, Object>{ 'Name' => a.Owner.Name },
             // Child loop → {#Contacts}…{/Contacts} + {COUNT:Contacts}
-            'Contacts' => new Map<String, Object>{
-                'records' => contacts,
-                'totalSize' => contacts.size()
-            }
+            'Contacts' => new Map<String, Object>{ 'records' => contacts, 'totalSize' => contacts.size() }
         };
     }
 
@@ -343,10 +404,16 @@ global with sharing class MyAccountBriefProvider implements portwoodglobal.DocGe
         // Powers the field-pill cheat sheet in the template wizard.
         // Use dot-notation for parent lookups; '#'/'/' wrap loop boundaries.
         return new List<String>{
-            'Name', 'Industry', 'AnnualRevenue',
+            'Name',
+            'Industry',
+            'AnnualRevenue',
             'CustomerScore',
             'Owner.Name',
-            '#Contacts', 'Contacts.FullName', 'Contacts.Title', 'Contacts.Email', '/Contacts'
+            '#Contacts',
+            'Contacts.FullName',
+            'Contacts.Title',
+            'Contacts.Email',
+            '/Contacts'
         };
     }
 }
@@ -655,6 +722,7 @@ Inside a `{#Relationship}` loop, `{%Image:N}` scopes to the iterating record's i
 ```
 
 Handles multiple sources automatically:
+
 - Rich text HTML `<img src="data:...">` — decoded and embedded
 - Raw base64 strings (100+ chars) — decoded and embedded
 - ContentVersion IDs (18-char, starts with `068`) — looked up and fetched
@@ -703,6 +771,7 @@ When a field value contains HTML (`<p>`, `<div>`, `<br>`, `<b>`, `<i>`, `<u>`, `
 **Inline images in DOCX:** Lightning rich text inline images (the kind you paste/insert directly into a Rich Text Area field) now render in DOCX output via the **Document Generator** runner on a record page. The platform stores these as ContentReference records (ID prefix `0EM`) which can't be fetched by Apex callouts or browser code, so DocGen renders a single-image PDF server-side via `Blob.toPdf()` (which has internal resolver privileges), then extracts the image bytes client-side and embeds them in the DOCX ZIP. Zero session ID exposure, zero persistent storage, AppExchange-clean.
 
 Limitations:
+
 - The **Generate Sample** button in the template builder produces server-side ZIP only — rich text inline images appear as broken placeholders there. Test rendering via the runner instead.
 - DOCX image quality: `Blob.toPdf()` may re-encode the source image as JPEG (visible quality difference vs. the original PNG). For pixel-perfect images, use the `{%Image:N}` merge tag with an attached File instead of inline rich text.
 - Rotation of inline images is not preserved — they render at the original orientation.
@@ -718,6 +787,7 @@ Two ways to add a full-page watermark or background image to your PDF output:
 **Option A: Upload via the template builder (recommended).** In the template editor, click the **Watermark / Background** tab and upload a pre-sized image. This bypasses Word's Watermark dialog entirely and gives you exact pixel-level control over the output.
 
 **Option B: Insert via Word's Design → Watermark dialog.** Word's built-in watermark works too, with these constraints:
+
 - **Scale must be set to 100%.** Word's "Auto", "50%", etc. scale settings are ignored by the PDF renderer — only the source image's pixel dimensions matter.
 - **Washout must be OFF.** Leave the Washout checkbox unchecked. To get a faded look, pre-fade the image in an editor (~15–20% opacity over white) BEFORE inserting in Word.
 - **No rotation.** Word's 315° diagonal default isn't honored. If you need a rotated watermark, save the image pre-rotated as a PNG.
@@ -726,13 +796,14 @@ Both options use the same rendering pipeline — `@page { background-image: url(
 
 **Pre-resize your watermark image to the page dimensions at 96 DPI** (the resolution Flying Saucer renders at — NOT the standard 72 DPI you might assume from PDF specs):
 
-| Page size | Pixels at 96 DPI |
-|---|---|
+| Page size            | Pixels at 96 DPI  |
+| -------------------- | ----------------- |
 | Letter (8.5 × 11 in) | **816 × 1056 px** |
 | A4 (8.27 × 11.69 in) | **794 × 1123 px** |
-| Legal (8.5 × 14 in) | **816 × 1344 px** |
+| Legal (8.5 × 14 in)  | **816 × 1344 px** |
 
 Other limitations (apply to both options):
+
 - **Text watermarks** ("DRAFT", "CONFIDENTIAL" via Word's text watermark option) are not supported. Use a picture watermark with the text rendered into a PNG.
 - **DOCX output preserves whatever Word would render natively** — these constraints only apply to PDF output.
 
@@ -830,10 +901,10 @@ Approved: {#IF IsApproved}☑{/IF}{#IFNOT IsApproved}☐{/IFNOT}
 
 Or in tabular form for surveys / inspection forms:
 
-| Item | Status |
-|---|---|
-| Pre-flight check | {#IF Preflight_Complete__c}☑{/IF}{#IFNOT Preflight_Complete__c}☐{/IFNOT} |
-| Safety briefing | {#IF Safety_Done__c}☑{/IF}{#IFNOT Safety_Done__c}☐{/IFNOT} |
+| Item             | Status                                                                   |
+| ---------------- | ------------------------------------------------------------------------ |
+| Pre-flight check | {#IF Preflight_Complete**c}☑{/IF}{#IFNOT Preflight_Complete**c}☐{/IFNOT} |
+| Safety briefing  | {#IF Safety_Done**c}☑{/IF}{#IFNOT Safety_Done**c}☐{/IFNOT}               |
 
 #### What does NOT work
 
@@ -889,12 +960,12 @@ Mass-generate documents for many records in one batch.
 1. Command Hub → **Bulk Generation** tab.
 2. Pick a template.
 3. Supply a **filter** — either:
-   - A SOQL `WHERE` clause (e.g., `StageName = 'Closed Won' AND CloseDate = THIS_QUARTER`), or
-   - A **saved query** you've built previously.
+    - A SOQL `WHERE` clause (e.g., `StageName = 'Closed Won' AND CloseDate = THIS_QUARTER`), or
+    - A **saved query** you've built previously.
 4. Choose:
-   - **Combined PDF** — all records merged into one PDF (memory-efficient, compliance bundles).
-   - **Individual files** — one PDF per record saved to that record.
-   - **Both** — individual files + a combined bundle.
+    - **Combined PDF** — all records merged into one PDF (memory-efficient, compliance bundles).
+    - **Individual files** — one PDF per record saved to that record.
+    - **Both** — individual files + a combined bundle.
 5. Adjust batch size if needed (1–200; default 10).
 6. Submit.
 
@@ -905,6 +976,7 @@ Save a filter as a reusable `DocGen_Saved_Query__c`. Gives non-technical users a
 ### 8.3 Job history
 
 Command Hub → **Job History** tab. Every bulk job shows:
+
 - Status (Draft, Harvesting, Running, Completed, Failed)
 - Record count + success/failure counts
 - Generated PDFs (clickable links)
@@ -914,6 +986,7 @@ Command Hub → **Job History** tab. Every bulk job shows:
 ### 8.4 Governor-limit analysis
 
 Before a big bulk job submits, the runner calls `analyzeJob()` which estimates:
+
 - SOQL query count
 - DML operation count
 - Peak heap usage
@@ -936,11 +1009,11 @@ Typed-name electronic signatures with PIN verification, audit trail, packets, an
 2. The **DocGen Signature Sender** LWC appears on the page layout (if placed).
 3. Pick one or more templates (packets).
 4. Add signers:
-   - **Select from Contacts** (picker shows any Contact on the record).
-   - **Manual entry** (name + email + role, for people not yet in Salesforce).
+    - **Select from Contacts** (picker shows any Contact on the record).
+    - **Manual entry** (name + email + role, for people not yet in Salesforce).
 5. For each signer, choose:
-   - **Role** (Buyer, Seller, Witness — matches `{@Signature_Role}` in the template)
-   - **Order** (1, 2, 3 — for sequential flows, controls send order)
+    - **Role** (Buyer, Seller, Witness — matches `{@Signature_Role}` in the template)
+    - **Order** (1, 2, 3 — for sequential flows, controls send order)
 6. Pick signing order: **Parallel** (all get emails simultaneously) or **Sequential** (each signer emailed only after the previous completes).
 7. Click **Send**. Each signer receives a branded invitation email.
 
@@ -972,6 +1045,7 @@ PIN hashes are stored (not the PIN itself). Timestamps on `PIN_Verified_At__c`.
 ### 9.6 In-person signing (PIN bypass)
 
 Admins with `DocGen_Admin` permission set see a **Sign In Person** button on the signer row. When clicked:
+
 - Browser confirm dialog asks them to attest they've verified the signer's identity in person.
 - The signing URL opens in a new tab without requiring PIN.
 - An audit record captures who bypassed, when, and the attestation.
@@ -995,6 +1069,7 @@ Enable in signature settings. A scheduled job runs hourly and sends one reminder
 ### 9.9 Audit trail
 
 Every signature action creates an immutable `DocGen_Signature_Audit__c` record with:
+
 - IP address (captured server-side)
 - User agent
 - Timestamp
@@ -1007,6 +1082,7 @@ Audit records are read-only and appear on the signature request related list.
 ### 9.10 Signed PDF
 
 Once all signers complete, the system:
+
 1. Generates the final PDF with all signature tags stamped to "Electronically signed by X on DATE" text.
 2. Appends a **verification page** listing each signer, their typed name, IP, timestamp, and a QR code linking to the verify page.
 3. Saves the PDF to the source record as ContentDocumentLink.
@@ -1015,6 +1091,7 @@ Once all signers complete, the system:
 ### 9.11 Decline flow
 
 Any signer can decline with an optional reason. On decline:
+
 - The request is marked Declined.
 - Pending signers are NOT emailed.
 - The creator receives a decline notification with the reason.
@@ -1022,6 +1099,7 @@ Any signer can decline with an optional reason. On decline:
 ### 9.12 Admin setup (one-time)
 
 Before signatures work in production, complete the checklist in **Signature Settings**:
+
 - ✅ Site URL configured (Experience Cloud Site or Salesforce Site)
 - ✅ Active Salesforce Site exists
 - ✅ Org-Wide Email Address configured + verified (green checkmark)
@@ -1033,6 +1111,7 @@ The Settings panel shows each check as pass/fail with a fix link.
 ### 9.13 Email branding
 
 Configure in Signature Settings:
+
 - Brand color (hex) — used in email header/buttons
 - Logo URL — displayed at top of emails
 - Subject line and body (merge-tag aware — `{RecipientName}`, `{DocumentName}`, etc.)
@@ -1050,6 +1129,7 @@ Four Flow invocable actions. All available in Record-Triggered, Scheduled, Scree
 ### 10.1 DocGen — Generate Document
 
 Generate a single document.
+
 - **Inputs**: Template ID, Record ID, optional output format override, save-to-record flag, optional document title.
 - **Outputs**: ContentDocumentId, ContentVersionId, error message, success flag.
 
@@ -1058,6 +1138,7 @@ Use when you want a doc generated as part of a workflow (e.g., "when Opportunity
 ### 10.2 DocGen — Generate Bulk Documents
 
 Launch a bulk job from a Flow.
+
 - **Inputs**: Template ID, SOQL `WHERE` clause, job label, combined-PDF flag, individual-files flag, batch size.
 - **Outputs**: Job ID, success flag.
 
@@ -1066,6 +1147,7 @@ Fire-and-forget — Flow continues immediately. Monitor via Job History tab.
 ### 10.3 DocGen — Send Signature Request
 
 Create a signature request and email signers from a Flow.
+
 - **Inputs**: Template ID, Related Record ID, Signers collection (Name, Email, Role, Contact ID), signing order (Parallel/Sequential), sendEmails flag.
 - **Outputs**: Request ID, signer URLs (if `sendEmails=false`), success flag, error message, per-signer email status.
 
@@ -1074,6 +1156,7 @@ Supports the full v3 pipeline — guided signing, PIN, sequential ordering, bran
 ### 10.4 DocGen — Giant Query Generator
 
 Auto-detect giant-query mode from a Flow.
+
 - **Inputs**: Template ID, Record ID, save-to-record flag.
 - **Outputs**: ContentDocumentId (if sync), Job ID (if giant), `isGiantQuery` flag, success flag.
 
@@ -1089,15 +1172,16 @@ Call DocGen from your own Apex code, triggers, scheduled jobs, or Lightning comp
 
 ### 10A.1 `DocGenService` — synchronous generation
 
-Primary entry point from Apex. Use from triggers, scheduled Apex, or other service classes.
+Primary entry point from Apex. Use from triggers, scheduled Apex, or other service classes. All methods listed below are `global` in the managed namespace `portwoodglobal` — call them directly from subscriber Apex.
 
-| Method | Returns | Purpose |
-|---|---|---|
-| `generateDocument(Id templateId, Id recordId)` | `Id` (ContentDocumentId) | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format. |
-| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)` | `Id` | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination. |
-| `generatePdfBlob(Id templateId, Id recordId)` | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system. |
-| `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)` | `Id` | Same as generateDocument but skips the per-record data query. Used internally by the bulk batch; call if you're building a custom bulk loop. |
-| `renderPreviewHtml(Id templateId, Id recordId)` | `String` (HTML) | The merged HTML that would go into `Blob.toPdf`. Useful for preview panes, email body, or custom rendering. |
+| Method                                                                                                                   | Returns                                | Purpose                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generateDocument(Id templateId, Id recordId)`                                                                           | `Id` (ContentDocumentId)               | Generates, saves as File on the record, returns the new ContentDocumentId. Uses the template's default output format.                                                                                                 |
+| `generateDocument(Id templateId, Id recordId, String outputFormatOverride)`                                              | `Id`                                   | Same, but `'PDF'` / `'Word'` / `'PowerPoint'` / `'HTML'` override. Throws on lock or incompatible combination.                                                                                                        |
+| `generatePdfBlob(Id templateId, Id recordId)`                                                                            | `Map<String,Object>` (`blob`, `title`) | Renders a PDF in-memory without saving. Use when you want to email / attach elsewhere / POST to another system.                                                                                                       |
+| `generateDocumentFromData(Id templateId, Id recordId, Map<String,Object> preloadedRecordData)`                           | `Id`                                   | Same as `generateDocument` but skips the per-record data query and uses the supplied map instead. For custom bulk loops or callers that already have the data in hand.                                                |
+| `generatePdfBlobFromData(Id templateId, Map<String,Object> dataMap)`                                                     | `Map<String,Object>` (`blob`, `title`) | Renders a PDF straight from a caller-built data map — no SOQL, no recordId required. Lets you assemble external API responses, computed totals, or cross-object aggregations and merge them directly into a template. |
+| `generateAndSaveFromData(Id templateId, Id attachmentRecordId, Map<String,Object> dataMap, String outputFormatOverride)` | `Id` (ContentDocumentId)               | Same as `generatePdfBlobFromData`, but also saves the file as a ContentVersion linked to `attachmentRecordId`. One-shot "build wrapper → render → attach".                                                            |
 
 ```apex
 // Example: trigger PDF generation from an approval process
@@ -1106,47 +1190,64 @@ Id contentDocId = portwoodglobal.DocGenService.generateDocument(
     accountId,            // record ID
     'PDF'                 // force PDF regardless of template setting
 );
+
+// Example: invoice generation referencing a Custom Label for the template Id
+Id invoicePdf = portwoodglobal.DocGenService.generateDocument(
+    System.Label.Invoice_Document_Template_Id,
+    invRecordId
+);
+
+// Example: render a PDF in-memory and email it without ever creating a File
+Map<String, Object> result = portwoodglobal.DocGenService.generatePdfBlob(templateId, oppId);
+Blob pdf = (Blob) result.get('blob');
+String title = (String) result.get('title');
+// ...attach to a Messaging.SingleEmailMessage, POST to an external system, etc.
 ```
+
+> **Catching exceptions.** All API methods throw `portwoodglobal.DocGenException` on validation failures (locked output format, missing template, PowerPoint→PDF, null `dataMap`, etc.). Subscriber code can catch by name: `catch (portwoodglobal.DocGenException e) { ... }`.
+
+> **Sharing & FLS.** `DocGenService` runs `with sharing` — record-level access is enforced for the calling user. Field-level security is **not** explicitly checked inside the merge engine; if a user has row access but restricted FLS on a referenced field, that field's value will still appear in the rendered document. The `…FromData` overloads (`generatePdfBlobFromData`, `generateAndSaveFromData`) accept a caller-supplied data map and bypass DocGen's SOQL boundary entirely — the calling code is responsible for any FLS/CRUD enforcement on the values it places in the map. Treat these like any privileged service: gate them in your own code if you expose them to lower-privilege actors.
 
 ### 10A.2 `DocGenController` — LWC / Aura endpoints
 
 All methods are `@AuraEnabled` so you can call them from your own LWC / Aura components. Use the full path from LWC:
+
 ```js
 import generatePdf from '@salesforce/apex/portwoodglobal.DocGenController.generatePdf';
 ```
 
-| Method | Returns | Purpose |
-|---|---|---|
-| `generatePdf(Id templateId, Id recordId, Boolean saveToRecord)` | `Map<String,Object>` (`base64`, `contentDocumentId`, `title`) | LWC-friendly PDF generation. `saveToRecord=true` attaches, `false` returns base64 only. |
-| `generatePdfAsync(Id templateId, Id recordId)` | `Id` (AsyncApexJob Id) | Enqueues a Queueable for large PDFs (>~15 MB) that exceed the sync Aura timeout. Client polls. |
-| `generateDocumentGiantQuery(Id templateId, Id recordId)` | `Map<String,Object>` (`isGiantQuery`, `jobId` OR `docId` + `contentVersionId`) | Auto-routes: small child counts go sync, >2000 rows spawn a batched Giant Query job. |
-| `saveTemplate(Map<String,Object> fields, Boolean createVersion, String contentVersionId)` | `void` | Programmatic template save. Fields: Id, Name, Type__c, Base_Object_API__c, Query_Config__c, Header_Html__c, Footer_Html__c, etc. |
-| `getAllTemplates()` | `List<DocGen_Template__c>` | Every template in the org (cacheable). |
-| `getTemplatesForObject(String objectApiName)` | `List<DocGen_Template__c>` | Audience-filtered list. Applies `Required_Permission_Sets__c` and static `Record_Filter__c`. |
-| `getTemplatesForObjectAndRecord(String objectApiName, String recordId)` | `List<DocGen_Template__c>` | Above plus per-record filter evaluation (`Specific_Record_Ids__c`, runtime `Record_Filter__c`). |
-| `saveHtmlTemplateImage(Id templateId, String fileName, String base64Content)` | `Map<String,Object>` (`contentVersionId`, `url`) | Stores an inline image from an HTML template upload (v1.61+). Called from the LWC during client-side unzip. |
-| `saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent)` | `Map<String,Object>` (`contentVersionId`, `contentDocumentId`) | Stores the rewritten HTML body after image extraction. |
+| Method                                                                                    | Returns                                                                        | Purpose                                                                                                                            |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `generatePdf(Id templateId, Id recordId, Boolean saveToRecord)`                           | `Map<String,Object>` (`base64`, `contentDocumentId`, `title`)                  | LWC-friendly PDF generation. `saveToRecord=true` attaches, `false` returns base64 only.                                            |
+| `generatePdfAsync(Id templateId, Id recordId)`                                            | `Id` (AsyncApexJob Id)                                                         | Enqueues a Queueable for large PDFs (>~15 MB) that exceed the sync Aura timeout. Client polls.                                     |
+| `generateDocumentGiantQuery(Id templateId, Id recordId)`                                  | `Map<String,Object>` (`isGiantQuery`, `jobId` OR `docId` + `contentVersionId`) | Auto-routes: small child counts go sync, >2000 rows spawn a batched Giant Query job.                                               |
+| `saveTemplate(Map<String,Object> fields, Boolean createVersion, String contentVersionId)` | `void`                                                                         | Programmatic template save. Fields: Id, Name, Type**c, Base_Object_API**c, Query_Config**c, Header_Html**c, Footer_Html\_\_c, etc. |
+| `getAllTemplates()`                                                                       | `List<DocGen_Template__c>`                                                     | Every template in the org (cacheable).                                                                                             |
+| `getTemplatesForObject(String objectApiName)`                                             | `List<DocGen_Template__c>`                                                     | Audience-filtered list. Applies `Required_Permission_Sets__c` and static `Record_Filter__c`.                                       |
+| `getTemplatesForObjectAndRecord(String objectApiName, String recordId)`                   | `List<DocGen_Template__c>`                                                     | Above plus per-record filter evaluation (`Specific_Record_Ids__c`, runtime `Record_Filter__c`).                                    |
+| `saveHtmlTemplateImage(Id templateId, String fileName, String base64Content)`             | `Map<String,Object>` (`contentVersionId`, `url`)                               | Stores an inline image from an HTML template upload (v1.61+). Called from the LWC during client-side unzip.                        |
+| `saveHtmlTemplateBody(Id templateId, String fileName, String htmlContent)`                | `Map<String,Object>` (`contentVersionId`, `contentDocumentId`)                 | Stores the rewritten HTML body after image extraction.                                                                             |
 
 ### 10A.3 `DocGenBulkController` — bulk generation
 
-| Method | Returns | Purpose |
-|---|---|---|
-| `submitJob(Id templateId, String condition, String jobLabel, Boolean mergePdf, Integer batchSize, Boolean mergeOnly)` | `Id` (DocGen_Job__c Id) | Launches a bulk batch. `condition` is a SOQL WHERE on the template's base object. `mergePdf` produces a combined PDF; `mergeOnly` skips per-record files. |
-| `analyzeJob(Id templateId, Integer recordCount, Integer batchSize, Boolean mergePdf)` | `JobAnalysis` (SOQL / DML / heap / record-count checks) | Pre-flight estimator. Run before `submitJob` to warn about governor-limit risks. |
-| `getBulkTemplates()` | `List<DocGen_Template__c>` | Audience-filtered template list for the bulk UI. |
-| `getJobStatus(Id jobId)` | `DocGen_Job__c` | Current status, success count, error count, total records, merged-PDF CV Id. |
-| `validateFilter(String objectName, String condition)` | `Integer` (matching count) | Validates a WHERE clause and returns the count. Use to preview scope. |
+| Method                                                                                                                | Returns                                                 | Purpose                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitJob(Id templateId, String condition, String jobLabel, Boolean mergePdf, Integer batchSize, Boolean mergeOnly)` | `Id` (DocGen_Job\_\_c Id)                               | Launches a bulk batch. `condition` is a SOQL WHERE on the template's base object. `mergePdf` produces a combined PDF; `mergeOnly` skips per-record files. |
+| `analyzeJob(Id templateId, Integer recordCount, Integer batchSize, Boolean mergePdf)`                                 | `JobAnalysis` (SOQL / DML / heap / record-count checks) | Pre-flight estimator. Run before `submitJob` to warn about governor-limit risks.                                                                          |
+| `getBulkTemplates()`                                                                                                  | `List<DocGen_Template__c>`                              | Audience-filtered template list for the bulk UI.                                                                                                          |
+| `getJobStatus(Id jobId)`                                                                                              | `DocGen_Job__c`                                         | Current status, success count, error count, total records, merged-PDF CV Id.                                                                              |
+| `validateFilter(String objectName, String condition)`                                                                 | `Integer` (matching count)                              | Validates a WHERE clause and returns the count. Use to preview scope.                                                                                     |
 
 ### 10A.4 Flow invocable actions (full signatures)
 
 Usable from Flow Builder and from Apex via `Invocable.Action.createCustomAction(...)`:
 
-| Action | Class | Input | Output |
-|---|---|---|---|
-| Generate Document | `DocGenFlowAction` | `templateId`, `recordId`, optional `outputFormatOverride` | `contentDocumentId`, `contentVersionId`, `fileName` |
-| Generate Bulk Documents | `DocGenBulkFlowAction` | `templateId`, `whereClause`, `jobLabel`, `mergePdf`, `batchSize`, `mergeOnly` | `jobId` |
-| Generate Document (Auto Giant Query) | `DocGenGiantQueryFlowAction` | `templateId`, `recordId` | `contentDocumentId` (small) OR `jobId` (giant) |
-| Create Signature Request | `DocGenSignatureFlowAction` | `templateId`, `recordId`, `signers` (List<Signer>: `email`, `role`, `firstName`, `lastName`), `signingOrder` | `signatureRequestId`, `status` |
+| Action                               | Class                        | Input                                                                                                        | Output                                              |
+| ------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Generate Document                    | `DocGenFlowAction`           | `templateId`, `recordId`, optional `outputFormatOverride`                                                    | `contentDocumentId`, `contentVersionId`, `fileName` |
+| Generate Bulk Documents              | `DocGenBulkFlowAction`       | `templateId`, `whereClause`, `jobLabel`, `mergePdf`, `batchSize`, `mergeOnly`                                | `jobId`                                             |
+| Generate Document (Auto Giant Query) | `DocGenGiantQueryFlowAction` | `templateId`, `recordId`                                                                                     | `contentDocumentId` (small) OR `jobId` (giant)      |
+| Create Signature Request             | `DocGenSignatureFlowAction`  | `templateId`, `recordId`, `signers` (List<Signer>: `email`, `role`, `firstName`, `lastName`), `signingOrder` | `signatureRequestId`, `status`                      |
 
 ### 10A.5 `DocGenDataProvider` interface — custom data source
 
@@ -1169,16 +1270,14 @@ global class MyCustomProvider implements portwoodglobal.DocGenDataProvider {
         Map<String, Object> data = new Map<String, Object>{
             'Name' => a.Name,
             'Industry' => a.Industry,
-            'ComputedScore' => calculateRiskScore(a)  // your logic
+            'ComputedScore' => calculateRiskScore(a) // your logic
         };
         // Add a child list for {#Contacts}...{/Contacts}
         List<Map<String, Object>> contacts = new List<Map<String, Object>>();
         for (Contact c : [SELECT FirstName, LastName FROM Contact WHERE AccountId = :recordId]) {
-            contacts.add(new Map<String, Object>{
-                'FirstName' => c.FirstName, 'LastName' => c.LastName
-            });
+            contacts.add(new Map<String, Object>{ 'FirstName' => c.FirstName, 'LastName' => c.LastName });
         }
-        data.put('Contacts', new Map<String, Object>{'records' => contacts});
+        data.put('Contacts', new Map<String, Object>{ 'records' => contacts });
         return data;
     }
 }
@@ -1208,18 +1307,18 @@ Salesforce Apex has a hard heap limit: 6 MB synchronous, 12 MB asynchronous. A t
 Three layers of defense:
 
 1. **Pre-flight estimator** (v1.54.0 / refined in v1.55.0). Before generation, `scoutChildCounts` estimates peak heap per child relationship using output-format-aware math:
-   - PDF: `baseBytes = 1 MB, bytesPerRow = 10 KB` (accounts for DOM parse overhead in `Blob.toPdf`)
-   - DOCX/Excel/PowerPoint: `baseBytes = 200 KB, bytesPerRow = 2 KB`
-   - If `baseBytes + (rowCount × bytesPerRow) > 60% × 6 MB`, route to giant mode upfront.
-   - Result: PDF giant threshold ≈ 260 records, DOCX ≈ 1700 records. No hardcoded record count.
+    - PDF: `baseBytes = 1 MB, bytesPerRow = 10 KB` (accounts for DOM parse overhead in `Blob.toPdf`)
+    - DOCX/Excel/PowerPoint: `baseBytes = 200 KB, bytesPerRow = 2 KB`
+    - If `baseBytes + (rowCount × bytesPerRow) > 60% × 6 MB`, route to giant mode upfront.
+    - Result: PDF giant threshold ≈ 260 records, DOCX ≈ 1700 records. No hardcoded record count.
 
 2. **In-flight safety net** (v1.54.0). During sync merge, `processXml` checks `Limits.getHeapSize()` every 50 loop iterations. If heap crosses 60% of the limit, it throws a typed `HeapPressureException` carrying the offending relationship name.
 
 3. **Try-and-retry fallback** (v1.55.0). The controller wraps generation in a try-catch:
-   - Catches `HeapPressureException` (from our in-flight check) → returns `{ heapPressure: true, giantRelationship: ... }` signal.
-   - Catches `System.LimitException` from `Blob.toPdf()` itself (not ours to throw — this is the PDF engine running out of heap on its own) → same signal.
-   - Runner LWC receives the signal → auto-retries via `_assembleGiantQueryPdf` → user sees a "large dataset — switching modes" toast.
-   - If the server couldn't identify the giant relationship (PDF engine OOM), the runner picks the relationship with the highest child count from the scout cache.
+    - Catches `HeapPressureException` (from our in-flight check) → returns `{ heapPressure: true, giantRelationship: ... }` signal.
+    - Catches `System.LimitException` from `Blob.toPdf()` itself (not ours to throw — this is the PDF engine running out of heap on its own) → same signal.
+    - Runner LWC receives the signal → auto-retries via `_assembleGiantQueryPdf` → user sees a "large dataset — switching modes" toast.
+    - If the server couldn't identify the giant relationship (PDF engine OOM), the runner picks the relationship with the highest child count from the scout cache.
 
 ### 11.3 What the user experiences
 
@@ -1248,6 +1347,7 @@ Admins can force giant mode via the Flow action `DocGenGiantQueryFlowAction` reg
 The DocGen app has 2 tabs: **DocGen** (Command Hub) and **Job History**.
 
 The Command Hub contains:
+
 - Welcome banner (shown when you have < 10 templates; dismissible)
 - Quick action cards (Templates, Bulk Generate, Generate from Record)
 - Embedded template manager (`docGenAdmin`)
@@ -1259,6 +1359,7 @@ The Command Hub contains:
 Location: DocGen app → Command Hub → Signature Settings.
 
 Covers:
+
 - Site URL configuration
 - OWA (Org-Wide Email Address) selection
 - Email branding (color, logo, subject, footer)
@@ -1292,6 +1393,7 @@ See [CLAUDE.md](./CLAUDE.md) for the full release-checklist rules.
 ### 13.2 PDF font limitations
 
 Salesforce's `Blob.toPdf()` uses Flying Saucer with only four built-in fonts:
+
 - **Helvetica** (sans-serif) — default
 - **Times** (serif)
 - **Courier** (monospace)
@@ -1320,6 +1422,7 @@ LWS blocks `fetch()` calls to `/sfc/servlet.shepherd/` URLs from LWCs (CORS redi
 ### 13.7 Guest user constraints (signing page)
 
 Guest users can't:
+
 - Send email without an OWA (required)
 - Call `Auth.SessionManagement.getCurrentSession()` (uncatchable session error)
 - Query the User table
@@ -1335,13 +1438,14 @@ DocGen's image proxy (`getImageBase64()`) returns base64 for guest users — sig
 
 1. Check the browser console / Apex log for the actual error.
 2. Common causes:
-   - Query config references a field that doesn't exist or user has no FLS access.
-   - Template has a malformed merge tag (unclosed `{` or missing `{/Rel}` for a loop).
-   - `Blob.toPdf` Release Update not enabled (PDF only).
+    - Query config references a field that doesn't exist or user has no FLS access.
+    - Template has a malformed merge tag (unclosed `{` or missing `{/Rel}` for a loop).
+    - `Blob.toPdf` Release Update not enabled (PDF only).
 
 ### 14.2 Heap size too large
 
 Should never happen in v1.55.0+. If it does:
+
 1. Check that the runner is v1.55.0+ (badge in the Command Hub header).
 2. Upgrade subscribers to v1.55.0 if they're on an older version.
 3. If confirmed on v1.55.0, file an issue — this is a bug; the estimator should have caught it or the fallback should have retried.
@@ -1349,6 +1453,7 @@ Should never happen in v1.55.0+. If it does:
 ### 14.3 Merge tags render as literal text (e.g., `{Name}` appears in the output)
 
 Usually:
+
 - The field isn't in the query config — add it.
 - The tag has a typo (`{name}` case-sensitive is fine for fields, but aggregate function names must be uppercase in some paths).
 - The template isn't the active version — re-save.
@@ -1357,6 +1462,7 @@ Usually:
 ### 14.4 Signature emails don't arrive
 
 Check in this order:
+
 1. **Setup → Deliverability** — must be "All Email" (default in scratch orgs is "System Email Only" — emails silently dropped).
 2. **OWA settings** — "Allow All Profiles" checked, or the sender's profile is listed.
 3. **OWA verification** — green checkmark next to the address.
@@ -1369,11 +1475,13 @@ Check in this order:
 ### 14.5 PDF image is broken / doesn't render
 
 For ContentVersion-backed images:
+
 - The image URL must be **relative** (`/sfc/servlet.shepherd/version/download/<id>`) — never absolute (`https://...`). Absolute URLs fail silently.
 - Template images must be pre-extracted at save time (happens automatically).
 - If the template was saved pre-v1.40 or so, re-save it to trigger extraction.
 
 For rich text images:
+
 - Rich text HTML is pre-resolved to data URIs before merge.
 - If the source field has broken images, output will show broken images.
 
