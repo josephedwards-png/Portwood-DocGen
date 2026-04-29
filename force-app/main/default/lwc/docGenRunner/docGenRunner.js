@@ -42,7 +42,6 @@ export default class DocGenRunner extends NavigationMixin(LightningElement) {
     @api showDocumentPacketOption;
     @api showCombinePdfsOption;
     @api showCombineWithExistingPdfsOption;
-    @api showCombineChildPdfsOption;
 
     @track templateOptions = [];
     @track selectedTemplateId = '';

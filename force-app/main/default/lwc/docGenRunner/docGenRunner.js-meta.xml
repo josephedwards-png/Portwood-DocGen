@@ -17,7 +17,6 @@
             <property name="showDocumentPacketOption" type="Boolean" label="Show Document Packet Mode" default="true" />
             <property name="showCombinePdfsOption" type="Boolean" label="Show Combine PDFs Mode" default="true" />
             <property name="showCombineWithExistingPdfsOption" type="Boolean" label="Show Combine with Existing PDFs Option" default="true" />
-            <property name="showCombineChildPdfsOption" type="Boolean" label="Show Combine Child PDFs Mode" default="true" />
             <supportedFormFactors>
                 <supportedFormFactor type="Large" />
                 <supportedFormFactor type="Small" />
@@ -29,7 +28,6 @@
             <property name="showDocumentPacketOption" type="Boolean" label="Show Document Packet Mode" default="true" />
             <property name="showCombinePdfsOption" type="Boolean" label="Show Combine PDFs Mode" default="true" />
             <property name="showCombineWithExistingPdfsOption" type="Boolean" label="Show Combine with Existing PDFs Option" default="true" />
-            <property name="showCombineChildPdfsOption" type="Boolean" label="Show Combine Child PDFs Mode" default="true" />
             <supportedFormFactors>
                 <supportedFormFactor type="Large" />
                 <supportedFormFactor type="Small" />
@@ -43,7 +41,6 @@
             <property name="showDocumentPacketOption" type="Boolean" label="Show Document Packet Mode" default="true" />
             <property name="showCombinePdfsOption" type="Boolean" label="Show Combine PDFs Mode" default="true" />
             <property name="showCombineWithExistingPdfsOption" type="Boolean" label="Show Combine with Existing PDFs Option" default="true" />
-            <property name="showCombineChildPdfsOption" type="Boolean" label="Show Combine Child PDFs Mode" default="true" />
         </targetConfig>
     </targetConfigs>
 </LightningComponentBundle>
