@@ -2,7 +2,11 @@
     <div class="runner-widget">
         <div class="widget-header">
             <div class="header-title">
-                <lightning-icon icon-name="standard:document" size="small" class="slds-var-m-right_x-small"></lightning-icon>
+                <lightning-icon
+                    icon-name="standard:document"
+                    size="small"
+                    class="slds-var-m-right_x-small"
+                ></lightning-icon>
                 <h2>DocGen</h2>
             </div>
             <p class="header-subtitle">Create or combine documents for this record.</p>
@@ -32,7 +36,14 @@
                 <!-- Custom Mode Selector (Segmented Control) -->
                 <div lwc:if={showModeSelector} class="custom-segmented-control slds-var-m-bottom_medium">
                     <template for:each={modernModeOptions} for:item="opt">
-                        <button key={opt.value} class={opt.class} data-value={opt.value} onclick={handleModeChangeInternal}>{opt.label}</button>
+                        <button
+                            key={opt.value}
+                            class={opt.class}
+                            data-value={opt.value}
+                            onclick={handleModeChangeInternal}
+                        >
+                            {opt.label}
+                        </button>
                     </template>
                 </div>
 
@@ -65,7 +76,9 @@
                             <select class="custom-select" onchange={handleTemplateChangeInternal}>
                                 <option value="">Choose a template...</option>
                                 <template for:each={templateOptions} for:item="tmpl">
-                                    <option key={tmpl.value} value={tmpl.value} selected={tmpl.selected}>{tmpl.label}</option>
+                                    <option key={tmpl.value} value={tmpl.value} selected={tmpl.selected}>
+                                        {tmpl.label}
+                                    </option>
                                 </template>
                             </select>
                         </div>
@@ -91,7 +104,14 @@
                         <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
                             <template for:each={modernOutputOptions} for:item="out">
-                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
+                                <button
+                                    key={out.value}
+                                    class={out.class}
+                                    data-value={out.value}
+                                    onclick={handleOutputModeChangeInternal}
+                                >
+                                    {out.label}
+                                </button>
                             </template>
                         </div>
                     </div>
@@ -99,7 +119,13 @@
                     <!-- PDF Merge Toggle -->
                     <template lwc:if={showMergeOption}>
                         <div class="slds-var-m-bottom_medium">
-                            <lightning-input type="checkbox" label="Combine with existing PDFs on this record" checked={mergeEnabled} onchange={handleMergeToggle} class="custom-checkbox">
+                            <lightning-input
+                                type="checkbox"
+                                label="Combine with existing PDFs on this record"
+                                checked={mergeEnabled}
+                                onchange={handleMergeToggle}
+                                class="custom-checkbox"
+                            >
                             </lightning-input>
                         </div>
 
@@ -110,7 +136,11 @@
                                     <div class="checkbox-list">
                                         <template for:each={recordPdfOptions} for:item="pdf">
                                             <div key={pdf.value} class="checkbox-item">
-                                                <input type="checkbox" value={pdf.value} onchange={handlePdfSelectionInternal} />
+                                                <input
+                                                    type="checkbox"
+                                                    value={pdf.value}
+                                                    onchange={handlePdfSelectionInternal}
+                                                />
                                                 <span>{pdf.label}</span>
                                             </div>
                                         </template>
@@ -123,7 +153,9 @@
                         </template>
                     </template>
 
-                    <button class="cool-brand-btn" onclick={handleGenerate} disabled={isGenerateDisabled}>{generateButtonLabel}</button>
+                    <button class="cool-brand-btn" onclick={handleGenerate} disabled={isGenerateDisabled}>
+                        {generateButtonLabel}
+                    </button>
                 </template>
 
                 <!-- PACKET MODE -->
@@ -143,7 +175,13 @@
                     </div>
 
                     <div lwc:if={canUseCombineWithExistingPdfs} class="slds-var-m-bottom_medium">
-                        <lightning-input type="checkbox" label="Include other PDFs from this record" checked={packetIncludeExisting} onchange={handlePacketIncludeToggle} class="custom-checkbox">
+                        <lightning-input
+                            type="checkbox"
+                            label="Include other PDFs from this record"
+                            checked={packetIncludeExisting}
+                            onchange={handlePacketIncludeToggle}
+                            class="custom-checkbox"
+                        >
                         </lightning-input>
                     </div>
 
@@ -151,12 +189,21 @@
                         <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
                             <template for:each={modernOutputOptions} for:item="out">
-                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
+                                <button
+                                    key={out.value}
+                                    class={out.class}
+                                    data-value={out.value}
+                                    onclick={handleOutputModeChangeInternal}
+                                >
+                                    {out.label}
+                                </button>
                             </template>
                         </div>
                     </div>
 
-                    <button class="cool-brand-btn" onclick={generatePacket} disabled={isPacketDisabled}>{packetButtonLabel}</button>
+                    <button class="cool-brand-btn" onclick={generatePacket} disabled={isPacketDisabled}>
+                        {packetButtonLabel}
+                    </button>
                 </template>
 
                 <!-- MERGE ONLY MODE -->
@@ -184,12 +231,21 @@
                         <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
                             <template for:each={modernOutputOptions} for:item="out">
-                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
+                                <button
+                                    key={out.value}
+                                    class={out.class}
+                                    data-value={out.value}
+                                    onclick={handleOutputModeChangeInternal}
+                                >
+                                    {out.label}
+                                </button>
                             </template>
                         </div>
                     </div>
 
-                    <button class="cool-brand-btn" onclick={mergeOnlyDocument} disabled={isMergeOnlyDisabled}>{mergeOnlyButtonLabel}</button>
+                    <button class="cool-brand-btn" onclick={mergeOnlyDocument} disabled={isMergeOnlyDisabled}>
+                        {mergeOnlyButtonLabel}
+                    </button>
                 </template>
 
                 <!-- MERGE CHILD RECORD PDFs MODE -->
@@ -207,7 +263,9 @@
                     </div>
 
                     <template lwc:if={selectedChildRel}>
-                        <div class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small slds-var-m-bottom_medium">
+                        <div
+                            class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small slds-var-m-bottom_medium"
+                        >
                             <div class="slds-col slds-grow">
                                 <lightning-input
                                     label="Filter Records"
@@ -232,7 +290,12 @@
                                         <p class="slds-text-title_bold">{group.childRecordName}</p>
                                         <template for:each={group.pdfs} for:item="pdf">
                                             <div key={pdf.value} class="checkbox-item slds-var-m-left_small">
-                                                <input type="checkbox" checked={pdf.checked} data-cvid={pdf.value} onchange={handleChildPdfCheckbox} />
+                                                <input
+                                                    type="checkbox"
+                                                    checked={pdf.checked}
+                                                    data-cvid={pdf.value}
+                                                    onchange={handleChildPdfCheckbox}
+                                                />
                                                 <span>{pdf.label}</span>
                                             </div>
                                         </template>
@@ -248,12 +311,25 @@
                             <label class="slds-form-element__label">Output Destination</label>
                             <div class="custom-mini-pills">
                                 <template for:each={modernOutputOptions} for:item="out">
-                                    <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
+                                    <button
+                                        key={out.value}
+                                        class={out.class}
+                                        data-value={out.value}
+                                        onclick={handleOutputModeChangeInternal}
+                                    >
+                                        {out.label}
+                                    </button>
                                 </template>
                             </div>
                         </div>
 
-                        <button class="cool-brand-btn" onclick={mergeChildrenDocument} disabled={isMergeChildrenDisabled}>{mergeChildrenButtonLabel}</button>
+                        <button
+                            class="cool-brand-btn"
+                            onclick={mergeChildrenDocument}
+                            disabled={isMergeChildrenDisabled}
+                        >
+                            {mergeChildrenButtonLabel}
+                        </button>
                     </template>
                 </template>
             </template>
