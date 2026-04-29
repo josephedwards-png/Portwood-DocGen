@@ -7387,4 +7387,340 @@ private class DocGenMiscTests {
         System.assert(caught, 'DocGenException should be catchable');
     }
 
+    // =========================================================================
+    // v1.72 — Nested IF balancing (findBalancedEnd IF prefix-match)
+    // =========================================================================
+
+    @IsTest
+    static void testNestedIfBothTrue() {
+        Map<String, Object> d = new Map<String, Object>{ 'O__c' => 1, 'I__c' => 1 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', d);
+        System.assertEquals('OUTERINNEREND', r);
+    }
+
+    @IsTest
+    static void testNestedIfInnerFalse() {
+        Map<String, Object> d = new Map<String, Object>{ 'O__c' => 1, 'I__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', d);
+        System.assertEquals('OUTEREND', r);
+    }
+
+    @IsTest
+    static void testNestedIfOuterFalse() {
+        Map<String, Object> d = new Map<String, Object>{ 'O__c' => 0, 'I__c' => 1 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testNestedIfTriple() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 1, 'B__c' => 1, 'C__c' => 1 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c != 0}A{#IF B__c != 0}B{#IF C__c != 0}C{/IF}/B{/IF}/A{/IF}', d);
+        System.assertEquals('ABC/B/A', r);
+    }
+
+    // =========================================================================
+    // v1.72 — Bare-boolean IF + truthy semantics + == operator
+    // =========================================================================
+
+    @IsTest
+    static void testBareBooleanIfTrue() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => true };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testBareBooleanIfFalse() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => false };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testBareIfNullField() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => null };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testBareIfStringFalse() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => 'false' };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testBareIfStringZero() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => '0' };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testBareIfStringValue() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => 'something' };
+        String r = DocGenService.processXmlForTest('{#IF Active__c}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfDoubleEquals() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => true };
+        String r = DocGenService.processXmlForTest('{#IF Active__c == true}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfBareEmptyRecordsList() {
+        Map<String, Object> d = new Map<String, Object>{
+            'Items' => new Map<String, Object>{
+                'totalSize' => 0, 'records' => new List<Object>()
+            }
+        };
+        String r = DocGenService.processXmlForTest('{#IF Items}YES{/IF}', d);
+        System.assertEquals('', r, 'empty records-wrapper should be falsy');
+    }
+
+    @IsTest
+    static void testIfBarePopulatedRecordsList() {
+        Map<String, Object> d = new Map<String, Object>{
+            'Items' => new Map<String, Object>{
+                'totalSize' => 1,
+                'records' => new List<Object>{ new Map<String, Object>{'X' => 1} }
+            }
+        };
+        String r = DocGenService.processXmlForTest('{#IF Items}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    // =========================================================================
+    // v1.72 — AND / OR / NOT / parens in IF expressions
+    // =========================================================================
+
+    @IsTest
+    static void testIfAndBothTrue() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 5, 'B__c' => 10 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 AND B__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfAndShortCircuit() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 0, 'B__c' => 10 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 AND B__c > 0}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testIfOrFirstTrue() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 5, 'B__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 OR B__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfOrSecondTrue() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 0, 'B__c' => 10 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 OR B__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfOrBothFalse() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 0, 'B__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 OR B__c > 0}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testIfNotTruthy() {
+        Map<String, Object> d = new Map<String, Object>{ 'X__c' => true };
+        String r = DocGenService.processXmlForTest('{#IF NOT X__c}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testIfNotFalsy() {
+        Map<String, Object> d = new Map<String, Object>{ 'X__c' => false };
+        String r = DocGenService.processXmlForTest('{#IF NOT X__c}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfBangNot() {
+        Map<String, Object> d = new Map<String, Object>{ 'X__c' => false };
+        String r = DocGenService.processXmlForTest('{#IF !X__c}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfSymbolicAnd() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 5, 'B__c' => 10 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 && B__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfSymbolicOr() {
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 5, 'B__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 || B__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfPrecedenceAndOverOr() {
+        // A>0 OR C>5 AND C>10 → A>0 OR (false AND false) → true
+        Map<String, Object> d = new Map<String, Object>{ 'A__c' => 5, 'C__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 OR C__c > 5 AND C__c > 10}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfParensOverridePrecedence() {
+        // (C>5 OR C>10) AND B>0 → false AND true → false
+        Map<String, Object> d = new Map<String, Object>{ 'B__c' => 10, 'C__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF (C__c > 5 OR C__c > 10) AND B__c > 0}YES{/IF}', d);
+        System.assertEquals('', r);
+    }
+
+    @IsTest
+    static void testIfMultiOrChain() {
+        // (C>5) OR (B>0 AND A>0) OR (C>5) → false OR true OR false → true
+        Map<String, Object> d = new Map<String, Object>{
+            'A__c' => 5, 'B__c' => 10, 'C__c' => 0
+        };
+        String r = DocGenService.processXmlForTest(
+            '{#IF (C__c > 5) OR (B__c > 0 AND A__c > 0) OR (C__c > 5)}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfNestedParens() {
+        // ((A>0 AND B>0) OR (C>5)) AND D>0 → (true OR false) AND true → true
+        Map<String, Object> d = new Map<String, Object>{
+            'A__c' => 5, 'B__c' => 10, 'C__c' => 0, 'D__c' => 7
+        };
+        String r = DocGenService.processXmlForTest(
+            '{#IF ((A__c > 0 AND B__c > 0) OR (C__c > 5)) AND D__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfQuotedAndPreserved() {
+        // 'big AND small' is opaque — AND inside quotes is part of the literal
+        Map<String, Object> d = new Map<String, Object>{ 'Stage' => 'big AND small' };
+        String r = DocGenService.processXmlForTest(
+            '{#IF Stage = \'big AND small\'}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfStringAnd() {
+        Map<String, Object> d = new Map<String, Object>{
+            'Name' => 'Acme', 'Stage' => 'Closed Won'
+        };
+        String r = DocGenService.processXmlForTest(
+            '{#IF Name = \'Acme\' AND Stage = \'Closed Won\'}WIN{/IF}', d);
+        System.assertEquals('WIN', r);
+    }
+
+    @IsTest
+    static void testIfBareBoolAndComparison() {
+        Map<String, Object> d = new Map<String, Object>{ 'Active__c' => true, 'A__c' => 5 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF Active__c AND A__c > 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfNotWithParens() {
+        Map<String, Object> d = new Map<String, Object>{ 'C__c' => 0 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF NOT (C__c > 5)}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfTripleAnd() {
+        Map<String, Object> d = new Map<String, Object>{
+            'A__c' => 5, 'B__c' => 10, 'Active__c' => true
+        };
+        String r = DocGenService.processXmlForTest(
+            '{#IF A__c > 0 AND B__c > 0 AND Active__c}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    @IsTest
+    static void testIfEntityDecodedGt() {
+        // Word stores `>` as `&gt;` in OOXML; v1.69 fix decodes before parse
+        Map<String, Object> d = new Map<String, Object>{ 'Amount' => 100 };
+        String r = DocGenService.processXmlForTest(
+            '{#IF Amount &gt; 0}YES{/IF}', d);
+        System.assertEquals('YES', r);
+    }
+
+    // =========================================================================
+    // v1.72 — Empty child relationship totalSize=0 synthesis (V1 + V2)
+    // =========================================================================
+
+    @IsTest
+    static void testEmptyRelTotalSizeV1() {
+        Account a = new Account(Name = 'DG_v172_test');
+        insert a;
+
+        Test.startTest();
+        Map<String, Object> data = DocGenDataRetriever.getRecordData(
+            a.Id, 'Account', 'Name, (SELECT Id FROM Contacts)');
+        Test.stopTest();
+
+        System.assertNotEquals(null, data);
+        System.assert(data.containsKey('Contacts'),
+            'V1 should synthesize empty Contacts wrapper');
+        Map<String, Object> rel = (Map<String, Object>) data.get('Contacts');
+        System.assertEquals(0, Integer.valueOf(rel.get('totalSize')));
+        System.assert(rel.get('records') instanceof List<Object>);
+        System.assert(((List<Object>) rel.get('records')).isEmpty());
+    }
+
+    @IsTest
+    static void testEmptyRelIfSuppresses() {
+        Account a = new Account(Name = 'DG_v172_test_if');
+        insert a;
+
+        Map<String, Object> data = DocGenDataRetriever.getRecordData(
+            a.Id, 'Account', 'Name, (SELECT Id FROM Contacts)');
+
+        String r = DocGenService.processXmlForTest(
+            '{#IF Contacts.totalSize != 0}HAS{/IF}', data);
+        System.assertEquals('', r,
+            'Empty rel IF should suppress (was truthy pre-1.72)');
+    }
+
+    @IsTest
+    static void testEmptyRelTotalSizeRendersZero() {
+        Account a = new Account(Name = 'DG_v172_test_render');
+        insert a;
+
+        Map<String, Object> data = DocGenDataRetriever.getRecordData(
+            a.Id, 'Account', 'Name, (SELECT Id FROM Contacts)');
+
+        String r = DocGenService.processXmlForTest('[{Contacts.totalSize}]', data);
+        System.assertEquals('[0]', r);
+    }
+
 }

@@ -2,7 +2,7 @@
 
 ## v1.72.0 — Nested IF blocks + AND/OR/NOT + empty-rel totalSize + bare-boolean IF
 
-Promoted package: `04tal000006r1FRAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r1FRAAY)
+Promoted package: `04tal000006r0xiAAA` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0xiAAA)
 
 Three IF/relationship bugs surfaced by Joe (external tester) when building a nontrivial Work Order template with multiple conditionally-visible sections. All three are pre-existing — the v1.69 IF-operator fix made nontrivial IF templates viable, which made these latent bugs reachable.
 
