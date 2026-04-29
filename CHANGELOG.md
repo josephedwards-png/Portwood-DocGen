@@ -1,5 +1,74 @@
 # Changelog
 
+## v1.72.0 — Nested IF blocks + AND/OR/NOT + empty-rel totalSize + bare-boolean IF
+
+Promoted package: `04tal000006r1FRAAY` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r1FRAAY)
+
+Three IF/relationship bugs surfaced by Joe (external tester) when building a nontrivial Work Order template with multiple conditionally-visible sections. All three are pre-existing — the v1.69 IF-operator fix made nontrivial IF templates viable, which made these latent bugs reachable.
+
+### Bug 1 — Nested `{#IF expr}` blocks paired incorrectly
+
+`DocGenService.findBalancedEnd` matched openers with `content.equals('#' + key)`. When `key == 'IF'` and the opener is `{#IF Field != 0}`, the content equals `#IF Field != 0` — not bare `#IF` — so the depth tracker never incremented past 1. The first `{/IF}` the function found (the inner one) got returned as the outer's match, the parser desynced, and runtime threw `Malformed loop tag: missing closing "" for ""`.
+
+Fix: `findBalancedEnd` now branches on `key == 'IF'` and matches openers by prefix (`#IF`, `#IF `, `^IF`, `^IF `). Closer remains exact-equals `/IF`. All other keys keep exact-equals matching, so non-IF balancing is unchanged.
+
+### Bug 2 — `{Rel.totalSize}` resolved to null (not 0) when SOQL child subqueries returned zero rows
+
+`record.getPopulatedFieldsAsMap()` strips empty child relationships. The V1 and V2 retriever paths called `mapSObject(parent)` and exited — the empty rel never made it into the data map. So `{Rel.totalSize}` resolved to null, `{#IF Rel.totalSize != 0}` compared `'' != '0'` (truthy via string fallback) and rendered the body that should have been suppressed.
+
+Fix: V1 (`getRecordData`) and V2 (`getRecordDataV2`) now synthesize `{records:[], totalSize:0}` wrappers for every declared subquery / junction relationship not present after `mapSObject`. The synthesis runs before `stitchGrandchildren` and `stitchJunctionTargets` so deeper levels still work as before. V3 was already correct (`processChildNodes` writes empty wrappers explicitly when no rows return); no V3 changes needed.
+
+### Bug 3 — Bare-boolean `{#IF FieldName}` and `{#IF FieldName == true}` always evaluated false
+
+Discovered while writing smoke tests for Bug 1. Two sub-bugs in `evaluateIfExpression`:
+- The operator parser returned `false` unconditionally when no operator was present in the expression. So `{#IF Active__c}` (a bare boolean reference) never rendered its body.
+- The operator list `['!=', '>=', '<=', '=', '>', '<']` checked `=` before `==`, so `==` got matched as `=` against the wrong byte position — `Active__c == true` parsed as field=`Active__c`, op=`=`, value=`= true`. Always false.
+
+Fix: when no operator parses, the expression is treated as a single field reference and evaluated with truthy semantics — Boolean direct, lists/records-wrappers truthy when non-empty, null/blank/`'false'`/`'0'` falsy, everything else truthy. `==` added to the operator list before `=` so it matches first.
+
+### Feature — `AND` / `OR` / `NOT` / parens in IF expressions
+
+The IF expression evaluator was previously single-comparison only — `{#IF A AND B}` silently parsed as `field=A, op=AND, value=B` and evaluated false. Templates with multiple conditions had to nest IFs (for AND) or duplicate content (for OR).
+
+v1.72 ships a real recursive-descent parser supporting:
+- Word-form `AND` / `OR` / `NOT` (case-insensitive, word-boundary detection)
+- Symbolic form `&&` / `||` / `!`
+- Parentheses for grouping and precedence override
+- Standard precedence: `NOT` (highest) → comparison → `AND` → `OR`
+- Arbitrarily long chains: `(C1) OR (C2 AND C3) OR (C4)` works natively
+- Quoted-string contents opaque — `'big AND small'` is preserved as a literal
+
+Usage examples:
+
+```
+{#IF Amount > 100000 AND Stage = 'Closed Won'} … {/IF}
+{#IF Stage = 'Closed Won' OR Stage = 'Closed - Pending Funding'} … {/IF}
+{#IF NOT IsPrivate__c} … {/IF}
+{#IF (Region = 'NA') OR (Region = 'EU' AND Tier__c = 'Gold')} … {/IF}
+```
+
+Existing single-comparison IFs are unchanged — they tokenize to one TERM and skip the recursive descent.
+
+### Tests
+
+Six new assertions in `scripts/e2e-07-syntax.apex`:
+- `NESTED IF (both true)` / `(inner false)` / `(outer false)` / `(triple)`
+- `EMPTY REL totalSize` (returns 0)
+- `EMPTY REL IF` (suppressed)
+- `EMPTY REL render` (renders `[0]`)
+
+Plus `scripts/smoke-v172.apex` with 9 assertions covering all three bugs end-to-end.
+
+### Template lint script
+
+`scripts/docgen-template-lint.js` (Joe's contribution) bundled into the repo. Pure-JS, no dependencies, runs against a `.docx` file pre-upload to catch fragmented merge tags, loop pairing issues, structural placement problems, and 9 named anti-patterns including the nested-IF and entity-encoded operator bugs (so templates stay portable to customers on older versions).
+
+### Credit
+
+All three bugs reported by **Joe** with full code traces, fix sketches, and repro test cases. The lint script bundled with the package is his contribution. Excellent bug report.
+
+---
+
 ## v1.71.0 — Checkmarks & Symbols (Wingdings → Unicode auto-translate)
 
 Promoted package: `04tal000006r0jBAAQ` · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)

@@ -139,6 +139,19 @@ public with sharing class DocGenDataRetriever {
             throw new DocGenException('Error executing query. Please verify your template configuration: ' + e.getMessage());
         }
 
+        // 1.72 — getPopulatedFieldsAsMap() drops child relationships that
+        // returned zero rows from the SOQL result. Synthesize empty
+        // {records:[], totalSize:0} wrappers for every declared subquery so
+        // {Rel.totalSize} resolves to 0 (not null) and {#IF Rel.totalSize != 0}
+        // evaluates correctly on the empty case.
+        List<String> declaredRels = new List<String>();
+        for (SubquerySpec spec : deepSpecs) {
+            if (String.isNotBlank(spec.relationshipName)) {
+                declaredRels.add(spec.relationshipName);
+            }
+        }
+        ensureChildRelKeys(data, declaredRels);
+
         // Stitch deeper levels (grandchildren, great-grandchildren)
         for (SubquerySpec spec : deepSpecs) {
             if (!spec.children.isEmpty()) {
@@ -335,6 +348,21 @@ public with sharing class DocGenDataRetriever {
         } catch (Exception e) {
             throw new DocGenException('Error executing query. Please verify your template configuration: ' + e.getMessage());
         }
+
+        // 1.72 — synthesize empty wrappers for declared child + junction
+        // relationships that returned zero rows. See V1 path comment.
+        List<String> declaredRelsV2 = new List<String>();
+        for (SubquerySpec spec : childSpecs) {
+            if (String.isNotBlank(spec.relationshipName)) {
+                declaredRelsV2.add(spec.relationshipName);
+            }
+        }
+        for (JunctionSpec js : junctionSpecs) {
+            if (String.isNotBlank(js.junctionRel)) {
+                declaredRelsV2.add(js.junctionRel);
+            }
+        }
+        ensureChildRelKeys(data, declaredRelsV2);
 
         // Stitch junction targets (two-hop: junction record → target object)
         for (JunctionSpec js : junctionSpecs) {
@@ -1483,6 +1511,25 @@ public with sharing class DocGenDataRetriever {
             }
         }
         return validated;
+    }
+
+    // 1.72 — getPopulatedFieldsAsMap() strips child subqueries that returned
+    // zero rows, so an empty child relationship has no key in the data map.
+    // For every declared rel in the template's query config, ensure the
+    // map contains at least { 'totalSize': 0, 'records': [] } so
+    // {Rel.totalSize} renders 0 (not blank) and {#IF Rel.totalSize != 0}
+    // evaluates false. Existing populated wrappers are left alone.
+    private static void ensureChildRelKeys(Map<String, Object> data, List<String> relNames) {
+        if (data == null || relNames == null) { return; }
+        for (String rel : relNames) {
+            if (String.isBlank(rel)) { continue; }
+            if (!data.containsKey(rel)) {
+                data.put(rel, new Map<String, Object>{
+                    'totalSize' => 0,
+                    'records' => new List<Object>()
+                });
+            }
+        }
     }
 
     /**

@@ -449,6 +449,110 @@ try {
     } else { fail++; System.debug('TABLE WIDTH pct: FAIL — got: ' + html.substring(html.indexOf('<table'), Math.min(html.indexOf('<table') + 200, html.length()))); }
 } catch (Exception e) { fail++; System.debug('TABLE WIDTH pct: FAIL — ' + e.getMessage()); }
 
+// ===== Nested {#IF} blocks pair correctly (v1.72) =====
+// Pre-1.72: findBalancedEnd matched openers with content.equals('#IF'),
+// which never matches '#IF Field != 0' (expression-bearing). Inner {/IF}
+// got returned as outer's match, parser desynced, "missing closing for"
+// thrown. v1.72 changes the IF balancer to prefix-match openers.
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'O__c' => 1, 'I__c' => 1 };
+    String r = DocGenService.processXmlForTest(
+        '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', data);
+    if (r == 'OUTERINNEREND') { pass++; System.debug('NESTED IF (both true): PASS'); }
+    else { fail++; System.debug('NESTED IF (both true): FAIL — got [' + r + ']'); }
+} catch (Exception e) { fail++; System.debug('NESTED IF (both true): FAIL — ' + e.getMessage()); }
+
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'O__c' => 1, 'I__c' => 0 };
+    String r = DocGenService.processXmlForTest(
+        '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', data);
+    if (r == 'OUTEREND') { pass++; System.debug('NESTED IF (inner false): PASS'); }
+    else { fail++; System.debug('NESTED IF (inner false): FAIL — got [' + r + ']'); }
+} catch (Exception e) { fail++; System.debug('NESTED IF (inner false): FAIL — ' + e.getMessage()); }
+
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'O__c' => 0, 'I__c' => 1 };
+    String r = DocGenService.processXmlForTest(
+        '{#IF O__c != 0}OUTER{#IF I__c != 0}INNER{/IF}END{/IF}', data);
+    if (r == '') { pass++; System.debug('NESTED IF (outer false): PASS'); }
+    else { fail++; System.debug('NESTED IF (outer false): FAIL — got [' + r + ']'); }
+} catch (Exception e) { fail++; System.debug('NESTED IF (outer false): FAIL — ' + e.getMessage()); }
+
+try {
+    Map<String, Object> data = new Map<String, Object>{ 'A__c' => 1, 'B__c' => 1, 'C__c' => 1 };
+    String r = DocGenService.processXmlForTest(
+        '{#IF A__c != 0}A{#IF B__c != 0}B{#IF C__c != 0}C{/IF}/B{/IF}/A{/IF}', data);
+    if (r == 'ABC/B/A') { pass++; System.debug('NESTED IF (triple): PASS'); }
+    else { fail++; System.debug('NESTED IF (triple): FAIL — got [' + r + ']'); }
+} catch (Exception e) { fail++; System.debug('NESTED IF (triple): FAIL — ' + e.getMessage()); }
+
+// ===== Empty child relationship totalSize is 0, not null (v1.72) =====
+// Pre-1.72: SOQL child subqueries returning zero rows were stripped from
+// getPopulatedFieldsAsMap(), so {Rel.totalSize} resolved to null and
+// {#IF Rel.totalSize != 0} evaluated truthy on the empty case. v1.72
+// synthesizes empty {records:[], totalSize:0} wrappers in V1+V2 retrievers.
+Account dgAcc = new Account(Name = 'DG_e2e07_v172_' + System.now().getTime());
+insert dgAcc;
+try {
+    Map<String, Object> data = DocGenDataRetriever.getRecordData(
+        dgAcc.Id, 'Account', 'Name, (SELECT Id FROM Contacts)');
+    Object rel = data.get('Contacts');
+    if (rel instanceof Map<String, Object>) {
+        Object ts = ((Map<String, Object>) rel).get('totalSize');
+        if (ts != null && Integer.valueOf(ts) == 0) {
+            pass++; System.debug('EMPTY REL totalSize: PASS — 0 not null');
+        } else { fail++; System.debug('EMPTY REL totalSize: FAIL — got [' + ts + ']'); }
+    } else {
+        fail++; System.debug('EMPTY REL totalSize: FAIL — Contacts key missing');
+    }
+
+    String r = DocGenService.processXmlForTest('{#IF Contacts.totalSize != 0}HAS{/IF}', data);
+    if (r == '') { pass++; System.debug('EMPTY REL IF: PASS — suppressed'); }
+    else { fail++; System.debug('EMPTY REL IF: FAIL — got [' + r + ']'); }
+
+    String r2 = DocGenService.processXmlForTest('[{Contacts.totalSize}]', data);
+    if (r2 == '[0]') { pass++; System.debug('EMPTY REL render: PASS — [0]'); }
+    else { fail++; System.debug('EMPTY REL render: FAIL — got [' + r2 + ']'); }
+} catch (Exception e) { fail++; System.debug('EMPTY REL: FAIL — ' + e.getMessage()); }
+finally { delete dgAcc; }
+
+// ===== AND / OR / NOT / parens in IF expressions (v1.72) =====
+try {
+    Map<String, Object> data = new Map<String, Object>{
+        'A__c' => 5, 'B__c' => 10, 'C__c' => 0, 'D__c' => 7, 'Active__c' => true
+    };
+    String r;
+    r = DocGenService.processXmlForTest('{#IF A__c > 0 AND B__c > 0}YES{/IF}', data);
+    if (r == 'YES') { pass++; System.debug('IF AND: PASS'); }
+    else { fail++; System.debug('IF AND: FAIL — got [' + r + ']'); }
+
+    r = DocGenService.processXmlForTest('{#IF C__c > 5 OR B__c > 0}YES{/IF}', data);
+    if (r == 'YES') { pass++; System.debug('IF OR: PASS'); }
+    else { fail++; System.debug('IF OR: FAIL — got [' + r + ']'); }
+
+    r = DocGenService.processXmlForTest('{#IF NOT (C__c > 5)}YES{/IF}', data);
+    if (r == 'YES') { pass++; System.debug('IF NOT parens: PASS'); }
+    else { fail++; System.debug('IF NOT parens: FAIL — got [' + r + ']'); }
+
+    // (A>0) OR (B>0 AND C>5) OR (D>0) → true OR (true AND false) OR true → true
+    r = DocGenService.processXmlForTest(
+        '{#IF (A__c > 0) OR (B__c > 0 AND C__c > 5) OR (D__c > 0)}YES{/IF}', data);
+    if (r == 'YES') { pass++; System.debug('IF multi-OR chain: PASS'); }
+    else { fail++; System.debug('IF multi-OR chain: FAIL — got [' + r + ']'); }
+
+    // Precedence: AND binds tighter than OR
+    r = DocGenService.processXmlForTest(
+        '{#IF C__c > 5 OR A__c > 0 AND C__c > 5}YES{/IF}', data);
+    if (r == '') { pass++; System.debug('IF precedence: PASS'); }
+    else { fail++; System.debug('IF precedence: FAIL — got [' + r + ']'); }
+
+    // Bare boolean field in compound expression
+    r = DocGenService.processXmlForTest(
+        '{#IF Active__c AND A__c > 0}YES{/IF}', data);
+    if (r == 'YES') { pass++; System.debug('IF bare-bool AND: PASS'); }
+    else { fail++; System.debug('IF bare-bool AND: FAIL — got [' + r + ']'); }
+} catch (Exception e) { fail++; System.debug('IF AND/OR: FAIL — ' + e.getMessage()); }
+
 System.debug('========================================');
 System.debug('E2E-07 SYNTAX — PASS: ' + pass + '  FAIL: ' + fail + (fail == 0 ? '  ALL TESTS PASSED' : '  FAILURES DETECTED'));
 System.debug('========================================');

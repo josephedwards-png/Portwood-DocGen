@@ -1,9 +1,9 @@
 {
   "packageDirectories": [
     {
-      "versionName": "1.71.0 — Checkmarks & Symbols (Wingdings → Unicode auto-translate)",
-      "versionNumber": "1.71.0.NEXT",
-      "ancestorId": "04tal000006qyhNAAQ",
+      "versionName": "1.72.0 — Nested IF + AND/OR/NOT + empty-rel totalSize + bare-boolean IF",
+      "versionNumber": "1.72.0.NEXT",
+      "ancestorId": "04tal000006r0jBAAQ",
       "path": "force-app",
       "default": true,
       "package": "Portwood DocGen Managed",
@@ -108,6 +108,7 @@
     "Portwood DocGen Managed@1.68.0-1": "04tal000006qt1lAAA",
     "Portwood DocGen Managed@1.69.0-1": "04tal000006qyB7AAI",
     "Portwood DocGen Managed@1.70.0-1": "04tal000006qyhNAAQ",
-    "Portwood DocGen Managed@1.71.0-1": "04tal000006r0jBAAQ"
+    "Portwood DocGen Managed@1.71.0-1": "04tal000006r0jBAAQ",
+    "Portwood DocGen Managed@1.72.0-3": "04tal000006r1FRAAY"
   }
 }

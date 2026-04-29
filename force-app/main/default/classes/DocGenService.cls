@@ -2395,10 +2395,23 @@ public with sharing class DocGenService {
                 return -1;
             }
             String content = xml.substring(nextStart + 1, nextClose).trim();
-            if (content.equals('#' + key) || content.equals('^' + key)) {
+            Boolean isOpener;
+            Boolean isCloser;
+            if (key == 'IF') {
+                // IF openers carry an expression ("#IF Field > 0"), but the
+                // close tag is bare "/IF". Match openers by prefix; the
+                // closer remains exact-equals.
+                isOpener = content.equals('#IF') || content.startsWith('#IF ')
+                        || content.equals('^IF') || content.startsWith('^IF ');
+                isCloser = content.equals('/IF');
+            } else {
+                isOpener = content.equals('#' + key) || content.equals('^' + key);
+                isCloser = content.equals('/' + key);
+            }
+            if (isOpener) {
                 depth++;
             }
-            else if (content.equals('/' + key)) {
+            else if (isCloser) {
                 depth--;
                 if (depth == 0) {
                     return nextStart;
@@ -2415,6 +2428,21 @@ public with sharing class DocGenService {
      * Values can be numbers, quoted strings, or field references.
      * Credit: conditional logic approach inspired by @ssk42 (PR #15)
      */
+    // 1.72 — boolean expression parser supporting AND/&&, OR/||, NOT/!,
+    // and parens, with standard precedence (NOT > comparison > AND > OR).
+    // Quoted-string contents are opaque (a literal "AND" inside 'big AND small'
+    // is preserved). Single-comparison expressions go through unchanged.
+    private class IfTok {
+        String type;  // 'AND' | 'OR' | 'NOT' | 'LPAREN' | 'RPAREN' | 'TERM'
+        String text;
+    }
+
+    private class IfParseState {
+        List<IfTok> toks;
+        Integer pos;
+        Map<String, Object> data;
+    }
+
     private static Boolean evaluateIfExpression(String expression, Map<String, Object> data) {
         // Word/OOXML escapes >, <, &, ', " in text runs, so expressions arrive
         // here with &gt;/&lt;/&amp;/&apos;/&quot; instead of literal chars.
@@ -2428,9 +2456,173 @@ public with sharing class DocGenService {
                 .replace('&quot;', '"')
                 .replace('&amp;', '&');
         }
+        if (String.isBlank(expression)) { return false; }
 
-        // Parse: "Field op Value" — find the operator
-        String[] operators = new String[]{ '!=', '>=', '<=', '=', '>', '<' };
+        List<IfTok> toks = tokenizeIfExpr(expression);
+        if (toks.isEmpty()) { return false; }
+
+        IfParseState st = new IfParseState();
+        st.toks = toks;
+        st.pos = 0;
+        st.data = data;
+        return parseIfOr(st);
+    }
+
+    private static Boolean parseIfOr(IfParseState st) {
+        Boolean left = parseIfAnd(st);
+        while (st.pos < st.toks.size() && st.toks[st.pos].type == 'OR') {
+            st.pos++;
+            Boolean right = parseIfAnd(st);
+            left = left || right;
+        }
+        return left;
+    }
+
+    private static Boolean parseIfAnd(IfParseState st) {
+        Boolean left = parseIfNot(st);
+        while (st.pos < st.toks.size() && st.toks[st.pos].type == 'AND') {
+            st.pos++;
+            Boolean right = parseIfNot(st);
+            left = left && right;
+        }
+        return left;
+    }
+
+    private static Boolean parseIfNot(IfParseState st) {
+        if (st.pos < st.toks.size() && st.toks[st.pos].type == 'NOT') {
+            st.pos++;
+            return !parseIfNot(st);
+        }
+        return parseIfPrimary(st);
+    }
+
+    private static Boolean parseIfPrimary(IfParseState st) {
+        if (st.pos >= st.toks.size()) { return false; }
+        IfTok t = st.toks[st.pos];
+        if (t.type == 'LPAREN') {
+            st.pos++;
+            Boolean result = parseIfOr(st);
+            if (st.pos < st.toks.size() && st.toks[st.pos].type == 'RPAREN') { st.pos++; }
+            return result;
+        }
+        if (t.type == 'TERM') {
+            st.pos++;
+            return evaluateSingleComparison(t.text, st.data);
+        }
+        // Unexpected token (stray AND/OR/NOT/RPAREN) — skip and continue
+        st.pos++;
+        return false;
+    }
+
+    private static List<IfTok> tokenizeIfExpr(String expression) {
+        // Normalize word-keyword AND/OR/NOT (case-insensitive, word-boundary,
+        // outside quoted strings) to symbolic && / || / !.
+        String norm = normalizeBoolOps(expression);
+        List<IfTok> out = new List<IfTok>();
+        Integer i = 0;
+        Integer len = norm.length();
+        String cur = '';
+        Boolean inSingle = false;
+        Boolean inDouble = false;
+        while (i < len) {
+            String c = norm.substring(i, i + 1);
+            if (!inSingle && !inDouble) {
+                if (c == '(' || c == ')') {
+                    addIfTerm(out, cur); cur = '';
+                    IfTok pt = new IfTok();
+                    pt.type = (c == '(') ? 'LPAREN' : 'RPAREN';
+                    pt.text = c;
+                    out.add(pt);
+                    i++;
+                    continue;
+                }
+                if (c == '&' && i + 1 < len && norm.substring(i + 1, i + 2) == '&') {
+                    addIfTerm(out, cur); cur = '';
+                    IfTok at = new IfTok(); at.type = 'AND'; at.text = '&&';
+                    out.add(at);
+                    i += 2;
+                    continue;
+                }
+                if (c == '|' && i + 1 < len && norm.substring(i + 1, i + 2) == '|') {
+                    addIfTerm(out, cur); cur = '';
+                    IfTok ot = new IfTok(); ot.type = 'OR'; ot.text = '||';
+                    out.add(ot);
+                    i += 2;
+                    continue;
+                }
+                // Standalone ! (NOT) — only when not part of !=
+                if (c == '!' && (i + 1 >= len || norm.substring(i + 1, i + 2) != '=')
+                        && cur.trim().length() == 0) {
+                    addIfTerm(out, cur); cur = '';
+                    IfTok nt = new IfTok(); nt.type = 'NOT'; nt.text = '!';
+                    out.add(nt);
+                    i++;
+                    continue;
+                }
+            }
+            if (c == '\'' && !inDouble) { inSingle = !inSingle; }
+            if (c == '"' && !inSingle) { inDouble = !inDouble; }
+            cur += c;
+            i++;
+        }
+        addIfTerm(out, cur);
+        return out;
+    }
+
+    private static void addIfTerm(List<IfTok> out, String s) {
+        if (String.isBlank(s)) { return; }
+        IfTok t = new IfTok();
+        t.type = 'TERM';
+        t.text = s.trim();
+        out.add(t);
+    }
+
+    private static String normalizeBoolOps(String expr) {
+        if (expr == null) { return null; }
+        String r = '';
+        Integer i = 0;
+        Integer len = expr.length();
+        Boolean inSingle = false;
+        Boolean inDouble = false;
+        while (i < len) {
+            String c = expr.substring(i, i + 1);
+            if (!inSingle && !inDouble) {
+                String upper = expr.substring(i).toUpperCase();
+                Boolean leftOk = (i == 0) || !isWordChar(expr.substring(i - 1, i));
+                if (leftOk) {
+                    if (upper.startsWith('AND')
+                            && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
+                        r += '&&'; i += 3; continue;
+                    }
+                    if (upper.startsWith('OR')
+                            && (i + 2 == len || !isWordChar(expr.substring(i + 2, i + 3)))) {
+                        r += '||'; i += 2; continue;
+                    }
+                    if (upper.startsWith('NOT')
+                            && (i + 3 == len || !isWordChar(expr.substring(i + 3, i + 4)))) {
+                        r += '!'; i += 3; continue;
+                    }
+                }
+            }
+            if (c == '\'' && !inDouble) { inSingle = !inSingle; }
+            if (c == '"' && !inSingle) { inDouble = !inDouble; }
+            r += c;
+            i++;
+        }
+        return r;
+    }
+
+    private static Boolean isWordChar(String c) {
+        if (String.isEmpty(c)) { return false; }
+        if (c == '_') { return true; }
+        return c.isAlphanumeric();
+    }
+
+    private static Boolean evaluateSingleComparison(String expression, Map<String, Object> data) {
+        // Parse: "Field op Value" — find the operator. Two-char operators
+        // must come before their single-char prefixes (==, >=, <= before =,
+        // >, <) or indexOf would match the prefix inside the longer form.
+        String[] operators = new String[]{ '!=', '==', '>=', '<=', '=', '>', '<' };
         String op = null;
         String fieldPart = null;
         String valuePart = null;
@@ -2446,7 +2638,27 @@ public with sharing class DocGenService {
         }
 
         if (op == null || fieldPart == null || valuePart == null) {
-            return false; // Unparseable expression
+            // No operator — treat the whole expression as a single field
+            // reference and apply truthy semantics. Pre-1.72 this returned
+            // false unconditionally, so {#IF BooleanField} and {#IF Rel}
+            // never rendered their bodies.
+            Object v = resolveValue(data, expression.trim());
+            if (v == null) { return false; }
+            if (v instanceof Boolean) { return (Boolean) v; }
+            if (v instanceof List<Object>) { return !((List<Object>) v).isEmpty(); }
+            if (v instanceof Map<String, Object>) {
+                Map<String, Object> mv = (Map<String, Object>) v;
+                // {records:[…], totalSize:N} wrapper — truthy when non-empty
+                if (mv.containsKey('records') && mv.get('records') instanceof List<Object>) {
+                    return !((List<Object>) mv.get('records')).isEmpty();
+                }
+                return true;
+            }
+            String s = String.valueOf(v);
+            if (String.isBlank(s)) { return false; }
+            if (s.equalsIgnoreCase('false')) { return false; }
+            if (s == '0') { return false; }
+            return true;
         }
 
         // Resolve field value

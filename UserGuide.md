@@ -5,7 +5,7 @@
 > If you ship a new feature: add it here first, then propagate to the Learning Center LWC (`docGenCommandHub`) and the website.
 > If you remove/deprecate a feature: mark it in this file, then remove from the Learning Center and website.
 
-**Current release:** v1.71.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)
+**Current release:** v1.72.0 · [Install URL](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r1FRAAY)
 
 ---
 
@@ -52,10 +52,10 @@ Portwood DocGen is a native Salesforce document generation engine. It merges Sal
 ### Install the package
 
 ```bash
-sf package install --package 04tal000006r0jBAAQ --wait 10 --target-org <your-org>
+sf package install --package 04tal000006r1FRAAY --wait 10 --target-org <your-org>
 ```
 
-Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r0jBAAQ)
+Or: [Install in Production](https://login.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r1FRAAY) · [Install in Sandbox](https://test.salesforce.com/packaging/installPackage.apexp?p0=04tal000006r1FRAAY)
 
 ### Post-install checklist
 
@@ -540,6 +540,78 @@ Supports `>`, `<`, `>=`, `<=`, `=` (or `==`), `!=`. Values can be field refs, qu
 ```
 
 String comparisons are case-sensitive.
+
+#### AND / OR / NOT (v1.72+)
+
+Combine comparisons with boolean operators. Both word-form (`AND`, `OR`, `NOT` — case-insensitive) and symbolic form (`&&`, `||`, `!`) work. Parentheses control precedence.
+
+```
+{#IF Amount > 100000 AND Stage = 'Negotiation/Review'}
+  Large deal in negotiation — escalate.
+{/IF}
+
+{#IF Stage = 'Closed Won' OR Stage = 'Closed - Pending Funding'}
+  Pipeline closed.
+{/IF}
+
+{#IF NOT IsPrivate__c}
+  Public record.
+{/IF}
+```
+
+Default precedence (highest first): `NOT` → comparisons → `AND` → `OR`. Use parens to override:
+
+```
+{#IF (Amount > 100000 OR Strategic__c) AND IsClosed = false}
+  Large or strategic, still open.
+{/IF}
+```
+
+Arbitrarily long chains and grouping work:
+
+```
+{#IF (Region = 'NA') OR (Region = 'EU' AND Tier__c = 'Gold') OR (Strategic__c)}
+  Eligible for premium support.
+{/IF}
+```
+
+Quoted strings are opaque — `AND` / `OR` inside quotes is treated as part of the string, not as an operator.
+
+#### Live example — Project Status Showcase
+
+Repository ships a complete worked example exercising every IF feature. Three files:
+
+- `dev-only-deploy/main/default/classes/ProjectStatusDemoProvider.cls` — a V4 Apex Data Provider that returns synthetic project data (no SOQL — works without test data setup).
+- `scripts/template-project-status.html` — the full HTML template body. Demonstrates nested IF, AND/OR/NOT, parens, comparison, bare-boolean IF, empty-rel `totalSize=0`, inverse loops with `{:else}`.
+- `scripts/demo-project-status-template.apex` — anonymous Apex script that creates the DocGen template, links the provider, and renders one PDF attached to a record.
+
+To run it:
+
+```bash
+# 1. Deploy the provider class
+sf project deploy start --source-dir dev-only-deploy/main/default/classes/ProjectStatusDemoProvider.cls --target-org <your-org>
+
+# 2. Create the template + render a sample PDF
+sf apex run --target-org <your-org> -f scripts/demo-project-status-template.apex
+```
+
+The script logs a Salesforce URL where the rendered PDF is attached. Open it to see all the IF features rendering against real data — including the empty-rel sections that correctly suppress.
+
+#### Nested IF blocks
+
+`{#IF}…{/IF}` blocks can be nested arbitrarily deep (v1.72+). Common pattern: an outer IF gates a whole section, inner IFs gate sub-sections within it.
+
+```
+{#IF Work_Tasks__r.totalSize != 0}
+  WORK TASKS
+  …table with Work Tasks loop…
+  {#IF Work_Task_Step_Count__c != 0}
+    …Steps table with Steps loop…
+  {/IF}
+{/IF}
+```
+
+`Rel.totalSize` returns 0 (not null) when the child relationship is empty (v1.72+), so `{#IF Rel.totalSize != 0}` is the canonical "render this section if there are rows" check.
 
 ### 6.5 Aggregates
 
