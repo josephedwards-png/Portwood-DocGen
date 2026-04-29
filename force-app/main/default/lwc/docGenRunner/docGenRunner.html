@@ -2,16 +2,10 @@
     <div class="runner-widget">
         <div class="widget-header">
             <div class="header-title">
-                <lightning-icon
-                    icon-name="standard:document"
-                    size="small"
-                    class="slds-var-m-right_x-small"
-                ></lightning-icon>
+                <lightning-icon icon-name="standard:document" size="small" class="slds-var-m-right_x-small"></lightning-icon>
                 <h2>DocGen</h2>
             </div>
-            <p class="header-subtitle">
-                Create or combine documents for this record.
-            </p>
+            <p class="header-subtitle">Create or combine documents for this record.</p>
         </div>
 
         <div class="widget-body">
@@ -21,25 +15,13 @@
 
             <template lwc:if={isLoading}>
                 <div class="loading-state">
-                    <lightning-spinner
-                        alternative-text="Loading"
-                        size="medium"
-                    ></lightning-spinner>
+                    <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
                     <template lwc:if={loadingMessage}>
-                        <p
-                            class="slds-text-body_small slds-text-color_weak slds-var-m-top_small"
-                        >
-                            {loadingMessage}
-                        </p>
+                        <p class="slds-text-body_small slds-text-color_weak slds-var-m-top_small">{loadingMessage}</p>
                     </template>
                     <template lwc:if={showProgressBar}>
-                        <div
-                            class="progress-bar-container slds-var-m-top_small"
-                        >
-                            <lightning-progress-bar
-                                value={progressPercent}
-                                size="medium"
-                            ></lightning-progress-bar>
+                        <div class="progress-bar-container slds-var-m-top_small">
+                            <lightning-progress-bar value={progressPercent} size="medium"></lightning-progress-bar>
                             <p class="progress-bar-label">{progressPercent}%</p>
                         </div>
                     </template>
@@ -48,19 +30,9 @@
 
             <template lwc:else>
                 <!-- Custom Mode Selector (Segmented Control) -->
-                <div
-                    lwc:if={showModeSelector}
-                    class="custom-segmented-control slds-var-m-bottom_medium"
-                >
+                <div lwc:if={showModeSelector} class="custom-segmented-control slds-var-m-bottom_medium">
                     <template for:each={modernModeOptions} for:item="opt">
-                        <button
-                            key={opt.value}
-                            class={opt.class}
-                            data-value={opt.value}
-                            onclick={handleModeChangeInternal}
-                        >
-                            {opt.label}
-                        </button>
+                        <button key={opt.value} class={opt.class} data-value={opt.value} onclick={handleModeChangeInternal}>{opt.label}</button>
                     </template>
                 </div>
 
@@ -68,39 +40,19 @@
                 <template lwc:if={isGenerateMode}>
                     <!-- 1.47 — Empty state -->
                     <template lwc:if={showEmptyState}>
-                        <div
-                            class="slds-box slds-theme_shade slds-var-m-bottom_medium"
-                            style="text-align: center"
-                        >
-                            <p
-                                class="slds-text-body_regular slds-text-color_weak"
-                            >
-                                {emptyStateMessage}
-                            </p>
+                        <div class="slds-box slds-theme_shade slds-var-m-bottom_medium" style="text-align: center">
+                            <p class="slds-text-body_regular slds-text-color_weak">{emptyStateMessage}</p>
                         </div>
                     </template>
 
                     <!-- 1.47 — Category filter (only shown when 2+ categories exist) -->
                     <template lwc:if={showCategoryFilter}>
                         <div class="slds-form-element slds-var-m-bottom_medium">
-                            <label class="slds-form-element__label"
-                                >Category</label
-                            >
+                            <label class="slds-form-element__label">Category</label>
                             <div class="slds-form-element__control">
-                                <select
-                                    class="custom-select"
-                                    onchange={handleCategoryChange}
-                                >
-                                    <template
-                                        for:each={categoryOptions}
-                                        for:item="cat"
-                                    >
-                                        <option
-                                            key={cat.value}
-                                            value={cat.value}
-                                        >
-                                            {cat.label}
-                                        </option>
+                                <select class="custom-select" onchange={handleCategoryChange}>
+                                    <template for:each={categoryOptions} for:item="cat">
+                                        <option key={cat.value} value={cat.value}>{cat.label}</option>
                                     </template>
                                 </select>
                             </div>
@@ -108,26 +60,12 @@
                     </template>
 
                     <div class="slds-form-element slds-var-m-bottom_medium">
-                        <label class="slds-form-element__label"
-                            >Select Template</label
-                        >
+                        <label class="slds-form-element__label">Select Template</label>
                         <div class="slds-form-element__control">
-                            <select
-                                class="custom-select"
-                                onchange={handleTemplateChangeInternal}
-                            >
+                            <select class="custom-select" onchange={handleTemplateChangeInternal}>
                                 <option value="">Choose a template...</option>
-                                <template
-                                    for:each={templateOptions}
-                                    for:item="tmpl"
-                                >
-                                    <option
-                                        key={tmpl.value}
-                                        value={tmpl.value}
-                                        selected={tmpl.selected}
-                                    >
-                                        {tmpl.label}
-                                    </option>
+                                <template for:each={templateOptions} for:item="tmpl">
+                                    <option key={tmpl.value} value={tmpl.value} selected={tmpl.selected}>{tmpl.label}</option>
                                 </template>
                             </select>
                         </div>
@@ -136,27 +74,12 @@
                     <!-- 1.47 — Output format override (hidden when template locks format or only one format applies) -->
                     <template lwc:if={showOutputFormatPicker}>
                         <div class="slds-form-element slds-var-m-bottom_medium">
-                            <label class="slds-form-element__label"
-                                >Output As</label
-                            >
+                            <label class="slds-form-element__label">Output As</label>
                             <div class="slds-form-element__control">
-                                <select
-                                    class="custom-select"
-                                    onchange={handleOutputFormatOverrideChange}
-                                >
-                                    <option value="">
-                                        Use template default
-                                    </option>
-                                    <template
-                                        for:each={outputFormatPickerOptions}
-                                        for:item="opt"
-                                    >
-                                        <option
-                                            key={opt.value}
-                                            value={opt.value}
-                                        >
-                                            {opt.label}
-                                        </option>
+                                <select class="custom-select" onchange={handleOutputFormatOverrideChange}>
+                                    <option value="">Use template default</option>
+                                    <template for:each={outputFormatPickerOptions} for:item="opt">
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                                     </template>
                                 </select>
                             </div>
@@ -164,26 +87,11 @@
                     </template>
 
                     <!-- Custom Output Selector -->
-                    <div
-                        lwc:if={showOutputDestinationSelector}
-                        class="slds-form-element slds-var-m-bottom_medium"
-                    >
-                        <label class="slds-form-element__label"
-                            >Output Destination</label
-                        >
+                    <div lwc:if={showOutputDestinationSelector} class="slds-form-element slds-var-m-bottom_medium">
+                        <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
-                            <template
-                                for:each={modernOutputOptions}
-                                for:item="out"
-                            >
-                                <button
-                                    key={out.value}
-                                    class={out.class}
-                                    data-value={out.value}
-                                    onclick={handleOutputModeChangeInternal}
-                                >
-                                    {out.label}
-                                </button>
+                            <template for:each={modernOutputOptions} for:item="out">
+                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
                             </template>
                         </div>
                     </div>
@@ -191,61 +99,31 @@
                     <!-- PDF Merge Toggle -->
                     <template lwc:if={showMergeOption}>
                         <div class="slds-var-m-bottom_medium">
-                            <lightning-input
-                                type="checkbox"
-                                label="Combine with existing PDFs on this record"
-                                checked={mergeEnabled}
-                                onchange={handleMergeToggle}
-                                class="custom-checkbox"
-                            >
+                            <lightning-input type="checkbox" label="Combine with existing PDFs on this record" checked={mergeEnabled} onchange={handleMergeToggle} class="custom-checkbox">
                             </lightning-input>
                         </div>
 
                         <template lwc:if={mergeEnabled}>
                             <div class="merge-box">
                                 <template lwc:if={hasRecordPdfs}>
-                                    <p
-                                        class="slds-text-body_small slds-var-m-bottom_x-small"
-                                    >
-                                        Select PDFs to append:
-                                    </p>
+                                    <p class="slds-text-body_small slds-var-m-bottom_x-small">Select PDFs to append:</p>
                                     <div class="checkbox-list">
-                                        <template
-                                            for:each={recordPdfOptions}
-                                            for:item="pdf"
-                                        >
-                                            <div
-                                                key={pdf.value}
-                                                class="checkbox-item"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    value={pdf.value}
-                                                    onchange={handlePdfSelectionInternal}
-                                                />
+                                        <template for:each={recordPdfOptions} for:item="pdf">
+                                            <div key={pdf.value} class="checkbox-item">
+                                                <input type="checkbox" value={pdf.value} onchange={handlePdfSelectionInternal} />
                                                 <span>{pdf.label}</span>
                                             </div>
                                         </template>
                                     </div>
                                 </template>
                                 <template lwc:else>
-                                    <p
-                                        class="slds-text-body_small slds-text-color_weak"
-                                    >
-                                        No other PDFs found here.
-                                    </p>
+                                    <p class="slds-text-body_small slds-text-color_weak">No other PDFs found here.</p>
                                 </template>
                             </div>
                         </template>
                     </template>
 
-                    <button
-                        class="cool-brand-btn"
-                        onclick={handleGenerate}
-                        disabled={isGenerateDisabled}
-                    >
-                        {generateButtonLabel}
-                    </button>
+                    <button class="cool-brand-btn" onclick={handleGenerate} disabled={isGenerateDisabled}>{generateButtonLabel}</button>
                 </template>
 
                 <!-- PACKET MODE -->
@@ -264,51 +142,21 @@
                         </lightning-dual-listbox>
                     </div>
 
-                    <div
-                        lwc:if={canUseCombineWithExistingPdfs}
-                        class="slds-var-m-bottom_medium"
-                    >
-                        <lightning-input
-                            type="checkbox"
-                            label="Include other PDFs from this record"
-                            checked={packetIncludeExisting}
-                            onchange={handlePacketIncludeToggle}
-                            class="custom-checkbox"
-                        >
+                    <div lwc:if={canUseCombineWithExistingPdfs} class="slds-var-m-bottom_medium">
+                        <lightning-input type="checkbox" label="Include other PDFs from this record" checked={packetIncludeExisting} onchange={handlePacketIncludeToggle} class="custom-checkbox">
                         </lightning-input>
                     </div>
 
-                    <div
-                        lwc:if={showOutputDestinationSelector}
-                        class="slds-form-element slds-var-m-bottom_medium"
-                    >
-                        <label class="slds-form-element__label"
-                            >Output Destination</label
-                        >
+                    <div lwc:if={showOutputDestinationSelector} class="slds-form-element slds-var-m-bottom_medium">
+                        <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
-                            <template
-                                for:each={modernOutputOptions}
-                                for:item="out"
-                            >
-                                <button
-                                    key={out.value}
-                                    class={out.class}
-                                    data-value={out.value}
-                                    onclick={handleOutputModeChangeInternal}
-                                >
-                                    {out.label}
-                                </button>
+                            <template for:each={modernOutputOptions} for:item="out">
+                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
                             </template>
                         </div>
                     </div>
 
-                    <button
-                        class="cool-brand-btn"
-                        onclick={generatePacket}
-                        disabled={isPacketDisabled}
-                    >
-                        {packetButtonLabel}
-                    </button>
+                    <button class="cool-brand-btn" onclick={generatePacket} disabled={isPacketDisabled}>{packetButtonLabel}</button>
                 </template>
 
                 <!-- MERGE ONLY MODE -->
@@ -328,75 +176,38 @@
                             </lightning-dual-listbox>
                         </template>
                         <template lwc:else>
-                            <p
-                                class="slds-text-body_small slds-text-color_weak"
-                            >
-                                No PDF files found to combine.
-                            </p>
+                            <p class="slds-text-body_small slds-text-color_weak">No PDF files found to combine.</p>
                         </template>
                     </div>
 
-                    <div
-                        lwc:if={showOutputDestinationSelector}
-                        class="slds-form-element slds-var-m-bottom_medium"
-                    >
-                        <label class="slds-form-element__label"
-                            >Output Destination</label
-                        >
+                    <div lwc:if={showOutputDestinationSelector} class="slds-form-element slds-var-m-bottom_medium">
+                        <label class="slds-form-element__label">Output Destination</label>
                         <div class="custom-mini-pills">
-                            <template
-                                for:each={modernOutputOptions}
-                                for:item="out"
-                            >
-                                <button
-                                    key={out.value}
-                                    class={out.class}
-                                    data-value={out.value}
-                                    onclick={handleOutputModeChangeInternal}
-                                >
-                                    {out.label}
-                                </button>
+                            <template for:each={modernOutputOptions} for:item="out">
+                                <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
                             </template>
                         </div>
                     </div>
 
-                    <button
-                        class="cool-brand-btn"
-                        onclick={mergeOnlyDocument}
-                        disabled={isMergeOnlyDisabled}
-                    >
-                        {mergeOnlyButtonLabel}
-                    </button>
+                    <button class="cool-brand-btn" onclick={mergeOnlyDocument} disabled={isMergeOnlyDisabled}>{mergeOnlyButtonLabel}</button>
                 </template>
 
                 <!-- MERGE CHILD RECORD PDFs MODE -->
                 <template lwc:if={isMergeChildrenMode}>
                     <div class="slds-form-element slds-var-m-bottom_medium">
-                        <label class="slds-form-element__label"
-                            >Source List</label
-                        >
+                        <label class="slds-form-element__label">Source List</label>
                         <div class="slds-form-element__control">
-                            <select
-                                class="custom-select"
-                                onchange={handleChildRelChangeInternal}
-                            >
+                            <select class="custom-select" onchange={handleChildRelChangeInternal}>
                                 <option value="">Select a child list...</option>
-                                <template
-                                    for:each={childRelComboboxOptions}
-                                    for:item="rel"
-                                >
-                                    <option key={rel.value} value={rel.value}>
-                                        {rel.label}
-                                    </option>
+                                <template for:each={childRelComboboxOptions} for:item="rel">
+                                    <option key={rel.value} value={rel.value}>{rel.label}</option>
                                 </template>
                             </select>
                         </div>
                     </div>
 
                     <template lwc:if={selectedChildRel}>
-                        <div
-                            class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small slds-var-m-bottom_medium"
-                        >
+                        <div class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small slds-var-m-bottom_medium">
                             <div class="slds-col slds-grow">
                                 <lightning-input
                                     label="Filter Records"
@@ -408,47 +219,20 @@
                                 </lightning-input>
                             </div>
                             <div class="slds-col">
-                                <button
-                                    class="pill-action-btn"
-                                    onclick={handleLoadChildPdfs}
-                                >
-                                    Find Files
-                                </button>
+                                <button class="pill-action-btn" onclick={handleLoadChildPdfs}>Find Files</button>
                             </div>
                         </div>
                     </template>
 
                     <template lwc:if={childPdfsLoaded}>
-                        <div
-                            class="merge-box"
-                            style="max-height: 250px; overflow-y: auto"
-                        >
+                        <div class="merge-box" style="max-height: 250px; overflow-y: auto">
                             <template lwc:if={hasChildRecordGroups}>
-                                <template
-                                    for:each={childRecordGroupsWithState}
-                                    for:item="group"
-                                >
-                                    <div
-                                        key={group.childRecordId}
-                                        class="slds-var-m-bottom_small"
-                                    >
-                                        <p class="slds-text-title_bold">
-                                            {group.childRecordName}
-                                        </p>
-                                        <template
-                                            for:each={group.pdfs}
-                                            for:item="pdf"
-                                        >
-                                            <div
-                                                key={pdf.value}
-                                                class="checkbox-item slds-var-m-left_small"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={pdf.checked}
-                                                    data-cvid={pdf.value}
-                                                    onchange={handleChildPdfCheckbox}
-                                                />
+                                <template for:each={childRecordGroupsWithState} for:item="group">
+                                    <div key={group.childRecordId} class="slds-var-m-bottom_small">
+                                        <p class="slds-text-title_bold">{group.childRecordName}</p>
+                                        <template for:each={group.pdfs} for:item="pdf">
+                                            <div key={pdf.value} class="checkbox-item slds-var-m-left_small">
+                                                <input type="checkbox" checked={pdf.checked} data-cvid={pdf.value} onchange={handleChildPdfCheckbox} />
                                                 <span>{pdf.label}</span>
                                             </div>
                                         </template>
@@ -456,45 +240,20 @@
                                 </template>
                             </template>
                             <template lwc:else>
-                                <p
-                                    class="slds-text-body_small slds-text-color_weak"
-                                >
-                                    No matching files found.
-                                </p>
+                                <p class="slds-text-body_small slds-text-color_weak">No matching files found.</p>
                             </template>
                         </div>
 
-                        <div
-                            lwc:if={showOutputDestinationSelector}
-                            class="slds-form-element slds-var-m-bottom_medium"
-                        >
-                            <label class="slds-form-element__label"
-                                >Output Destination</label
-                            >
+                        <div lwc:if={showOutputDestinationSelector} class="slds-form-element slds-var-m-bottom_medium">
+                            <label class="slds-form-element__label">Output Destination</label>
                             <div class="custom-mini-pills">
-                                <template
-                                    for:each={modernOutputOptions}
-                                    for:item="out"
-                                >
-                                    <button
-                                        key={out.value}
-                                        class={out.class}
-                                        data-value={out.value}
-                                        onclick={handleOutputModeChangeInternal}
-                                    >
-                                        {out.label}
-                                    </button>
+                                <template for:each={modernOutputOptions} for:item="out">
+                                    <button key={out.value} class={out.class} data-value={out.value} onclick={handleOutputModeChangeInternal}>{out.label}</button>
                                 </template>
                             </div>
                         </div>
 
-                        <button
-                            class="cool-brand-btn"
-                            onclick={mergeChildrenDocument}
-                            disabled={isMergeChildrenDisabled}
-                        >
-                            {mergeChildrenButtonLabel}
-                        </button>
+                        <button class="cool-brand-btn" onclick={mergeChildrenDocument} disabled={isMergeChildrenDisabled}>{mergeChildrenButtonLabel}</button>
                     </template>
                 </template>
             </template>
